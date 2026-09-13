@@ -133,6 +133,20 @@ riskTier: 4
 - **Next:** human review. Risk tier 4 — the pull request waits for @MadaraUchiha-314, and
   the security sign-off is a separate, named approval.
 
+### 2026-09-13 — CI green on the first run
+
+- **Phase:** needs-review
+- **Did:** opened [PR #4](https://github.com/MadaraUchiha-314/yaah/pull/4) with the
+  reviewer briefing as its description, and watched the first CI run.
+- **Checkpoint/tests:** all three jobs passed on the first attempt — *Quality gate (the
+  contributor's own hooks)*, *Integration tests*, *Documentation site builds*. That is the
+  work item's central claim (`make check` green ⇒ CI green) holding on its first real
+  test, which is why it is recorded here rather than only in the checks tab: the CI run
+  itself expires, so the committed `evidence/` remains the proof.
+- **Next:** nothing on the harness side. The three repository settings only a maintainer
+  can apply (PyPI Trusted Publishing, the `pypi` environment, Pages source) are named on
+  the ticket and in the briefing.
+
 ## Verification results
 
 > This work item has a `testing-plan.md`, so the `verification` node records its results
