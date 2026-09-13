@@ -11,7 +11,8 @@ changes behaviour — that is a ready-to-ship gate item, not a follow-up.
 
 | Capability | What it covers |
 |------------|----------------|
-| — | _No capabilities documented yet._ |
+| [Repository toolchain](repository-toolchain.md) | How yaah is linted, typed, tested, committed, versioned and published — one gate referenced by the git hooks, `make` and CI. |
+| [Documentation site](documentation-site.md) | Every markdown document in the repository, published as a searchable site on GitHub Pages. |
 
 New capability docs are scaffolded from the plugin's
 `skills/the-loop/templates/capability.md`.

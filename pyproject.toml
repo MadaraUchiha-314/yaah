@@ -1,0 +1,115 @@
+# yaah — project metadata AND the configuration of every Python tool the repository
+# runs. One file rather than four (ruff.toml + pytest.ini + pyrightconfig.json + this)
+# because each of these tools reads pyproject.toml natively, and a config that can drift
+# from the project it configures eventually does.
+#
+# The package manager is uv (docs/decisions/decision-001.md). Reproducibility comes from
+# the committed uv.lock and .python-version: `uv sync` locally and `uv sync --locked` in
+# CI resolve the same versions, which is what makes the pre-commit hooks and the CI jobs
+# the same gate rather than two similar ones.
+[project]
+name = "yaah"
+version = "0.1.0"
+description = "Yet Another Agent Harness"
+readme = "README.md"
+# Pinned to the latest stable Python 3 the pinned toolchain resolves — see
+# docs/decisions/decision-002.md for why this is 3.13 and not 3.14, and .python-version
+# for the interpreter both local commands and CI use.
+requires-python = ">=3.13"
+license = "Apache-2.0"
+license-files = ["LICENSE"]
+authors = [{ name = "MadaraUchiha-314" }]
+keywords = ["agent", "harness", "yaah"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: Apache Software License",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3 :: Only",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Software Development :: Libraries",
+    "Typing :: Typed",
+]
+# yaah has no runtime dependencies yet. Every addition is justified in the work item's
+# design.md first (reference/minimalism.md: YAGNI -> stdlib -> native -> existing dep).
+dependencies = []
+
+[project.urls]
+Homepage = "https://github.com/MadaraUchiha-314/yaah"
+Documentation = "https://madarauchiha-314.github.io/yaah/"
+Repository = "https://github.com/MadaraUchiha-314/yaah"
+Issues = "https://github.com/MadaraUchiha-314/yaah/issues"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+# The package lives at the repository root (issue #3: "All code should be under the
+# folder `yaah`"), so the wheel is built from it directly rather than from a src/ layout.
+packages = ["yaah"]
+
+# Dev tooling. PEP 735 dependency group: `uv sync` installs it by default, and it is NOT
+# part of the published distribution — nobody who `pip install yaah`s gets pyright.
+[dependency-groups]
+dev = [
+    "ruff>=0.15",
+    "pyright>=1.1.400",
+    "pytest>=8",
+    "pre-commit>=4",
+    "commitizen>=4",
+    # The integration suite asserts on the shape of .github/workflows/*.yml — the
+    # security invariants of design.md are tests, not promises. Reading them needs a
+    # YAML parser, and pyright strict needs its stubs.
+    "pyyaml>=6",
+    "types-pyyaml>=6",
+]
+
+[tool.ruff]
+line-length = 88
+target-version = "py313"
+
+[tool.ruff.lint]
+# Start strict on an empty codebase: retrofitting a rule set is what makes rule sets
+# permanent. E/W/F are the pycodestyle+pyflakes core; the rest catch the mistakes that
+# are cheap to prevent and expensive to find.
+select = [
+    "E",    # pycodestyle errors
+    "W",    # pycodestyle warnings
+    "F",    # pyflakes
+    "I",    # isort — import order
+    "B",    # flake8-bugbear
+    "UP",   # pyupgrade — keep syntax current with requires-python
+    "SIM",  # flake8-simplify
+    "RUF",  # ruff's own rules
+    "D",    # pydocstyle — public API carries docstrings
+]
+
+[tool.ruff.lint.pydocstyle]
+convention = "google"
+
+[tool.ruff.lint.per-file-ignores]
+# Tests document themselves through their names and their Gherkin docstrings; a module
+# docstring on every test file would be ceremony. D205/D415 are relaxed for the Gherkin
+# docstrings, which are a structured block rather than a one-line summary.
+"tests/**" = ["D100", "D103", "D104", "D205", "D415"]
+
+[tool.pyright]
+# Strict from the start, for the same reason ruff is: an empty codebase is the only time
+# adopting it is free.
+include = ["yaah", "tests"]
+typeCheckingMode = "strict"
+pythonVersion = "3.13"
+venvPath = "."
+venv = ".venv"
+
+[tool.pytest.ini_options]
+# `pythonpath = ["."]` lets pytest import `yaah` straight from the working tree, so the
+# unit tests a git hook runs need no editable install step.
+pythonpath = ["."]
+testpaths = ["tests"]
+addopts = "-q --strict-markers"
+markers = [
+    "integration: exercises the repository's own configuration end-to-end (CI, not the commit hook)",
+]

@@ -1,0 +1,27 @@
+{
+  // markdownlint config for yaah. Documentation is linted like code (the-loop:
+  // "lint ALL files including markdown"), so this file keeps the structural rules
+  // and relaxes the stylistic ones that fight the way these docs are written.
+  "config": {
+    "default": true,
+    "MD013": false, // line-length: prose is wrapped at ~90, not 80
+    "MD033": false, // inline HTML: the specs use <id>, <nnn>, <phase> placeholders
+    "MD041": false, // first-line heading: spec artifacts start with YAML front matter
+    "MD040": false, // fenced code language: ASCII diagram blocks carry none
+    "MD032": false, // blanks around lists: the templates use blockquoted lists
+    "MD034": false, // bare URLs: intentional in docs
+    // emphasis style: the-loop's scaffolded artifacts use _underscore_ for the
+    // "not yet filled in" placeholders and *asterisk* for inline emphasis in prose.
+    // Both appear in the same file by design, so neither "consistent" nor a single
+    // style can hold without rewriting documents the plugin owns.
+    "MD049": false,
+    "MD024": { "siblings_only": true }, // repeated headings under different parents
+    "MD025": { "front_matter_title": "" } // YAML front matter is not an H1
+  },
+  "ignores": [
+    "**/node_modules/**",
+    "**/.venv/**",
+    "docs/.vitepress/dist/**",
+    "docs/.vitepress/cache/**"
+  ]
+}
