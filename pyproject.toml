@@ -9,7 +9,7 @@
 # the same gate rather than two similar ones.
 [project]
 name = "yaah"
-version = "0.1.0"
+version = "0.2.0"
 description = "Yet Another Agent Harness"
 readme = "README.md"
 # Pinned to the latest stable Python 3 the pinned toolchain resolves — see
