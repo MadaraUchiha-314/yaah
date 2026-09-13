@@ -24,7 +24,7 @@ PRIVILEGED_PERMISSIONS = {"id-token", "contents", "packages", "pages", "deployme
 # Actions script-injection sink.
 UNTRUSTED_EXPRESSIONS = re.compile(
     r"\$\{\{\s*(github\.event\b|github\.head_ref\b|github\.actor\b|"
-    r"github\.triggering_actor\b|inputs\.)"
+    r"github\.triggering_actor\b|inputs\.|steps\.|needs\.)"
 )
 
 
@@ -132,10 +132,12 @@ def test_no_workflow_interpolates_untrusted_input_into_a_shell(
 
     Feature: Least-privilege CI
       Scenario: No workflow interpolates untrusted input into a shell
-        Given a commit message and a branch name are attacker-controlled text
+        Given a commit message, a branch name and a step output derived from
+          repository content are all attacker-influenced text
         When every `run:` block in every workflow is read
         Then none of them interpolates a `github.event`, `github.head_ref`,
-          `github.actor` or `inputs.` expression
+          `github.actor`, `inputs.`, `steps.` or `needs.` expression
+        And any such value reaches the shell through an `env:` mapping instead
 
     Requirement: docs/specs/issue-3/requirements.md R7 (abuse case A4)
     """

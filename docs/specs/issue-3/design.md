@@ -223,7 +223,10 @@ concrete mechanism below.
     if: ${{ !startsWith(github.event.head_commit.message, 'bump:') }}
     ```
 
-    — which GitHub Actions evaluates itself. Nothing is handed to a shell.
+    — which GitHub Actions evaluates itself. Nothing is handed to a shell. Values that
+    *do* reach a shell — the computed version, derived from `.cz.toml` — are passed
+    through an `env:` mapping and expanded by the shell, never interpolated into the
+    script text before it is parsed.
   - *Untrusted ingress 3 — `hello_world(name)`.* Validated by type and emptiness; the value
     is only ever interpolated into a returned string, never into a command, path or query.
   - No SQL, no filesystem path construction from input, no subprocess invocation with
@@ -260,7 +263,7 @@ concrete mechanism below.
   | A1 — fork PR reaches a credential | `ci.yml` requests no `id-token` and binds no environment | T8 — `tests/integration/test_workflows.py::test_ci_workflow_holds_no_publish_credentials` |
   | A2 — PR runs with a write token | `on: pull_request` only; no `pull_request_target` | T8 — `test_no_workflow_uses_pull_request_target` |
   | A3 — over-broad release permissions | `id-token: write` / `contents: write` declared per job | T8 — `test_release_scopes_privileges_per_job` |
-  | A4 — forged version via commit message | commits reach `main` only through a reviewed PR; the message is never shell-interpolated | T8 — `test_no_workflow_interpolates_untrusted_input_into_a_shell` |
+  | A4 — forged version via commit message | commits reach `main` only through a reviewed PR; no `github.event`, `inputs.`, `steps.` or `needs.` value is interpolated into a `run:` block — such values arrive via `env:` | T8 — `test_no_workflow_interpolates_untrusted_input_into_a_shell` |
   | A5 — unpinned third-party action | every `uses:` carries an explicit version ref | T8 — `test_every_action_reference_is_pinned` |
   | A6 — release loop on its own bump | `if: !startsWith(…, 'bump:')` + `concurrency: release` | T8 — `test_release_does_not_re_enter_on_its_own_bump_commit` |
   | A7 — `hello_world` accepts junk | type and emptiness validation | T1 — `tests/unit/test_hello.py` negative cases |

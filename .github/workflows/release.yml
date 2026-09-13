@@ -101,9 +101,16 @@ jobs:
       # NOTE: `git push --follow-tags` only pushes *annotated* tags and commitizen creates
       # a lightweight one, so the tag is pushed explicitly by ref — otherwise
       # `gh release create --verify-tag` below cannot find it on the remote.
+      # The version reaches the shell through `env:`, never through `${{ }}` inside the
+      # script. It is derived from `.cz.toml`, which is repository content: a value
+      # interpolated into a `run:` block is pasted in before the shell parses it, so the
+      # only safe shape is an environment variable the shell expands itself. Same for the
+      # release step below.
       - name: Push bump commit + tag to main
         if: steps.bump.outputs.released == 'true'
-        run: git push origin "HEAD:refs/heads/main" "refs/tags/v${{ steps.bump.outputs.version }}"
+        env:
+          VERSION: ${{ steps.bump.outputs.version }}
+        run: git push origin "HEAD:refs/heads/main" "refs/tags/v${VERSION}"
 
       - name: Build the distribution
         if: steps.bump.outputs.released == 'true'
@@ -113,7 +120,8 @@ jobs:
         if: steps.bump.outputs.released == 'true'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: gh release create "v${{ steps.bump.outputs.version }}" --generate-notes --verify-tag
+          VERSION: ${{ steps.bump.outputs.version }}
+        run: gh release create "v${VERSION}" --generate-notes --verify-tag
 
       - name: Upload dist artifacts
         if: steps.bump.outputs.released == 'true'
