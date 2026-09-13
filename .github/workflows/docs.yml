@@ -1,0 +1,61 @@
+# GitHub Pages — publish the VitePress site at https://madarauchiha-314.github.io/yaah/.
+#
+# Separate from ci.yml because Pages needs permissions CI must never hold (`pages: write`
+# and an OIDC token) and a deployment environment. ci.yml already *builds* the site on
+# every pull request, so this workflow only ever publishes something a merge gate has
+# already proved buildable.
+name: Pages
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - docs/**
+      - .github/workflows/docs.yml
+  workflow_dispatch:
+
+# One deploy in flight at a time; a newer push supersedes an in-progress one.
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+jobs:
+  build:
+    name: Build the site
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: Install docs dependencies
+        working-directory: docs
+        run: bun install --frozen-lockfile
+
+      - name: Build the site
+        working-directory: docs
+        run: bun run docs:build
+
+      - uses: actions/configure-pages@v5
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: docs/.vitepress/dist
+
+  deploy:
+    name: Deploy to GitHub Pages
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4

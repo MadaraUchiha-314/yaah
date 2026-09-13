@@ -20,4 +20,4 @@ Each file is scaffolded from the plugin's `skills/the-loop/templates/` by the
 `/the-loop:*` commands — don't hand-roll them. Rigor scales to the change: a trivial
 change does not need the full chain.
 
-Nothing lives directly in this directory except this README.
+Nothing lives directly in this directory except this index.

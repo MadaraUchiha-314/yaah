@@ -1,0 +1,94 @@
+# CI — the merge gate.
+#
+# RULE (the-loop, reference/tooling.md): CI runs exactly the commands a contributor runs.
+# The `quality` job is literally `pre-commit run --all-files`, the same hook set
+# `.pre-commit-config.yaml` installs locally — there is no second list of checks to keep
+# in sync. `integration` adds the one thing the commit hook deliberately skips, and
+# `docs` proves the documentation site still builds before a merge can break the
+# deployment.
+#
+# SECURITY: this workflow executes code from untrusted pull-request branches, including
+# forks. It therefore holds nothing worth stealing — read-only permissions, no OIDC
+# token, no environment binding, and `pull_request` rather than `pull_request_target`.
+# Those invariants are asserted by tests/integration/test_workflows.py, so an edit that
+# weakens one turns the suite red.
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+# Declared explicitly rather than inherited: the repository default is a setting someone
+# can change, and this is the boundary the whole threat model rests on.
+permissions:
+  contents: read
+
+# A newer push to the same branch supersedes an in-flight run.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  quality:
+    name: Quality gate (the contributor's own hooks)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # markdownlint is a Node tool invoked through npx by the pre-commit hook.
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      # No `python-version:` here on purpose — uv reads .python-version, so the
+      # repository's single interpreter pin is what CI resolves too.
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+
+      # `--locked` fails rather than re-resolving if uv.lock does not satisfy
+      # pyproject.toml. Silently resolving something newer is exactly the drift this
+      # whole setup exists to prevent.
+      - name: Sync the environment (uv.lock)
+        run: uv sync --locked
+
+      - name: Run every hook over every file
+        run: uv run pre-commit run --all-files --show-diff-on-failure
+
+  integration:
+    name: Integration tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+
+      - name: Sync the environment (uv.lock)
+        run: uv sync --locked
+
+      # The one check the commit hook does not run: hooks stay fast so people leave them
+      # installed, and this suite reads the repository's whole configuration.
+      - name: Run the integration suite
+        run: uv run pytest tests/integration -v
+
+  docs:
+    name: Documentation site builds
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: docs
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: Install docs dependencies
+        run: bun install --frozen-lockfile
+
+      # The same build the Pages workflow runs. A broken site fails the pull request
+      # rather than the deployment.
+      - name: Build the site
+        run: bun run docs:build

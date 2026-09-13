@@ -1,0 +1,73 @@
+# The repository's quality gate, defined ONCE.
+#
+# RULE (the-loop, reference/tooling.md): CI runs these SAME hooks — `ci.yml`'s quality
+# job is literally `uv run pre-commit run --all-files`. Nothing re-implements a check, so
+# "it passed locally" and "it passed in CI" cannot disagree.
+#
+# Every hook is `local`/`system` and enters through `uv run`, which resolves the exact
+# versions pinned in uv.lock whether the caller is `git commit`, `make check`, or a CI
+# job. markdownlint is the one exception: it is a Node tool, pinned by exact version
+# through npx.
+#
+# Integration tests are deliberately NOT a hook — they are the one check CI runs that the
+# commit path does not (requirement R6.2). Hooks have to stay fast enough that people
+# leave them installed.
+#
+# Install with: `make hooks` (or `uv run pre-commit install --install-hooks`).
+minimum_pre_commit_version: "3.0.0"
+default_install_hook_types: [pre-commit, pre-push, commit-msg]
+
+repos:
+  - repo: local
+    hooks:
+      - id: ruff-lint
+        name: ruff (lint + autofix)
+        entry: uv run ruff check --fix
+        language: system
+        types_or: [python, pyi]
+
+      - id: ruff-format
+        name: ruff (format)
+        entry: uv run ruff format
+        language: system
+        # Markdown too: ruff formats the Python inside ```python fences, so a snippet in
+        # the docs is held to the same style as the code it documents. `make format-check`
+        # runs `ruff format --check .` over the whole tree, and the hook has to cover the
+        # same files or the two disagree — which is the drift this setup exists to stop.
+        types_or: [python, pyi, markdown]
+
+      - id: pyright
+        name: pyright (type check)
+        entry: uv run pyright
+        language: system
+        pass_filenames: false
+        files: \.py$
+
+      - id: pytest-unit
+        name: pytest (unit tests)
+        entry: uv run pytest tests/unit
+        language: system
+        pass_filenames: false
+        files: \.py$
+
+      - id: markdownlint
+        name: markdownlint (all markdown, incl. docs)
+        # Pinned exactly so local == CI. An unpinned `npx --yes markdownlint-cli2`
+        # resolves whatever is newest at that moment, which is how a linter starts
+        # failing on a branch nobody touched.
+        entry: npx --yes markdownlint-cli2@0.18.1
+        language: system
+        types: [markdown]
+        # pre-commit chunks filenames across parallel processes; concurrent `npx`
+        # installs then race on the shared npx cache. One process handles all files fine.
+        require_serial: true
+
+      # Conventional Commits via commitizen (reference/tooling.md: prefer a
+      # well-maintained library over custom code), run through `uv run` so the `cz`
+      # pinned in uv.lock is the one that validates. Merge/revert and aborted commits
+      # pass via --allow-abort.
+      - id: commitizen
+        name: Conventional Commits (commitizen)
+        entry: uv run cz check --allow-abort --commit-msg-file
+        language: system
+        stages: [commit-msg]

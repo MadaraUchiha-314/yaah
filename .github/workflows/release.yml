@@ -1,0 +1,155 @@
+# Release — semantic versioning and PyPI publishing, as a consequence of merging.
+#
+# Versioning is derived from Conventional Commits (with squash-merge, that is the pull
+# request title): feat -> minor, fix -> patch, `BREAKING CHANGE`/`!` -> major. On every
+# push to main, `cz bump` computes the next version from the commits since the last tag,
+# rewrites it in .cz.toml and pyproject.toml (commitizen's `version_files`), commits
+# `bump: ...` and tags `v<version>`. The commit and tag are pushed back to main — so main
+# always carries the released version number — a GitHub Release is cut, and the built
+# distribution is published to PyPI. A run with nothing releasable is a clean no-op.
+#
+# Publishing uses PyPI **Trusted Publishing** (GitHub Actions OIDC): no token is stored
+# anywhere. PyPI must be configured to trust project `yaah`, owner/repo
+# `MadaraUchiha-314/yaah`, workflow `release.yml`, environment `pypi`.
+# See docs/decisions/decision-003.md.
+#
+# SECURITY: privileges are scoped per job, never workflow-wide — the job that writes to
+# main cannot authenticate to PyPI, and the job that authenticates to PyPI cannot write
+# to the repository. tests/integration/test_workflows.py asserts this.
+name: Release
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+# Two releases at once would race on the tag and on the push to main.
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  release:
+    name: Version bump + build
+    runs-on: ubuntu-latest
+    # Skip the run this workflow triggers on itself when it pushes the `bump:` commit:
+    # that commit carries no releasable change, so re-entering is a loop, not work.
+    if: ${{ !startsWith(github.event.head_commit.message, 'bump:') }}
+    permissions:
+      contents: write # push the bump commit + tag back to main, and cut the Release
+    outputs:
+      released: ${{ steps.bump.outputs.released }}
+      version: ${{ steps.bump.outputs.version }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # commitizen reads every commit since the last tag
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      # Same setup as CI — no `python-version:`, so .python-version decides.
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+
+      - name: Sync the environment (uv.lock)
+        run: uv sync --locked
+
+      - name: Configure git identity
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+      # First-release bootstrap. With no tag yet, `cz bump` would scan the entire history
+      # and over-count the increment. Treat the version already in the repository as
+      # released by tagging it on the PREVIOUS commit, so the bump is computed only from
+      # what has merged since. The tag is LOCAL-ONLY and never pushed: pushing a tag that
+      # points at a commit whose .github/workflows differ from the branch tip is rejected
+      # for GITHUB_TOKEN. Guarded on "no v* tag exists", so it runs exactly once.
+      - name: Bootstrap baseline tag (first release only, local-only)
+        run: |
+          if [ -z "$(git tag -l 'v*')" ]; then
+            base="v$(uv run cz version --project)"
+            git tag "$base" "HEAD^"
+            echo "Seeded local baseline ${base} for increment computation."
+          fi
+
+      # commitizen exits 21 (NoneIncrementExit) or 3 (NoCommitsFoundError) when nothing
+      # warrants a release. Those two are a clean no-op; anything else fails the run.
+      - name: Bump version (commitizen)
+        id: bump
+        run: |
+          set +e
+          out="$(uv run cz bump --yes --changelog 2>&1)"
+          code=$?
+          set -e
+          echo "$out"
+          if [ "$code" -eq 0 ]; then
+            version="$(uv run cz version --project)"
+            echo "released=true"            >> "$GITHUB_OUTPUT"
+            echo "version=${version}"       >> "$GITHUB_OUTPUT"
+            echo "Bumped to ${version}"
+          elif [ "$code" -eq 21 ] || [ "$code" -eq 3 ]; then
+            echo "released=false"           >> "$GITHUB_OUTPUT"
+            echo "No releasable commits since the last tag — skipping publish."
+          else
+            echo "::error::cz bump failed (exit ${code})"
+            exit "$code"
+          fi
+
+      # NOTE: `git push --follow-tags` only pushes *annotated* tags and commitizen creates
+      # a lightweight one, so the tag is pushed explicitly by ref — otherwise
+      # `gh release create --verify-tag` below cannot find it on the remote.
+      # The version reaches the shell through `env:`, never through `${{ }}` inside the
+      # script. It is derived from `.cz.toml`, which is repository content: a value
+      # interpolated into a `run:` block is pasted in before the shell parses it, so the
+      # only safe shape is an environment variable the shell expands itself. Same for the
+      # release step below.
+      - name: Push bump commit + tag to main
+        if: steps.bump.outputs.released == 'true'
+        env:
+          VERSION: ${{ steps.bump.outputs.version }}
+        run: git push origin "HEAD:refs/heads/main" "refs/tags/v${VERSION}"
+
+      - name: Build the distribution
+        if: steps.bump.outputs.released == 'true'
+        run: uv build
+
+      - name: Create the GitHub Release
+        if: steps.bump.outputs.released == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          VERSION: ${{ steps.bump.outputs.version }}
+        run: gh release create "v${VERSION}" --generate-notes --verify-tag
+
+      - name: Upload dist artifacts
+        if: steps.bump.outputs.released == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: dist
+          path: dist/
+          if-no-files-found: error
+
+  publish-pypi:
+    name: Publish to PyPI
+    needs: release
+    # There is no path that publishes a distribution the release job did not build.
+    if: needs.release.outputs.released == 'true'
+    runs-on: ubuntu-latest
+    environment:
+      name: pypi
+      url: https://pypi.org/project/yaah/
+    permissions:
+      # The OIDC token for Trusted Publishing — the ONLY credential this job holds, and
+      # it exists for the length of this job.
+      id-token: write
+    steps:
+      - name: Download dist artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: dist
+          path: dist/
+
+      - name: Publish to PyPI (Trusted Publishing / OIDC)
+        uses: pypa/gh-action-pypi-publish@release/v1

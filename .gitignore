@@ -216,3 +216,14 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# --- yaah additions (issue #3) ---------------------------------------------
+# The documentation site is a Node program (VitePress) living in docs/. Its
+# dependencies and build output are derived state; docs/bun.lock IS committed,
+# because the lock is what makes the local build and the Pages build identical.
+node_modules/
+docs/.vitepress/cache/
+docs/.vitepress/dist/
+
+# pyright's incremental cache.
+.pyright/
