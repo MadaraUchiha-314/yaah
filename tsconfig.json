@@ -32,6 +32,14 @@
     "declaration": true,
     "noEmit": true
   },
+  "files": ["src/surface/renderer/web/index.ts", "src/surface/renderer/web/server.ts"],
   "include": ["src", "test", "scripts", "*.ts"],
-  "exclude": ["dist", "node_modules"]
+  "exclude": [
+    "dist",
+    "node_modules",
+    "src/surface/renderer/web",
+    "test/web",
+    "test/**/*.tsx",
+    "test/e2e/web*.ts"
+  ]
 }

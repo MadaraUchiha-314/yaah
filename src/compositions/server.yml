@@ -22,3 +22,6 @@
   name: '@cordisjs/include'
   config:
     path: ./shared/http.yml
+# The web chat, served at / by the same listener.
+- id: web-ui
+  name: ../surface/renderer/web/server.ts

@@ -1,0 +1,13 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "lib": ["ES2024", "DOM", "DOM.Iterable"],
+    "jsx": "react-jsx",
+    "types": ["bun", "vite/client"],
+    "isolatedDeclarations": false,
+    "declaration": false
+  },
+  "files": [],
+  "include": ["src/surface/renderer/web", "test/web", "test/**/*.tsx", "test/e2e/web*.ts"],
+  "exclude": ["dist", "node_modules", "src/surface/renderer/web/server.ts"]
+}

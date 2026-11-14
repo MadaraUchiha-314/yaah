@@ -73,7 +73,7 @@ describe('the built package', () => {
    *   Given the package built into dist/
    *   When `node dist/cli/bin.js serve --config <file>` is started with a configuration
    *        naming an OpenAI-compatible endpoint
-   *   Then it prints where it listens, an A2A client gets the model's answer through it,
+   *   Then it prints where it listens, serves the web chat at /, an A2A client gets the model's answer through it,
    *        and it stops cleanly on SIGTERM
    * Requirement: docs/specs/issue-3/requirements.md R22.1, R22.2, R22.6, R6.4
    */
@@ -102,7 +102,11 @@ describe('the built package', () => {
     const exited = new Promise<number | null>((resolve) => {
       child?.once('exit', resolve);
     });
-    const session = await HarnessSession.connect(await listeningUrl(child));
+    const url = await listeningUrl(child);
+    const page = await fetch(`${url}/`, { headers: { accept: 'text/html' } });
+    expect(page.status).toBe(200);
+    expect(await page.text()).toContain('<div id="root">');
+    const session = await HarnessSession.connect(url);
     let final: TaskView | undefined = undefined;
     for await (const view of session.send({ text: 'hello' })) {
       final = view;

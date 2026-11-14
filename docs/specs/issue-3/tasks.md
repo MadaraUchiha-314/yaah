@@ -293,7 +293,7 @@ suite. `T<n>` refers to a row of the testing plan's matrix.
   - _Requirements:_ R19.4, R19.6; abuse case 5
   - _Test:_ T2, T8 — `Scenario: A basic-catalog A2UI form round-trips an action`;
     negative test: unknown component and `javascript:` URL
-- [ ] 36. Renderer interface, contract suite and the headless A2UI model
+- [x] 36. Renderer interface, contract suite and the headless A2UI model
   - `Renderer`, `rendererContract`; `MessageProcessor` wiring shared by both UIs;
     textual fallback.
   - _Depends on:_ 34, 35
@@ -308,7 +308,7 @@ suite. `T<n>` refers to a row of the testing plan's matrix.
   - _Requirements:_ R21.1–21.3, R19.4; abuse case 6
   - _Test:_ T4, T6, T8 — `test/e2e/tui.test.ts` over a pseudo-terminal; frame
     snapshots; negative test: terminal escapes
-- [ ] 38. Web UI
+- [x] 38. Web UI
   - Vite, React, Tailwind, shadcn AI Elements patterns per `design/web-chat.html`;
     `A2uiSurface` with the themed basic catalog; task controls; Temporal link; served
     by the HTTP listener.
@@ -324,7 +324,7 @@ suite. `T<n>` refers to a row of the testing plan's matrix.
 
 ### Slice 7 — CLI, observability, demo
 
-- [ ] 40. CLI and package exports
+- [x] 40. CLI and package exports
   - `yaah`, `yaah serve`, `yaah tui --url`, `--config`; `createHarness`; subpath
     exports; `specs/api/exports.json`; package name `@yaah/yaah`.
   - _Depends on:_ 37, 38, 32
