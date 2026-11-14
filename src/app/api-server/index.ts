@@ -39,6 +39,12 @@ export interface A2aService {
   addExtension(extension: AgentExtension): () => void;
   /** Sets the function that answers `/commands`, and what is listed in the card. */
   setCommands(dispatch: CommandDispatcher, list: () => readonly CommandInfo[]): () => void;
+  /**
+   * Adds a function asked about every message no command answered, before the message
+   * enters the inbox. A reply it returns is the answer and the message goes no further;
+   * null lets it through. Asked in the order added. Returns a function that removes it.
+   */
+  addInterceptor(intercept: CommandDispatcher): () => void;
   /** Sets where a new task's inherited settings (model, effort) come from. */
   setContextSettings(read: ContextSettings): () => void;
   /**
@@ -108,8 +114,24 @@ function callerAndEvents(ctx: Context): {
   };
 }
 
-/** Adds to `set`; the function returned removes what was added. */
-function adder<T>(set: Set<T>): (item: T) => () => void {
+/** Asks the command dispatcher, then each interceptor; the first reply is the answer. */
+async function firstReply(
+  commands: readonly CommandDispatcher[],
+  interceptors: ReadonlySet<CommandDispatcher>,
+  request: RequestContext,
+): ReturnType<CommandDispatcher> {
+  for (const answer of [...commands, ...interceptors]) {
+    // oxlint-disable-next-line no-await-in-loop -- asked in order; the first reply ends it
+    const reply = await answer(request);
+    if (reply !== null) {
+      return reply;
+    }
+  }
+  return null;
+}
+
+/** Builds the function that adds an item to `set` and returns the function removing it. */
+function adderTo<T>(set: Set<T>): (item: T) => () => void {
   return (item: T): (() => void) => {
     set.add(item);
     return (): void => {
@@ -126,6 +148,7 @@ export function apply(ctx: Context): void {
   const gate = new AdmissionGate();
   let commands: { dispatch: CommandDispatcher; list: () => readonly CommandInfo[] } | null = null;
   let contextSettings: ContextSettings | null = null;
+  const interceptors = new Set<CommandDispatcher>();
   const executor = new HarnessExecutor({
     store: runtime.taskStore,
     hub: runtime.hub,
@@ -137,7 +160,7 @@ export function apply(ctx: Context): void {
     contextSettings: (contextId: string): Partial<TaskSettings> =>
       contextSettings === null ? {} : contextSettings(contextId),
     commands: (request: RequestContext): ReturnType<CommandDispatcher> =>
-      commands === null ? Promise.resolve(null) : commands.dispatch(request),
+      firstReply(commands === null ? [] : [commands.dispatch], interceptors, request),
   });
   const cardFor = (baseUrl: string): AgentCard =>
     buildAgentCard({
@@ -157,7 +180,7 @@ export function apply(ctx: Context): void {
     addAdmission: (check: Admission): (() => void) => gate.add(check),
     openTasks: (caller: string): number =>
       runtime.taskStore.open().filter((task) => readSettings(task).caller === caller).length,
-    addExtension: adder(extensions),
+    addExtension: adderTo(extensions),
     setCommands: (
       dispatch: CommandDispatcher,
       list: () => readonly CommandInfo[],
@@ -167,6 +190,7 @@ export function apply(ctx: Context): void {
         commands = null;
       };
     },
+    addInterceptor: adderTo(interceptors),
     setContextSettings: (read: ContextSettings): (() => void) => {
       contextSettings = read;
       return (): void => {

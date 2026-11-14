@@ -6,6 +6,7 @@
 import type { IncomingMessage, Server, ServerResponse } from 'node:http';
 import { createServer } from 'node:http';
 
+import type { McpServer } from '@modelcontextprotocol/server';
 import { createMcpHandler } from '@modelcontextprotocol/server';
 
 import { createStubServer } from './stub-tools.ts';
@@ -67,8 +68,13 @@ export async function freePort(): Promise<number> {
 }
 
 /** Serves the stub on `port` of the loopback interface. */
-export async function serveStubHttp(port: number): Promise<StubHttp> {
-  const handler = createMcpHandler(() => createStubServer());
+export function serveStubHttp(port: number): Promise<StubHttp> {
+  return serveMcpHttp(port, createStubServer);
+}
+
+/** Serves the MCP server `create` builds — one per request — on `port` of the loopback interface. */
+export async function serveMcpHttp(port: number, create: () => McpServer): Promise<StubHttp> {
+  const handler = createMcpHandler(() => create());
   const server: Server = createServer((req, res) => {
     void (async () => {
       try {

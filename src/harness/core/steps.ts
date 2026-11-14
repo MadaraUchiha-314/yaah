@@ -10,6 +10,7 @@ import type { Redactor } from '../../kernel/redactor.ts';
 import type { EntityRegistry } from '../../kernel/registry.ts';
 import type { LLM, LlmEvent } from '../models/llm/types.ts';
 import { t } from '../../kernel/strings.ts';
+import type { ToolGuard } from '../tools/execute.ts';
 import { executeToolCall } from '../tools/execute.ts';
 import { errorResult } from '../tools/types.ts';
 import type { SkillsSection } from './context/builder.ts';
@@ -73,6 +74,8 @@ export interface StepDeps {
   /** How long one tool call may take. */
   readonly toolTimeoutMs: number;
   readonly skills?: SkillsSection | undefined;
+  /** Asked before every tool call; it may refuse the call. */
+  readonly toolGuard?: ToolGuard | undefined;
   /** What plugins add to a turn: a prompt section and a transformation of the reply. */
   readonly turnExtensions?: ((task: TaskSnapshot) => readonly TurnExtension[]) | undefined;
   readonly compact?: Compactor | undefined;
@@ -283,7 +286,10 @@ async function invokeTool(
   deps.sink.activity(ctx.taskId, { ...about, phase: 'started' });
   const raw = ctx.outcomeUnknown
     ? errorResult('unknown-outcome', t('tool.error.unknown-outcome', { name: call.name }))
-    : await executeToolCall(deps.registry, call, ctx, { timeoutMs: deps.toolTimeoutMs });
+    : await executeToolCall(deps.registry, call, ctx, {
+        timeoutMs: deps.toolTimeoutMs,
+        guard: deps.toolGuard,
+      });
   const result = redactResult(deps, raw);
   assertCurrent(ctx);
   await deps.persistence.conversation.put(ctx.taskId, ctx.key, [

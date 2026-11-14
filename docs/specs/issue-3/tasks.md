@@ -343,7 +343,7 @@ suite. `T<n>` refers to a row of the testing plan's matrix.
   - _Requirements:_ R18.2
   - _Test:_ T2 — `Scenario: One trace spans the A2A call, the model call and the tool
     call`
-- [ ] 43. Fail-closed start-up and security sweep
+- [x] 43. Fail-closed start-up and security sweep
   - Missing credential, invalid composition, plugin validation; path containment
     helpers; run the whole T8 suite.
   - _Depends on:_ 40
@@ -360,14 +360,14 @@ suite. `T<n>` refers to a row of the testing plan's matrix.
 
 ### Slice 8 — extensibility (P1)
 
-- [ ] 45. Skills
+- [x] 45. Skills
   - Parser and validator for the Agent Skills specification; `load_skill`,
     `read_skill_file`; path containment.
   - _Depends on:_ 14
   - _Requirements:_ R9.1, R9.4; abuse case 11
   - _Test:_ T2, T8 — `Scenario: A skill body is loaded only when used`; negative test:
     path escape
-- [ ] 46. Agent plugins and hooks
+- [x] 46. Agent plugins and hooks
   - `plugin.json` and `mcp.json` with the vendored schemas; the hooks service;
     MCP-tool hooks and prompt commands from the client-extension directory.
   - _Depends on:_ 45, 25, 27

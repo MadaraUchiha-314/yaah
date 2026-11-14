@@ -47,6 +47,7 @@ describe('createHarness', () => {
       'inbox-triage',
       'plan',
       'roles',
+      'skills',
       'summary',
       'system',
       'task',

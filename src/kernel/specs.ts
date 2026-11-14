@@ -1,4 +1,5 @@
 import { extensionJsonSchemas } from '../app/api-server/extensions/index.ts';
+import { hooksJsonSchemas } from '../harness/plugins/hooks-file.ts';
 import { configJsonSchema } from './config-schema.ts';
 import type { Json } from './json.ts';
 
@@ -10,7 +11,11 @@ import type { Json } from './json.ts';
  * without the change showing up in review as a diff of `specs/`.
  */
 export function generatedSpecs(): Readonly<Record<string, Json>> {
-  return { 'specs/config/config.schema.json': configJsonSchema(), ...extensionJsonSchemas() };
+  return {
+    'specs/config/config.schema.json': configJsonSchema(),
+    ...extensionJsonSchemas(),
+    ...hooksJsonSchemas(),
+  };
 }
 
 /** The exact text written to, and expected in, a spec file. */

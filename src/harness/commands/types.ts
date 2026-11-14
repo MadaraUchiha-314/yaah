@@ -23,6 +23,11 @@ export interface CommandContext {
 export interface CommandResult {
   /** Shown to the user. */
   readonly text: string;
+  /**
+   * When set, the command is not answered with `text`: this is sent to the model in
+   * place of what the user typed, as the user's message. How a prompt command works.
+   */
+  readonly prompt?: string | undefined;
 }
 
 /** The function behind a command. */

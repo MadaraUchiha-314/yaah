@@ -17,7 +17,19 @@ export interface ExecuteOptions {
   readonly allowed?: ReadonlySet<string>;
   /** How long the tool may take. Absent means no limit beyond the caller's signal. */
   readonly timeoutMs?: number;
+  /** Asked after the arguments passed their schema; an error it returns is the result. */
+  readonly guard?: ToolGuard | undefined;
 }
+
+/**
+ * A check made before a tool runs — how a hook refuses a call. Returns null to let the
+ * call through, or the error the model is shown instead of a result. One that throws
+ * refuses the call.
+ */
+export type ToolGuard = (
+  call: ToolCall,
+  ctx: Omit<ToolCallContext, 'callId'>,
+) => Promise<ToolError | null>;
 
 /**
  * Checks arguments against the tool's JSON Schema.
@@ -74,8 +86,9 @@ function deadline(ms: number | undefined, onExpire: () => void): Promise<'timeou
 /**
  * Runs one tool call.
  *
- * The tool runs only if it is registered, allowed for the task, and its arguments pass
- * its schema. A thrown error, a timeout or a refusal becomes `{ ok: false, error }`.
+ * The tool runs only if it is registered, allowed for the task, its arguments pass its
+ * schema and `options.guard` lets it through. A thrown error, a timeout or a refusal
+ * becomes `{ ok: false, error }`.
  */
 export async function executeToolCall(
   registry: EntityRegistry,
@@ -97,6 +110,10 @@ export async function executeToolCall(
   };
   ctx.signal.addEventListener('abort', abort, { once: true });
   try {
+    const refused = (await options.guard?.(call, ctx)) ?? null;
+    if (refused !== null) {
+      return { ok: false, error: refused };
+    }
     const outcome = await Promise.race([
       tool.invoke(call.args, { ...ctx, callId: call.id, signal: controller.signal }),
       deadline(options.timeoutMs, abort),
