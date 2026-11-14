@@ -1,0 +1,5 @@
+# What extends the agent: commands, tools, sub-agents.
+- id: commands
+  name: ../../harness/commands/index.ts
+- id: a2a-agents
+  name: ../../harness/a2a/index.ts

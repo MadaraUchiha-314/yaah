@@ -15,6 +15,7 @@ import { HarnessExecutor } from './executor.ts';
 import type { CommandInfo } from './extensions/index.ts';
 import { CALLER_HEADER } from './guards.ts';
 import { handlerFacing } from './task-store.ts';
+import type { TaskSettings } from './task-port.ts';
 import { readSettings } from './task-port.ts';
 
 /** The A2A side of the harness. */
@@ -33,7 +34,12 @@ export interface A2aService {
   addExtension(extension: AgentExtension): () => void;
   /** Sets the function that answers `/commands`, and what is listed in the card. */
   setCommands(dispatch: CommandDispatcher, list: () => readonly CommandInfo[]): () => void;
+  /** Sets where a new task's inherited settings (model, effort) come from. */
+  setContextSettings(read: ContextSettings): () => void;
 }
+
+/** Reads the settings a conversation chose, for the tasks it creates. */
+export type ContextSettings = (contextId: string) => Partial<TaskSettings>;
 
 declare module 'cordis' {
   interface Context {
@@ -68,6 +74,7 @@ export function apply(ctx: Context): void {
   const inbox = new Inbox(ctx.persistence.inbox, durable);
   const extensions = new Set<AgentExtension>();
   let commands: { dispatch: CommandDispatcher; list: () => readonly CommandInfo[] } | null = null;
+  let contextSettings: ContextSettings | null = null;
   const executor = new HarnessExecutor({
     store: runtime.taskStore,
     hub: runtime.hub,
@@ -76,6 +83,8 @@ export function apply(ctx: Context): void {
     tasks: runtime.tasks,
     agentId: 'self',
     callerOf,
+    contextSettings: (contextId: string): Partial<TaskSettings> =>
+      contextSettings === null ? {} : contextSettings(contextId),
     commands: (request: RequestContext): ReturnType<CommandDispatcher> =>
       commands === null ? Promise.resolve(null) : commands.dispatch(request),
   });
@@ -111,12 +120,24 @@ export function apply(ctx: Context): void {
         commands = null;
       };
     },
+    setContextSettings: (read: ContextSettings): (() => void) => {
+      contextSettings = read;
+      return (): void => {
+        contextSettings = null;
+      };
+    },
   });
-  // After a restart: every open task gets its run back, then what was accepted but not
-  // consumed is handed to those runs again. This waits until the whole harness is up —
-  // a recovered run may call a model or a tool at once.
+  recoverWhenReady(ctx, inbox);
+}
+
+/**
+ * After a restart: every open task gets its run back, then what was accepted but not
+ * consumed is handed to those runs again. This waits until the whole harness is up — a
+ * recovered run may call a model or a tool at once.
+ */
+function recoverWhenReady(ctx: Context, inbox: Inbox): void {
   ctx.on('harness/ready', async () => {
-    await durable.recover(runtime.taskStore.open().map((task) => task.id));
+    await ctx.durable.recover(ctx.taskRuntime.taskStore.open().map((task) => task.id));
     await inbox.redeliverPending();
   });
 }

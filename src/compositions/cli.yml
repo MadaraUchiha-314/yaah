@@ -8,6 +8,10 @@
   name: '@cordisjs/include'
   config:
     path: ./shared/app.yml
+- id: extensions-layer
+  name: '@cordisjs/include'
+  config:
+    path: ./shared/extensions.yml
 - id: http-layer
   name: '@cordisjs/include'
   config:
