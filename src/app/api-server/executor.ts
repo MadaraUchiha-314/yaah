@@ -18,12 +18,13 @@ import type { JsonObject } from '../../kernel/json.ts';
 import { isJsonObject } from '../../kernel/json.ts';
 import type { DurableExecution } from '../durable/types.ts';
 import type { Inbox } from '../inbox/inbox.ts';
-import type { HubEvent, StreamHub } from '../stream-hub.ts';
-import { messageText, partsFromA2a, resultArtifact } from './convert.ts';
+import type { StreamHub } from '../stream-hub.ts';
+import { messageText, metadataObject, partsFromA2a } from './convert.ts';
+import { activityEvent, artifactEvent } from './executor-events.ts';
 import type { DurableExecutionTask } from './extensions/index.ts';
 import { A2A_EVENT_MEDIA_TYPE, EXT, SCHEMAS, readExtension } from './extensions/index.ts';
 import type { A2aTaskPort, TaskSettings } from './task-port.ts';
-import { SETTINGS_KEY, STATUS_KEY, readTaskModel, replyArtifactId } from './task-port.ts';
+import { SETTINGS_KEY, STATUS_KEY, readTaskModel } from './task-port.ts';
 import type { YaahTaskStore } from './task-store.ts';
 
 /** Answers a `/command` without involving the task's run. Provided by the commands plugin. */
@@ -131,6 +132,8 @@ export class HarnessExecutor implements AgentExecutor {
       request.task === undefined
         ? this.#create(request)
         : (this.#deps.store.get(taskId) ?? request.task);
+    // What the client offers for this turn (for example UI catalogs) travels with the task.
+    this.#deps.tasks.updateSettings(taskId, { turnMetadata: metadataObject(message.metadata) });
     bus.publish(AgentEvent.task(task));
     const inbox = readExtension(message.metadata, EXT.inboxEvents, SCHEMAS.inboxEventsRequest);
     const item: InboxItem = {
@@ -204,6 +207,7 @@ export class HarnessExecutor implements AgentExecutor {
       caller,
       llm: null,
       effort: null,
+      turnMetadata: metadataObject(message.metadata),
       ...this.#deps.contextSettings?.(request.contextId),
     };
     const task: Task = {
@@ -277,32 +281,16 @@ export class HarnessExecutor implements AgentExecutor {
           if (RESTING.has(event.state)) {
             return;
           }
+        } else if (event.type === 'activity') {
+          bus.publish(AgentEvent.statusUpdate(activityEvent(task, event.activity)));
         } else {
-          bus.publish(AgentEvent.artifactUpdate(this.#artifactEvent(task, event)));
+          bus.publish(AgentEvent.artifactUpdate(artifactEvent(task, event)));
         }
       }
     } finally {
       clearInterval(backstop);
       stop.abort();
     }
-  }
-
-  #artifactEvent(
-    task: Task,
-    event: Exclude<HubEvent, { type: 'status' }>,
-  ): Parameters<typeof AgentEvent.artifactUpdate>[0] {
-    const base = { taskId: task.id, contextId: task.contextId, metadata: undefined };
-    if (event.type === 'artifact') {
-      const artifact = resultArtifact(event.artifactId, event.parts);
-      return { ...base, artifact, append: false, lastChunk: true };
-    }
-    const artifactId = replyArtifactId(event.key);
-    if (event.type === 'reset') {
-      // The step is being attempted again: what it streamed so far is void.
-      return { ...base, artifact: resultArtifact(artifactId, []), append: false, lastChunk: false };
-    }
-    const artifact = resultArtifact(artifactId, [{ type: 'text', text: event.text }]);
-    return { ...base, artifact, append: true, lastChunk: false };
   }
 
   #rests(task: Task): boolean {

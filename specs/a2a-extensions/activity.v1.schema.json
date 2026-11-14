@@ -1,0 +1,44 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/MadaraUchiha-314/yaah/extensions/activity/v1",
+  "$defs": {
+    "statusMessageMetadata": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "type": "object",
+      "properties": {
+        "kind": {
+          "type": "string",
+          "enum": [
+            "tool"
+          ]
+        },
+        "id": {
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        },
+        "phase": {
+          "type": "string",
+          "enum": [
+            "started",
+            "finished"
+          ]
+        },
+        "ok": {
+          "type": "boolean"
+        },
+        "durationMs": {
+          "type": "number"
+        }
+      },
+      "required": [
+        "kind",
+        "id",
+        "name",
+        "phase"
+      ],
+      "additionalProperties": false
+    }
+  }
+}

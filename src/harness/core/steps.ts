@@ -5,6 +5,7 @@
  * Every handler writes under the step key it is given and replaces what that key wrote
  * before, so performing a step twice leaves the stores as performing it once.
  */
+import type { Json } from '../../kernel/json.ts';
 import type { Redactor } from '../../kernel/redactor.ts';
 import type { EntityRegistry } from '../../kernel/registry.ts';
 import type { LLM, LlmEvent } from '../models/llm/types.ts';
@@ -28,6 +29,31 @@ import type {
   ToolResult,
 } from './types.ts';
 
+/** A piece of a model's reply after a turn extension has read it. */
+export type ReplyPiece =
+  | { readonly type: 'text'; readonly text: string }
+  | { readonly type: 'data'; readonly mediaType: string; readonly data: Json };
+
+/** Reads a reply as it streams and turns marked-up spans into structured parts. */
+export interface ReplyStream {
+  /** Takes the next chunk of text and returns the pieces that are complete so far. */
+  feed(chunk: string): readonly ReplyPiece[];
+  /** Called after the last chunk; returns whatever was held back. */
+  close(): readonly ReplyPiece[];
+}
+
+/**
+ * What a plugin adds to one turn of one task — for example, teaching the model to emit
+ * A2UI when the client said it can render it, and turning what the model wrote into
+ * validated UI messages.
+ */
+export interface TurnExtension {
+  /** Added to the context as its own system message. */
+  readonly promptSection: string;
+  /** Opens a reader for the next reply. */
+  openReply(): ReplyStream;
+}
+
 /** Replaces older conversation with a summary. Provided by the compaction module. */
 export type Compactor = (ctx: StepContext) => Promise<StepOutput<'context.compact'>>;
 
@@ -47,6 +73,8 @@ export interface StepDeps {
   /** How long one tool call may take. */
   readonly toolTimeoutMs: number;
   readonly skills?: SkillsSection | undefined;
+  /** What plugins add to a turn: a prompt section and a transformation of the reply. */
+  readonly turnExtensions?: ((task: TaskSnapshot) => readonly TurnExtension[]) | undefined;
   readonly compact?: Compactor | undefined;
 }
 
@@ -72,25 +100,74 @@ function resolveLlm(deps: StepDeps, task: TaskSnapshot): LLM {
 async function request(
   deps: StepDeps,
   taskId: string,
-): Promise<{ task: TaskSnapshot; llm: LLM; request: ReturnType<typeof buildContext> }> {
+): Promise<{
+  task: TaskSnapshot;
+  llm: LLM;
+  request: ReturnType<typeof buildContext>;
+  extensions: readonly TurnExtension[];
+}> {
   const [task, events, snapshot] = await Promise.all([
     deps.tasks.load(taskId),
     deps.persistence.conversation.read(taskId),
     deps.persistence.state.get(taskId, PLAN_SNAPSHOT),
   ]);
+  const extensions = deps.turnExtensions?.(task) ?? [];
   const built = buildContext({
     registry: deps.registry,
     task,
     planSnapshot: typeof snapshot === 'string' ? snapshot : '',
     events,
     skills: deps.skills,
+    extraSections: extensions.map((extension: TurnExtension) => extension.promptSection),
   });
   const llm = resolveLlm(deps, task);
   const fallback = deps.defaultEffort;
   const effort =
     built.effort ??
     (fallback !== undefined && llm.capabilities.efforts.includes(fallback) ? fallback : undefined);
-  return { task, llm, request: { ...built, effort } };
+  return { task, llm, request: { ...built, effort }, extensions };
+}
+
+/** Gathers a reply's pieces into message parts, merging text that belongs together. */
+class ReplyParts {
+  readonly parts: ContentPart[] = [];
+  readonly #emit: (text: string) => void;
+
+  constructor(emit: (text: string) => void) {
+    this.#emit = emit;
+  }
+
+  add(pieces: readonly ReplyPiece[]): void {
+    for (const piece of pieces) {
+      const last = this.parts.at(-1);
+      if (piece.type === 'data') {
+        this.parts.push({ type: 'data', mediaType: piece.mediaType, data: piece.data });
+      } else if (piece.text !== '') {
+        this.#emit(piece.text);
+        if (last?.type === 'text') {
+          this.parts[this.parts.length - 1] = { type: 'text', text: last.text + piece.text };
+        } else {
+          this.parts.push({ type: 'text', text: piece.text });
+        }
+      }
+    }
+  }
+}
+
+/** Passes text through each turn extension's reader in turn. */
+function readThrough(streams: readonly ReplyStream[], text: string | null): readonly ReplyPiece[] {
+  let pieces: readonly ReplyPiece[] = text === null ? [] : [{ type: 'text', text }];
+  for (const stream of streams) {
+    const next: ReplyPiece[] = [];
+    for (const piece of pieces) {
+      next.push(...(piece.type === 'text' ? stream.feed(piece.text) : [piece]));
+    }
+    if (text === null) {
+      next.push(...stream.close());
+    }
+    pieces = next;
+  }
+  return pieces;
 }
 
 /** Collects what one model call produced, forwarding text to the stream as it arrives. */
@@ -98,15 +175,18 @@ async function consume(
   deps: StepDeps,
   ctx: StepContext,
   stream: AsyncIterable<LlmEvent>,
+  extensions: readonly TurnExtension[],
 ): Promise<{ events: ConversationEventBody[]; output: StepOutput<'llm.invoke'> }> {
   const events: ConversationEventBody[] = [];
   const toolCalls: ToolCall[] = [];
-  let text = '';
+  const readers = extensions.map((extension: TurnExtension) => extension.openReply());
+  const reply = new ReplyParts((text: string) => {
+    deps.sink.delta(ctx.taskId, ctx.key, text);
+  });
   let usage = { inputTokens: 0, outputTokens: 0, cachedInputTokens: 0 };
   for await (const event of stream) {
     if (event.type === 'text.delta') {
-      text += event.text;
-      deps.sink.delta(ctx.taskId, ctx.key, event.text);
+      reply.add(readThrough(readers, event.text));
     } else if (event.type === 'tool-call') {
       toolCalls.push(event.call);
       events.push({ type: 'tool-call', call: event.call, opaque: event.opaque });
@@ -116,9 +196,9 @@ async function consume(
       ({ usage } = event);
     }
   }
-  if (text.length > 0) {
-    const parts: ContentPart[] = [{ type: 'text', text }];
-    events.unshift({ type: 'message', role: 'agent', parts, sourceId: ctx.key });
+  reply.add(readThrough(readers, null));
+  if (reply.parts.length > 0) {
+    events.unshift({ type: 'message', role: 'agent', parts: reply.parts, sourceId: ctx.key });
   }
   return { events, output: { toolCalls, usage } };
 }
@@ -191,6 +271,29 @@ async function acceptItems(
   return { accepted: events.length };
 }
 
+/** Runs one tool call, tells the interfaces about it, and stores its result. */
+async function invokeTool(
+  deps: StepDeps,
+  ctx: StepContext,
+  input: StepInput<'tool.invoke'>,
+): Promise<StepOutput<'tool.invoke'>> {
+  const { call } = input;
+  const about = { kind: 'tool', id: call.id, name: call.name } as const;
+  const startedAt = Date.now();
+  deps.sink.activity(ctx.taskId, { ...about, phase: 'started' });
+  const raw = ctx.outcomeUnknown
+    ? errorResult('unknown-outcome', t('tool.error.unknown-outcome', { name: call.name }))
+    : await executeToolCall(deps.registry, call, ctx, { timeoutMs: deps.toolTimeoutMs });
+  const result = redactResult(deps, raw);
+  assertCurrent(ctx);
+  await deps.persistence.conversation.put(ctx.taskId, ctx.key, [
+    { type: 'tool-result', callId: call.id, result },
+  ]);
+  const durationMs = Date.now() - startedAt;
+  deps.sink.activity(ctx.taskId, { ...about, phase: 'finished', ok: result.ok, durationMs });
+  return { ok: result.ok };
+}
+
 /** Builds the step implementations over `deps`. */
 export function createStepHandlers(deps: StepDeps): StepHandlers {
   const { conversation } = deps.persistence;
@@ -207,7 +310,8 @@ export function createStepHandlers(deps: StepDeps): StepHandlers {
     'llm.invoke': async (ctx) => {
       const built = await request(deps, ctx.taskId);
       deps.sink.reset(ctx.taskId, ctx.key);
-      const result = await consume(deps, ctx, built.llm.stream(built.request, ctx.signal));
+      const stream = built.llm.stream(built.request, ctx.signal);
+      const result = await consume(deps, ctx, stream, built.extensions);
       assertCurrent(ctx);
       await conversation.put(ctx.taskId, ctx.key, result.events);
       const [first] = result.events;
@@ -216,17 +320,7 @@ export function createStepHandlers(deps: StepDeps): StepHandlers {
       }
       return result.output;
     },
-    'tool.invoke': async (ctx, input) => {
-      const raw = ctx.outcomeUnknown
-        ? errorResult('unknown-outcome', t('tool.error.unknown-outcome', { name: input.call.name }))
-        : await executeToolCall(deps.registry, input.call, ctx, { timeoutMs: deps.toolTimeoutMs });
-      const result = redactResult(deps, raw);
-      assertCurrent(ctx);
-      await conversation.put(ctx.taskId, ctx.key, [
-        { type: 'tool-result', callId: input.call.id, result },
-      ]);
-      return { ok: result.ok };
-    },
+    'tool.invoke': (ctx, input) => invokeTool(deps, ctx, input),
     'task.transition': async (ctx, input) => {
       const task = await deps.tasks.load(ctx.taskId);
       const status = nextStatus(task.longRunning, input);

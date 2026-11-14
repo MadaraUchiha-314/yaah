@@ -50,6 +50,7 @@ function yaahExtensions(init: AgentCardInit): AgentExtension[] {
       'How tasks are executed durably, and where to watch them.',
       init.durable,
     ),
+    extension(EXT.activity, 'Tool calls as they start and finish, on working status updates.'),
     ...(init.extensions ?? []),
   ];
 }

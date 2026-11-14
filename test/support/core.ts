@@ -51,6 +51,8 @@ export interface Core {
   readonly runner: DirectRunner;
   readonly handlers: StepHandlers;
   readonly deltas: string[];
+  /** Tool activity as `<name> <phase>`, in order. */
+  readonly activities: string[];
   /** Resolves when the task reaches a terminal state. */
   readonly finished: Promise<TransitionResult>;
   /** Puts a message in the inbox and hands it to the run. */
@@ -110,6 +112,7 @@ export async function createCore(options: CoreOptions = {}): Promise<Core> {
   const tasks = new MemoryTaskPort();
   tasks.create({ ...options.task, taskId });
   const deltas: string[] = [];
+  const activities: string[] = [];
   const handlers = createStepHandlers({
     registry,
     persistence,
@@ -120,6 +123,9 @@ export async function createCore(options: CoreOptions = {}): Promise<Core> {
       },
       reset: () => {
         deltas.length = 0;
+      },
+      activity: (_task, activity) => {
+        activities.push(`${activity.name} ${activity.phase}`);
       },
     },
     redactor: new Redactor(),
@@ -162,6 +168,7 @@ export async function createCore(options: CoreOptions = {}): Promise<Core> {
     runner,
     handlers,
     deltas,
+    activities,
     finished: runTask(runner),
     deliver,
     send: (text, sendOptions = {}) =>

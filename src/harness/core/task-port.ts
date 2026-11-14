@@ -4,6 +4,7 @@
  * own; it sees the task through this port.
  */
 import type { TaskState, TaskSubState } from './step-runner.ts';
+import type { JsonObject } from '../../kernel/json.ts';
 import type { ContentPart, StepKey, TaskId, TaskModel } from './types.ts';
 
 /** The task as the core needs to see it. */
@@ -19,6 +20,25 @@ export interface TaskSnapshot {
   readonly llm: string | null;
   /** The reasoning effort chosen for this task's context, or null for the default. */
   readonly effort: string | null;
+  /**
+   * The metadata of the latest message from the client. A turn extension reads what the
+   * client offered for this turn from here (for example the UI catalogs it can render).
+   */
+  readonly turnMetadata: JsonObject;
+}
+
+/** Something the agent is doing right now, for the interfaces following the task. */
+export interface Activity {
+  readonly kind: 'tool';
+  /** The model's id for the call. */
+  readonly id: string;
+  /** The tool's name. */
+  readonly name: string;
+  readonly phase: 'started' | 'finished';
+  /** Set when finished. */
+  readonly ok?: boolean | undefined;
+  /** Set when finished: how long it took. */
+  readonly durationMs?: number | undefined;
 }
 
 /** A new status for a task. */
@@ -50,6 +70,8 @@ export interface StreamSink {
   delta(taskId: TaskId, key: StepKey, text: string): void;
   /** Everything step `key` streamed so far is void: the step is being attempted again. */
   reset(taskId: TaskId, key: StepKey): void;
+  /** The agent started or finished something worth showing. Never stored. */
+  activity(taskId: TaskId, activity: Activity): void;
 }
 
 /** A sink that drops everything. */
@@ -58,6 +80,9 @@ export const NO_STREAM: StreamSink = {
     // Nothing is listening.
   },
   reset(): void {
+    // Nothing is listening.
+  },
+  activity(): void {
     // Nothing is listening.
   },
 };

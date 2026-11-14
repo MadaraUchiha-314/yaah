@@ -33,6 +33,8 @@ export interface ContextInputs {
   readonly planSnapshot: string;
   readonly events: readonly ConversationEvent[];
   readonly skills?: SkillsSection | undefined;
+  /** Sections plugins add for this turn; each becomes a system message after the head. */
+  readonly extraSections?: readonly string[] | undefined;
   /** Tool ids the task may use. Absent means every registered tool. */
   readonly allowedTools?: ReadonlySet<string> | undefined;
 }
@@ -106,7 +108,13 @@ export function buildContext(inputs: ContextInputs): LlmRequest {
   const head = [renderPrompt(registry, 'system', {}), skills]
     .filter((text: string) => text.length > 0)
     .join('\n\n');
-  const messages: LlmMessage[] = [system(head, true), system(taskSection(registry, task.model))];
+  const messages: LlmMessage[] = [
+    system(head, true),
+    ...(inputs.extraSections ?? [])
+      .filter((text: string) => text !== '')
+      .map((text: string) => system(text, true)),
+    system(taskSection(registry, task.model)),
+  ];
   if (inputs.planSnapshot.length > 0) {
     messages.push(system(renderPrompt(registry, 'plan', { steps: inputs.planSnapshot }), true));
   }

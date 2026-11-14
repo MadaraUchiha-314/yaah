@@ -22,12 +22,14 @@ export const EXT: {
   readonly inboxEvents: string;
   readonly commands: string;
   readonly durableExecution: string;
+  readonly activity: string;
 } = {
   taskLifecycle: `${EXTENSION_BASE}/task-lifecycle/v1`,
   taskModel: `${EXTENSION_BASE}/task-model/v1`,
   inboxEvents: `${EXTENSION_BASE}/inbox-events/v1`,
   commands: `${EXTENSION_BASE}/commands/v1`,
   durableExecution: `${EXTENSION_BASE}/durable-execution/v1`,
+  activity: `${EXTENSION_BASE}/activity/v1`,
 };
 
 /** The media type of a part that carries an A2A event as inbox input. */
@@ -84,6 +86,20 @@ export interface CommandOutcome {
   readonly status: 'executed' | 'failed' | 'unknown';
 }
 
+/**
+ * What the agent is doing right now, on the message of a `working` status update. It is
+ * streamed for interfaces to show and is not kept in the task's history.
+ */
+export interface ActivityStatus {
+  readonly kind: 'tool';
+  /** The model's id for the call. */
+  readonly id: string;
+  readonly name: string;
+  readonly phase: 'started' | 'finished';
+  readonly ok?: boolean | undefined;
+  readonly durationMs?: number | undefined;
+}
+
 /** Durable-execution parameters in the agent card. */
 export interface DurableExecutionParams {
   readonly mode: 'none' | 'temporal-embedded' | 'temporal-remote';
@@ -123,6 +139,7 @@ export interface ExtensionSchemas {
   readonly commandOutcome: z.ZodType<CommandOutcome>;
   readonly durableExecutionParams: z.ZodType<DurableExecutionParams>;
   readonly durableExecutionTask: z.ZodType<DurableExecutionTask>;
+  readonly activityStatus: z.ZodType<ActivityStatus>;
 }
 
 /** The schema of each extension payload, by where it rides. */
@@ -182,6 +199,14 @@ export const SCHEMAS: ExtensionSchemas = {
     runId: z.string(),
     url: z.string(),
   }),
+  activityStatus: z.strictObject({
+    kind: z.enum(['tool']),
+    id: z.string(),
+    name: z.string(),
+    phase: z.enum(['started', 'finished']),
+    ok: z.boolean().optional(),
+    durationMs: z.number().optional(),
+  }),
 };
 
 /** A payload under an extension URI did not match the extension's schema. */
@@ -240,6 +265,9 @@ export function extensionJsonSchemas(): Readonly<Record<string, Json>> {
     [file('commands.v1')]: schema(EXT.commands, {
       agentCardParams: SCHEMAS.commandsParams,
       messageMetadata: SCHEMAS.commandOutcome,
+    }),
+    [file('activity.v1')]: schema(EXT.activity, {
+      statusMessageMetadata: SCHEMAS.activityStatus,
     }),
     [file('durable-execution.v1')]: schema(EXT.durableExecution, {
       agentCardParams: SCHEMAS.durableExecutionParams,

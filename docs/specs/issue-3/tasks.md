@@ -286,7 +286,7 @@ suite. `T<n>` refers to a row of the testing plan's matrix.
   - _Depends on:_ 20
   - _Requirements:_ R19.1–19.3
   - _Test:_ T2 — `Scenario: Two surfaces follow one task`
-- [ ] 35. A2UI on the agent side
+- [x] 35. A2UI on the agent side
   - `@a2ui/agent` prompt snippet and parsing; A2UI data parts; user actions as
     conversation events; the official A2UI extension in the card.
   - _Depends on:_ 14, 19
