@@ -2,8 +2,8 @@
 type: requirements
 phase: requirements-definition
 workItem: "issue-3"
-status: draft
-approvedBy: []
+status: approved
+approvedBy: ["MadaraUchiha-314"]
 collaborators: [product-manager, architect, engineer, approver]
 overrides: {}
 ---
@@ -829,3 +829,9 @@ provider's model list during design.
 > comments (issue-109). Append-only and attributed: an approval never silently
 > discards a reviewer's suggestions, and the feedback travels with the document
 > it concerns rather than living in a side-channel tracker.
+
+### 2026-11-14 — approved
+
+**@MadaraUchiha-314** wrote:
+
+approved
