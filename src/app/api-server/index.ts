@@ -9,6 +9,7 @@ import { DefaultRequestHandler, STATE_HEADERS_KEY } from '@a2a-js/sdk/server';
 import type { Context } from 'cordis';
 
 import type { InboxItem } from '../../harness/core/types.ts';
+import { VERSION } from '../../kernel/version.ts';
 import { Inbox } from '../inbox/inbox.ts';
 import { buildAgentCard } from './agent-card.ts';
 import type { CommandDispatcher } from './executor.ts';
@@ -57,9 +58,6 @@ declare module 'cordis' {
     'inbox/discarded'(taskId: string, reason: string): void;
   }
 }
-
-/** The harness's own version, shown in the agent card. */
-const VERSION = '0.1.0';
 
 export const name = 'api-server';
 export const inject: readonly string[] = [
