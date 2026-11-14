@@ -281,7 +281,7 @@ suite. `T<n>` refers to a row of the testing plan's matrix.
 
 ### Slice 6 — surfaces
 
-- [ ] 34. `HarnessSession` and `TaskView`
+- [x] 34. `HarnessSession` and `TaskView`
   - SDK client wrapper; extension activation; `follow` as snapshot-then-subscribe.
   - _Depends on:_ 20
   - _Requirements:_ R19.1–19.3

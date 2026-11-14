@@ -20,4 +20,6 @@ export interface ContractMatchers {
   readonly toEqual: (expected: unknown) => void;
   readonly toBeUndefined: () => void;
   readonly toContain: (expected: unknown) => void;
+  /** Negates the next matcher. */
+  readonly not: ContractMatchers;
 }
