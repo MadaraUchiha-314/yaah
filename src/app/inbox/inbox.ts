@@ -34,9 +34,17 @@ export class Inbox {
     return outcome;
   }
 
-  /** Hands every stored, unconsumed item to its task's run again. Used after a restart. */
-  async redeliverPending(): Promise<number> {
-    const pending = await this.#store.pending();
+  /**
+   * Hands stored, unconsumed items to their tasks' runs again — all of them after a
+   * restart, or only those received before `before` when the heartbeat looks for items
+   * a run never took. A run that already holds an item ignores the second delivery.
+   */
+  async redeliverPending(before?: Date): Promise<number> {
+    const stored = await this.#store.pending();
+    const pending =
+      before === undefined
+        ? stored
+        : stored.filter((item: InboxItem) => new Date(item.receivedAt) < before);
     await Promise.all(
       pending.map((item: InboxItem) => this.#durable.deliver(item.taskId, refOf(item))),
     );

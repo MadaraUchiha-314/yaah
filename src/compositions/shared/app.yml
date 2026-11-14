@@ -6,3 +6,5 @@
   name: ../../app/durable/index.ts
 - id: api-server
   name: ../../app/api-server/index.ts
+- id: heartbeat
+  name: ../../app/heartbeat/index.ts

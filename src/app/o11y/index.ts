@@ -12,6 +12,8 @@ import type { Request, Response } from 'express';
 
 import type { StepCall } from '../../harness/core/step-middleware.ts';
 import type { InboxItem } from '../../harness/core/types.ts';
+// For the heartbeat's events, which this plugin logs.
+import type { Heartbeat } from '../heartbeat/index.ts';
 import { addTraceparentSource } from '../../kernel/trace-context.ts';
 import { Logger, fileWriter, stderrWriter } from './logger.ts';
 import { endFacts, logFacts, recordTypeOf, spanNameOf, startFacts } from './steps.ts';
@@ -21,6 +23,8 @@ declare module 'cordis' {
   interface Context {
     /** Writes structured log records. */
     log: Logger;
+    /** The heartbeat, when the composition has one; its events are logged here. */
+    heartbeat: Heartbeat;
     /** Starts spans and knows the trace of the running work. */
     tracing: Tracing;
   }
@@ -139,6 +143,16 @@ function listen(ctx: Context): void {
       { command, error: reason, traceId: ctx.tracing.traceId() },
       'error',
     );
+  });
+  ctx.on('task/stalled', (taskId: string, idleMs: number) => {
+    ctx.log.record('task.stalled', { taskId, idleMs }, 'warn');
+  });
+  ctx.on('heartbeat/tick', (_at: Date, redelivered: number) => {
+    ctx.log.record('heartbeat.tick', { redelivered }, 'debug');
+  });
+  ctx.on('heartbeat/failed', (error: unknown) => {
+    const reason = error instanceof Error ? error.message : String(error);
+    ctx.log.record('harness.event', { event: 'heartbeat/failed', error: reason }, 'error');
   });
   ctx.on('durable/run-error', (taskId: string, error: unknown) => {
     const reason = error instanceof Error ? error.message : String(error);

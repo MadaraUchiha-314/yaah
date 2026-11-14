@@ -68,6 +68,11 @@
   "./app/durable/temporal": [
     "startTemporal"
   ],
+  "./app/heartbeat": [
+    "apply",
+    "inject",
+    "name"
+  ],
   "./app/o11y": [
     "apply",
     "inject",

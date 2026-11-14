@@ -381,7 +381,7 @@ suite. `T<n>` refers to a row of the testing plan's matrix.
   - _Requirements:_ R12.1–12.5
   - _Test:_ T2 — `Scenario: A message from a non-participant is rejected`; a small-input
     round trip; a task created for a participant
-- [ ] 48. Heartbeat
+- [x] 48. Heartbeat
   - Timer plugin, pending-item re-delivery, `task.stalled`.
   - _Depends on:_ 22
   - _Requirements:_ R16.1–16.3

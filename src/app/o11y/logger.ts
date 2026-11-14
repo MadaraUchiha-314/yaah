@@ -26,6 +26,8 @@ export type RecordType =
   | 'command.invoked'
   | 'command.executed'
   | 'command.failed'
+  | 'task.stalled'
+  | 'heartbeat.tick'
   | 'harness.event';
 
 /** What a record carries besides its type. Undefined values are left out. */
