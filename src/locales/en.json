@@ -58,5 +58,12 @@
   "agent.invoke.ended": "The agent's task ended as {state}. {text}",
   "agent.self.name": "self",
   "agent.self.description": "A copy of you with a fresh, empty context. Use it for a self-contained piece of work whose details you do not need to keep.",
-  "error.agent.interface-host": "Agent \"{id}\": its card points to {host}, which is neither the card's own host nor in a2a.allowed_hosts."
+  "error.agent.interface-host": "Agent \"{id}\": its card points to {host}, which is neither the card's own host nor in a2a.allowed_hosts.",
+  "llm.anthropic.description": "Anthropic's {model}, called over the Messages API.",
+  "llm.error.aborted": "The request to {provider} model {model} was aborted.",
+  "llm.error.connection": "Could not reach {provider}, or lost the connection, while calling model {model}.",
+  "llm.error.status": "{provider} answered HTTP {status} ({type}) for model {model}: {reason}",
+  "llm.error.stream": "{provider} failed while model {model} was answering ({type}): {reason}",
+  "llm.error.incomplete": "The answer of {provider} model {model} ended before it was complete.",
+  "llm.error.unsupported-content": "{provider} model {model} does not accept content of type {mediaType}."
 }

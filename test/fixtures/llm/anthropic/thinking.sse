@@ -1,0 +1,39 @@
+event: message_start
+data: {"type":"message_start","message":{"model":"claude-haiku-5-5","id":"msg_011Ch3W1vuQzVqTgXTZ95uDp","type":"message","role":"assistant","content":[],"container":null,"stop_reason":null,"stop_sequence":null,"stop_details":null,"usage":{"input_tokens":441,"cache_creation_input_tokens":0,"cache_read_input_tokens":0,"cache_creation":{"ephemeral_5m_input_tokens":0,"ephemeral_1h_input_tokens":0},"output_tokens":3,"service_tier":"standard","inference_geo":"global","speed":"standard"},"diagnostics":null}        }
+
+event: content_block_start
+data: {"type":"content_block_start","index":0,"content_block":{"type":"thinking","thinking":"","signature":""}     }
+
+event: ping
+data: {"type": "ping"}
+
+event: content_block_delta
+data: {"type":"content_block_delta","index":0,"delta":{"type":"thinking_delta","thinking":""}}
+
+event: content_block_delta
+data: {"type":"content_block_delta","index":0,"delta":{"type":"signature_delta","signature":"CAQSnwUKEAgTGAI4AUIIdGhpbmtpbmcSDBWCn799nd8RJr97OBoMbXWXhD4z6AirKHNBIjCcLc+TkZvV/v2xtCChdXev0z0+m48E9OyDnCt+Myl1PAvX3YbNjAAGVPJpTq+D1TMqvAR6jmSHEH5u5Qd6pxuhj4obP3fRzy+2fJGGi04olGyBqQGKJ46FexXBq8Q6wcrO04ZDXchh2ppe2vcN9v5CwCLAxMlRQ5n8A4EbJ7fz5KiCntdeq5RBcmby4XukrvID1RaKsq5TYjWfvikIhGqkBWqgRIYdsrJ/3QUVHqRdO9l/4bZu9vdjEYKyMrNynJSigZtq8L9SjOKp26b/fVHzWlRbgUXIWl83gMTnMHJXbeUgzARm7UcbX+ZC4ZDFsQjA/oOLA8ETg09cbNGhDn7kvc9lAZ605TjjzItfuMmJ8BOxZeyVXdr4iptsmS0Q4D5YTj2RQPW6CAHIEJIWw57r/7/J9M/8YVQ3KU4DcMDugiVTspliIl+vI99b3CBoae/LyGDyJWDQU/wY0i1YTLSQCU+P1hAb7MMlxGFuX14S/49Z09wBu2PhmtXGsHQ1IfKEUOYBgnyrnwqu66bGiTCfGOCnN3GCTU7+1LEuGVCHXNVKctDjxHkThi4d14GrpbIiTfIWsqpqHeoQCTEUEsm36RDnGaYQhMQrN2M9MlNpNXXz/UK9pvYzTxzqCFIXQWcPG9T2HyOdFp7/ebMbeMtgdTq9tDDdSGH6zHRlk27jxTrJnKwn9RNqzFmvzR43MpX60jvRYSNihTCzrRfCPYj3bB7ncLKDXKximUachEeSFx2zTiSSw9pm8+wdotl7jOCHtE3fpz2cwQ5A/2C/wvPRHlc1a7YpBBurpj9CzOFJwrqMKy3nrFBe3fxVqzfTZRgB"}        }
+
+event: content_block_stop
+data: {"type":"content_block_stop","index":0             }
+
+event: content_block_start
+data: {"type":"content_block_start","index":1,"content_block":{"type":"tool_use","id":"toolu_01V2APUEqdyTVNnQyTuN5oLF","name":"lookup","input":{},"caller":{"type":"direct"}}     }
+
+event: content_block_delta
+data: {"type":"content_block_delta","index":1,"delta":{"type":"input_json_delta","partial_json":""}       }
+
+event: content_block_delta
+data: {"type":"content_block_delta","index":1,"delta":{"type":"input_json_delta","partial_json":"{\"id\": "} }
+
+event: content_block_delta
+data: {"type":"content_block_delta","index":1,"delta":{"type":"input_json_delta","partial_json":"\"A-647\"}"}              }
+
+event: content_block_stop
+data: {"type":"content_block_stop","index":1     }
+
+event: message_delta
+data: {"type":"message_delta","delta":{"stop_reason":"tool_use","stop_sequence":null,"stop_details":null,"container":null},"usage":{"input_tokens":441,"cache_creation_input_tokens":0,"cache_read_input_tokens":0,"output_tokens":90,"output_tokens_details":{"thinking_tokens":40}}      }
+
+event: message_stop
+data: {"type":"message_stop"              }
+
