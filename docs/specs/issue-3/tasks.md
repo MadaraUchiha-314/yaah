@@ -85,7 +85,7 @@ suite. `T<n>` refers to a row of the testing plan's matrix.
 
 ### Slice 2 — core
 
-- [ ] 7. Persistence interfaces, memory backend and the contract suite
+- [x] 7. Persistence interfaces, memory backend and the contract suite
   - `ConversationStore`, `StateStore`, `PlanStore`, `InboxStore`, `StepJournal`;
     `persistenceContract(factory)` including replace-by-`StepKey`.
   - _Depends on:_ 3
@@ -96,20 +96,20 @@ suite. `T<n>` refers to a row of the testing plan's matrix.
   - _Depends on:_ 7
   - _Requirements:_ R5.3, R5.4
   - _Test:_ T3 — the same contract suite against SQLite on Bun and Node
-- [ ] 9. LLM interface, contract suite and the scripted LLM
+- [x] 9. LLM interface, contract suite and the scripted LLM
   - `LLM`, `LlmRequest`, `LlmEvent`, `llmContract(factory)`; `ScriptedLlm` that replays
     fixtures from `test/fixtures/llm/`.
   - _Depends on:_ 3
   - _Requirements:_ R7.3
   - _Test:_ T3 — `test/contract/llm.contract.ts` against `ScriptedLlm`
-- [ ] 10. Tool interface, argument validation and the stub tools
+- [x] 10. Tool interface, argument validation and the stub tools
   - `Tool`, `ToolResult`, `toolContract`; `@cfworker/json-schema` validation; a tool
     without a schema is not registered.
   - _Depends on:_ 3
   - _Requirements:_ R8.2, R8.3, R8.5
   - _Test:_ T3, T8 — `tool.contract.ts`; `Scenario: Invalid tool arguments are refused
     before the call`; negative test: tool without a schema
-- [ ] 11. `StepRunner`, the in-memory runner and `runTask`
+- [x] 11. `StepRunner`, the in-memory runner and `runTask`
   - The loop of the design: wake, accept, iterate, drain, interrupt, cancel, limits.
     A test runner that executes steps directly with no journal.
   - _Depends on:_ 7, 9, 10
@@ -118,27 +118,27 @@ suite. `T<n>` refers to a row of the testing plan's matrix.
     failed tool call does not lose the others` · `Scenario: The iteration limit fails
     the task` · `Scenario: A message during tool execution is read at the next
     iteration` · `Scenario: An interrupting item aborts the current iteration`
-- [ ] 12. Task model, transitions and `ask_user`
+- [x] 12. Task model, transitions and `ask_user`
   - `TaskModel` schema; the state table of the task-lifecycle extension as a pure
     function; the suspending `ask_user` path; the task-token budget.
   - _Depends on:_ 11
   - _Requirements:_ R4.1, R4.2, R14.1, R14.2, R14.4, R14.5, R14.8; abuse case 9
   - _Test:_ T1, T8 — `test/unit/harness/core/transitions.test.ts`; negative tests:
     iteration and token limits
-- [ ] 13. Plan and state tools
+- [x] 13. Plan and state tools
   - `plan_set`, `plan_update_step` with DAG validation; `state_get`, `state_set` with
     schema-checked prefixes.
   - _Depends on:_ 11
   - _Requirements:_ R4.3, R4.4, R5.1, R5.2
   - _Test:_ T1 — `plan.test.ts` (cycle, unknown dependency, duplicate), `state.test.ts`
-- [ ] 14. Context window manager
+- [x] 14. Context window manager
   - Sections 1–6, hashing and cached rendering, cache boundaries, sanitised
     third-party descriptions, plan snapshot rule.
   - _Depends on:_ 6, 12, 13
   - _Requirements:_ R6.1, R6.2; abuse case 4
   - _Test:_ T1, T6, T8 — byte-stability test; rendered-context snapshot; negative test:
     injected instructions stay inside a result block
-- [ ] 15. Compaction
+- [x] 15. Compaction
   - `CompactionStrategy` service, default strategy, `context.compact` step and event.
   - _Depends on:_ 14
   - _Requirements:_ R6.3–6.6

@@ -1,0 +1,23 @@
+/**
+ * The slice of a test runner the contract suites need. `bun:test`, Vitest and Jest all
+ * satisfy it, so an operator can run yaah's contracts against their own implementation
+ * with whichever runner they use:
+ *
+ * ```ts
+ * import { describe, expect, test } from 'bun:test';
+ * persistenceContract({ describe, expect, test }, () => myBackend());
+ * ```
+ */
+export interface ContractApi {
+  readonly describe: (name: string, body: () => void) => void;
+  readonly test: (name: string, body: () => void | Promise<void>) => void;
+  readonly expect: (actual: unknown) => ContractMatchers;
+}
+
+/** The matchers the suites use. */
+export interface ContractMatchers {
+  readonly toBe: (expected: unknown) => void;
+  readonly toEqual: (expected: unknown) => void;
+  readonly toBeUndefined: () => void;
+  readonly toContain: (expected: unknown) => void;
+}
