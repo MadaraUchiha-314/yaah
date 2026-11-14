@@ -9,8 +9,8 @@ Every conversation with the harness is an A2A task. A client may ask for a **lon
 ## Current behaviour
 
 - WHEN a message arrives without a task id THEN the system SHALL create a task and answer on it.
-- WHEN a client asks for a long-running task (`task-lifecycle` extension, `longRunning: true`) THEN the system SHALL keep the task in `INPUT_REQUIRED` between turns, with the sub-state `idle` in the status message's metadata.
-- WHEN the model calls `ask_user` THEN the system SHALL suspend the turn, put the task in `INPUT_REQUIRED` with sub-state `awaiting-user` and the question as the status message, and use the next message as the answer to that call.
+- WHEN a client asks for a long-running task (`task-lifecycle` extension, `longRunning: true`) THEN the system SHALL keep the task in `INPUT_REQUIRED` between turns, with the sub-state `awaiting-next-interaction` in the status message's metadata.
+- WHEN the model calls `ask_user` THEN the system SHALL suspend the turn, put the task in `INPUT_REQUIRED` with sub-state `awaiting-user-input` and the question as the status message, and use the next message as the answer to that call.
 - WHEN a client sends `{ action: "complete" }` on the `task-lifecycle` extension THEN the system SHALL move the task to `COMPLETED`; WHEN a client cancels THEN to `CANCELED`. A task that is not long-running completes after its answer.
 - WHEN a message arrives for a task that is working THEN the system SHALL store it and show it to the model at its next iteration; with `interrupt: true` (`inbox-events` extension) it SHALL abort the iteration in progress first. Each such message gets a well-formed stream of its own.
 - The system SHALL store every accepted message before delivering it, and SHALL consume each exactly once, also across a client retry and a restart.
