@@ -35,12 +35,12 @@ into 27 testable requirements. Three things shape all of them:
 
 **What it costs.** The issue is epic-sized. To keep the demo reachable, each requirement
 carries a priority: **P0** is needed for the definition-of-done demo, **P1** is asked for
-in the issue but the demo does not depend on it. Both are in scope; P0 is built and
-proved first. If P1 should move to follow-up tickets, say so at this gate
-([open question 2](#open-questions)).
+in the issue but the demo does not depend on it. Both are delivered under issue #3, as
+stacked pull requests, P0 first; no follow-up tickets are opened.
 
-**What to check first.** The [open questions](#open-questions) — each states the default
-I will proceed on — and [Requirement 14](#requirement-14--task-lifecycle-and-long-running-tasks-p0),
+**What to check first.** The [decisions and open questions](#open-questions) — five
+answered in review, three still on their stated default — the accepted risk of running
+without authentication ([Security considerations](#security-considerations)), and [Requirement 14](#requirement-14--task-lifecycle-and-long-running-tasks-p0),
 which fixes how a task stays open across turns.
 
 ### The system, as the issue draws it
@@ -257,8 +257,9 @@ tied to one provider.
    the configured policy; IF it fails with a non-retryable error THEN the system SHALL
    fail the call with a typed error naming the provider and model.
 5. The system SHALL define a System One model interface for fast decisions (a typed
-   decision with a confidence), separate from the LLM interface. _(P1: a shipped
-   implementation.)_
+   decision with a confidence), separate from the LLM interface.
+6. The system SHALL ship a System One implementation backed by OpenAI's decisions
+   model. _(P1)_
 
 ### Requirement 8 — Tools and MCP (P0)
 
@@ -487,6 +488,13 @@ customer never loses a conversation or pays twice for the same step.
    same A2A behaviour in all three modes.
 7. IF remote Temporal is configured and unreachable at start THEN the system SHALL fail
    to start and SHALL NOT fall back to the in-process mode.
+8. WHEN the harness starts with a Temporal mode THEN the system SHALL show the URL of
+   the Temporal Web UI for its namespace — in the TUI, in the server's start-up output
+   and in the web UI — and that URL SHALL open the dashboard from the machine the
+   harness runs on.
+9. WHERE embedded Temporal is used the system SHALL serve the Temporal Web UI locally.
+10. WHEN a task runs under a Temporal mode THEN each surface SHALL offer a link from
+    the task to its workflow in the Temporal Web UI.
 
 _The issue's open questions on Temporal (workflow versus activity boundaries,
 non-determinism on replay, pod crashes) are answered in the design; criteria 2–5 are the
@@ -571,7 +579,7 @@ import, with neither a second-class citizen.
 
 #### Acceptance criteria (EARS)
 
-1. WHEN the `yaah` npm package is installed and `yaah` is run with no arguments THEN the
+1. WHEN the `@yaah/yaah` npm package is installed and `yaah` is run with no arguments THEN the
    system SHALL start a harness and open the TUI.
 2. The system SHALL provide a command that starts the harness as an A2A server and
    serves the web UI.
@@ -678,7 +686,9 @@ that I can accept the work.
 5. The demo SHALL run against Temporal Cloud (namespace `yaah.gtebu`) with OpenAI
    GPT 6.1 as the LLM, with credentials taken from `TEMPORAL_API_KEY` and
    `OPENAI_API_KEY`.
-6. Evidence of criteria 1–5 SHALL be committed under `docs/specs/issue-3/evidence/`,
+6. WHILE the demo runs the Temporal Web UI SHALL be open at the URL the harness
+   showed, and SHALL show the demo task's workflow.
+7. Evidence of criteria 1–6 SHALL be committed under `docs/specs/issue-3/evidence/`,
    redacted.
 
 ## Non-functional requirements
@@ -717,10 +727,10 @@ operator's configuration grants capability.**
     PII), persisted state, and durable-execution history, which stores payloads outside
     the process.
 - **Abuse cases (EARS):**
-  1. WHEN an unauthenticated request reaches the A2A API on a non-loopback interface
-     THEN the system SHALL reject it.
-  2. WHEN a caller reads, continues, completes or cancels a task it does not own THEN
-     the system SHALL reject the request without revealing whether the task exists.
+  1. WHEN the harness starts with no bind address configured THEN the system SHALL
+     listen on the loopback interface only.
+  2. WHEN a browser request to the API carries an `Origin` that is not the harness's
+     own web UI or an origin the operator allowed THEN the system SHALL reject it.
   3. WHEN the LLM requests a tool or sub-agent that is not registered for the task THEN
      the system SHALL refuse and SHALL return the refusal as the tool result.
   4. WHEN a tool result, MCP tool description, agent card or sub-agent reply contains
@@ -740,13 +750,16 @@ operator's configuration grants capability.**
   9. WHEN a sub-agent chain or loopback recursion exceeds the configured depth, or a
      task exceeds its iteration or token budget, THEN the system SHALL stop it.
   10. WHEN an inbox event claims to update a task THEN the system SHALL accept it only
-      from the party that task was delegated to.
+      for a sub-task the harness itself delegated, matched on task id and context id,
+      and SHALL discard it otherwise.
   11. WHEN a skill or plugin path resolves outside its configured root THEN the system
       SHALL refuse to load it.
   12. WHEN a credential would appear in a log, a trace, an error returned to a caller
       or a prompt THEN the system SHALL redact it.
 - **Fail closed:**
-  - No authentication configured and a non-loopback bind requested → refuse to start.
+  - A non-loopback bind is requested → the system starts, and states at start-up that
+    the API is unauthenticated and on which address it listens. It never widens the
+    bind on its own.
   - A credential named in the configuration is absent from the environment → the entity
     that needs it fails to register, and start fails if it is required.
   - Unknown configuration keys, an invalid `cordis.yaml`, or a plugin that fails
@@ -756,44 +769,59 @@ operator's configuration grants capability.**
   - A tool with no declared input schema, or arguments that fail it → the call is not
     made.
 
-Authentication and task ownership are not in the issue; they are added here because the
-server is otherwise an open relay to the operator's LLM account
-([open question 5](#open-questions)).
+- **Accepted risk — no authentication.** Decided in review
+  ([comment](https://github.com/MadaraUchiha-314/yaah/pull/6#discussion_r4575328411)):
+  this work item requires no authentication; an authentication plugin comes later. Until
+  it exists, anyone who can reach the port can read, continue, complete or cancel any
+  task and spend the operator's LLM budget, and any local process can do so on the
+  default loopback bind. What limits that here is not identity: the loopback default,
+  the origin check, the request limits, and the start-up notice. The system SHALL
+  expose an extension point on the API server where an authentication plugin can
+  reject a request before a task is created or read, and the agent card SHALL declare
+  no security scheme while none is installed. The same applies to the Temporal Web UI
+  URL of Requirement 17.8–17.9: served locally, it is unauthenticated too, and binds to
+  loopback by default.
 
 ## Out of scope
 
 - **Self-improvement** — simulation, evaluation, optimization. The issue marks it TBD.
 - **Memory** and **Sandbox** — drawn in the diagram, not described in the issue
-  ([open question 3](#open-questions)).
+  ([open question 2](#open-questions)).
 - **MCP Apps** rendering, and **video** as a modality — "may" in the issue.
-- **A System One implementation backed by a specific model** (the issue's "Jev") — the
-  interface ships; see [open question 4](#open-questions).
-- **Packages for crates.io or PyPI** — see [open question 1](#open-questions).
+- **Authentication and authorization** — a later plugin; this work item ships only the
+  extension point ([Security considerations](#security-considerations)).
+- **A System One implementation for "Jev"** — the shipped one uses OpenAI's decisions
+  model (Requirement 7.6).
+- **Packages for crates.io or PyPI** — TypeScript on npm only, pending
+  [open question 1](#open-questions).
 - **Multi-tenant administration, billing, user management** and any hosted offering.
 - **Custom A2UI catalogs** — only the default catalog.
 
 ## Open questions
 
-Each has the default I proceed on if the approval does not say otherwise. Answer on the
-pull request.
+Three remain. Each has the default I proceed on if the approval does not say otherwise.
+Answer on the pull request.
 
-1. **Language and distribution.** The issue says "crate/pypi/npm"; the repository is
-   TypeScript on Bun, and cordis and the named A2A SDK are TypeScript. _Default:_
-   TypeScript only, one npm package `yaah`.
-2. **Scope of this ticket.** _Default:_ P0 and P1 are both delivered under issue #3, P0
-   first, across several pull requests. The alternative is to close #3 on P0 and open
-   follow-up tickets for the P1 rows of the [priority table](#priority-at-a-glance).
-3. **Memory and Sandbox.** _Default:_ out of scope, no interface reserved.
-4. **System One / "Jev".** I do not know what Jev refers to. _Default:_ ship the
-   interface only.
-5. **Authentication.** _Default:_ loopback-only with no authentication by default;
-   a bearer token (from an environment variable, declared in the agent card) is required
-   to bind any other interface; a task is owned by the identity that created it.
-6. **Model id.** "OpenAI GPT 6.1" — _Default:_ the model id is configuration; tests use
-   `gpt-6.1`, confirmed against the provider's model list during design.
-7. **Embedded Temporal.** In TypeScript this means a local Temporal development server
+1. **Language.** The issue says "crate/pypi/npm"; the repository is TypeScript on Bun,
+   and cordis and the named A2A SDK are TypeScript. _Default:_ TypeScript only.
+2. **Memory and Sandbox.** _Default:_ out of scope, no interface reserved.
+3. **Embedded Temporal.** In TypeScript this means a local Temporal development server
    started by the harness, not an in-process engine. _Default:_ accept that; the browser
    build uses the in-process (none) mode.
+
+One item is carried into design rather than asked: the exact model ids for "OpenAI
+GPT 6.1" and for OpenAI's decisions model are configuration, pinned against the
+provider's model list during design.
+
+### Decided in review
+
+| Question | Decision | Source |
+| --- | --- | --- |
+| Package name | `@yaah/yaah` on npm — `yaah` reads too much like `yarn`. The command stays `yaah`. | [comment](https://github.com/MadaraUchiha-314/yaah/pull/6#discussion_r4575321839) |
+| Scope of this ticket | No new issues. P0 and P1 are delivered under #3 as stacked pull requests. | [comment](https://github.com/MadaraUchiha-314/yaah/pull/6#discussion_r4575324595) |
+| System One | Ship an implementation on OpenAI's decisions model (Requirement 7.6). | [comment](https://github.com/MadaraUchiha-314/yaah/pull/6#discussion_r4575325868) |
+| Authentication | None required; an authentication plugin comes later. | [comment](https://github.com/MadaraUchiha-314/yaah/pull/6#discussion_r4575328411) |
+| Temporal dashboard | Its URL is shown and reachable whenever the harness runs with Temporal (Requirement 17.8–17.10). | [comment](https://github.com/MadaraUchiha-314/yaah/pull/6#discussion_r4575332090) |
 
 ## Review comments
 
