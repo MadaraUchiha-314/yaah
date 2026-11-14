@@ -187,6 +187,15 @@
     "viewOfTask",
     "withUserMessage"
   ],
+  "./surface/renderer/tui": [
+    "BASIC_CATALOG_ID",
+    "createTuiSurface",
+    "isPlain",
+    "runTui",
+    "sanitize",
+    "tuiRenderer",
+    "tuiSurface"
+  ],
   "./testing": [
     "MemoryTaskPort",
     "ScriptedLlm",

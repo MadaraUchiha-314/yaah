@@ -33,7 +33,7 @@ export function validateToolArgs(tool: Tool, args: Json): ToolError | null {
   if (typeof schema !== 'object' || schema === null || Array.isArray(schema)) {
     return {
       code: 'invalid-arguments',
-      message: t('tool.error.no-schema', { name: tool.ref.id }),
+      message: t('tool.error.uncallable', { name: tool.ref.id }),
     };
   }
   const outcome = new Validator(tool.inputSchema, '2020-12', true).validate(args);
