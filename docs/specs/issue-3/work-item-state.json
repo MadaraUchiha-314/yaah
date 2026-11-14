@@ -283,7 +283,18 @@
   "effort": "medium",
   "claudeArtifact": true,
   "repos": [],
-  "pullRequests": [],
+  "pullRequests": [
+    {
+      "ref": "github:MadaraUchiha-314/yaah#6",
+      "repository": "MadaraUchiha-314/yaah",
+      "number": 6,
+      "url": "https://github.com/MadaraUchiha-314/yaah/issues/6",
+      "stateDir": "pr-loops/MadaraUchiha-314__yaah/pr-6",
+      "state": "open",
+      "linkedAt": "2026-11-14T18:28:01+00:00",
+      "linkedBy": "session"
+    }
+  ],
   "loop": "pdlc-work-item-loop",
   "phase": "requirements-definition"
 }
