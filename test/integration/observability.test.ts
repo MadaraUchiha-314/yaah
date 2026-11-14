@@ -219,3 +219,28 @@ describe('observability', () => {
     expect(span?.attributes['error.type']).toBe('LlmError');
   });
 });
+
+describe('observability: harness events', () => {
+  test('events other plugins raise are logged at the level they deserve', async () => {
+    const path = logFile();
+    running = await startHarness({
+      config: `[o11y]\nlog_level = "debug"\nlog_file = ${JSON.stringify(path)}`,
+    });
+    const { ctx } = running.harness;
+    ctx.emit('heartbeat/failed', new Error('store is gone'));
+    ctx.emit('system-one/unavailable', 'openai/gpt-6-luna', 'OPENAI_API_KEY');
+    ctx.emit('inbox/discarded', 't1', 'not delegated');
+    await ctx.heartbeat.beat();
+    await running.stop();
+    running = undefined;
+    const records = readLog(path);
+    const failed = records.find((record) => record['event'] === 'heartbeat/failed');
+    expect(failed?.level).toBe('error');
+    expect(failed?.['error']).toBe('store is gone');
+    expect(records.find((record) => record['event'] === 'system-one/unavailable')?.level).toBe(
+      'debug',
+    );
+    expect(records.find((record) => record.type === 'inbox.discarded')?.level).toBe('warn');
+    expect(records.some((record) => record.type === 'heartbeat.tick')).toBe(true);
+  });
+});

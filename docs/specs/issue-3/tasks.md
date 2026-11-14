@@ -404,7 +404,7 @@ suite. `T<n>` refers to a row of the testing plan's matrix.
   - _Requirements:_ R24.3–24.6
   - _Test:_ T2, T4 — `Scenario: An audio turn is transcribed for a text-only model`;
     audio chunks arrive before the final event; microphone-denied path
-- [ ] 51. System One and Langfuse
+- [x] 51. System One and Langfuse
   - `SystemOne` interface, contract suite, the OpenAI Decisions implementation, the
     opt-in inbox triage; the Langfuse exporter preset.
   - _Depends on:_ 18, 42
