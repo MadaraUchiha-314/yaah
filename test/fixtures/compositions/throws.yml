@@ -1,0 +1,6 @@
+- id: base
+  name: '@cordisjs/include'
+  config:
+    path: ./shared/base.yml
+- id: broken
+  name: ../plugins/throws.ts

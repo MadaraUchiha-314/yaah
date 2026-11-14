@@ -1,0 +1,3 @@
+# Shared by every build: what the harness needs whatever surrounds it.
+- id: system-prompt
+  name: ../../harness/system-prompt/index.ts

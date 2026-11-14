@@ -38,7 +38,7 @@ suite. `T<n>` refers to a row of the testing plan's matrix.
 
 ### Slice 1 — kernel
 
-- [ ] 1. Project layout, dependencies and test scripts
+- [x] 1. Project layout, dependencies and test scripts
   - Create the `src/` tree of the design (kernel, surface, app, harness, cli,
     compositions, prompts, locales). Add the pinned kernel dependencies. Add scripts
     `test:unit`, `test:integration`, `test:contract`, `test:security`, `test:node` and
@@ -47,20 +47,20 @@ suite. `T<n>` refers to a row of the testing plan's matrix.
   - _Depends on:_ none
   - _Requirements:_ R26.1, R26.3
   - _Test:_ T14 — `bun run check` and `bun run test:node` on an empty suite per directory
-- [ ] 2. Errors, strings and the redactor
+- [x] 2. Errors, strings and the redactor
   - `YaahError` hierarchy; `t(key, params)` over `src/locales/<locale>.json` with
     fallback to `en`; `Redactor` (substring and sensitive-key redaction).
   - _Depends on:_ 1
   - _Requirements:_ R10.4, R10.5, R18.4
   - _Test:_ T1, T15 — `test/unit/kernel/strings.test.ts`, `redactor.test.ts` (red→green)
-- [ ] 3. Entity model and registry
+- [x] 3. Entity model and registry
   - `EntityRef`, `Entity`, `Locality`, `Registry` as a cordis service; registration
     inside `ctx.effect`.
   - _Depends on:_ 1
   - _Requirements:_ R2.1–2.6, R1.5
   - _Test:_ T1 — `test/unit/kernel/registry.test.ts`: null version, not-found,
     conflict, override, removal on dispose
-- [ ] 4. Kernel bootstrap and compositions
+- [x] 4. Kernel bootstrap and compositions
   - `kernel/bootstrap.ts` over cordis loader and include; `shared/*.yml`, `cli.yml`,
     `server.yml` with placeholder plugins; `PluginLoadError`.
   - _Depends on:_ 3
@@ -68,7 +68,7 @@ suite. `T<n>` refers to a row of the testing plan's matrix.
   - _Test:_ T2 — `Scenario: A composition replaces a default plugin by id` ·
     `Scenario: A plugin that fails to load stops start-up and is named` ·
     `Scenario: Disposing a plugin removes its tools and commands`
-- [ ] 5. Configuration
+- [x] 5. Configuration
   - zod schema (`.strict()`), `~/.yaah/config.toml` creation with mode `0600`,
     `--config` precedence, `[[overrides]]` → include patches, generated
     `specs/config/config.schema.json`.
@@ -76,7 +76,7 @@ suite. `T<n>` refers to a row of the testing plan's matrix.
   - _Requirements:_ R22.3–22.5, R22.7, R1.3
   - _Test:_ T1, T3, T6 — `test/unit/kernel/config.test.ts`; schema equality; default
     file snapshot
-- [ ] 6. Prompts as entities
+- [x] 6. Prompts as entities
   - `Prompt` entity loaded from `src/prompts/*.md`; override and extension; the minimal
     `system.md`, `roles.md`, `untrusted-data.md`.
   - _Depends on:_ 3

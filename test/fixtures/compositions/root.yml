@@ -1,0 +1,4 @@
+- id: base
+  name: '@cordisjs/include'
+  config:
+    path: ./shared/base.yml

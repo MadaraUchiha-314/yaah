@@ -4,5 +4,12 @@
   "singleQuote": true,
   "semi": true,
   "trailingComma": "all",
-  "ignorePatterns": ["dist/**", "coverage/**", "bun.lock", ".the-loop/**", "docs/specs/**"]
+  "ignorePatterns": [
+    "dist/**",
+    "coverage/**",
+    "bun.lock",
+    ".the-loop/**",
+    "docs/specs/**",
+    "specs/**"
+  ]
 }

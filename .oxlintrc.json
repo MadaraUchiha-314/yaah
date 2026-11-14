@@ -35,13 +35,30 @@
     "import/no-dynamic-require": "error",
     "unicorn/prefer-module": "error",
     "unicorn/prefer-node-protocol": "error",
-    "no-console": "error"
+    "no-console": "error",
+    "typescript/prefer-readonly-parameter-types": "off",
+    "import/max-dependencies": "off"
   },
   "overrides": [
     {
-      "files": ["**/*.test.ts", "build.ts", "commitlint.config.ts"],
+      "files": [
+        "**/*.test.ts",
+        "test/**/*.ts",
+        "build.ts",
+        "commitlint.config.ts",
+        "scripts/**/*.ts"
+      ],
       "rules": {
-        "no-console": "off"
+        "no-console": "off",
+        "max-lines-per-function": "off",
+        "max-lines": "off",
+        "max-classes-per-file": "off"
+      }
+    },
+    {
+      "files": ["**/errors.ts"],
+      "rules": {
+        "max-classes-per-file": "off"
       }
     }
   ]
