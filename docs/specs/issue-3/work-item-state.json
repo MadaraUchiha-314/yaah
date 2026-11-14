@@ -1,7 +1,7 @@
 {
   "version": 1,
   "workItem": "issue-3",
-  "currentNode": "spec-explainer",
+  "currentNode": "spec-quiz",
   "nodes": {
     "phase-selection": {
       "attempts": 1,
@@ -77,8 +77,16 @@
     },
     "spec-explainer": {
       "attempts": 1,
-      "outcome": "",
+      "outcome": "pass",
       "enteredAt": "2026-11-14T20:04:00+00:00",
+      "exitedAt": "2026-11-14T20:05:56+00:00",
+      "lastBlock": "",
+      "forced": false
+    },
+    "spec-quiz": {
+      "attempts": 1,
+      "outcome": "",
+      "enteredAt": "2026-11-14T20:05:56+00:00",
       "exitedAt": "",
       "lastBlock": "",
       "forced": false
@@ -298,7 +306,11 @@
     }
   },
   "forced": [],
-  "parked": null,
+  "parked": {
+    "node": "spec-quiz",
+    "reason": "awaiting a human",
+    "since": "2026-11-14T20:05:56+00:00"
+  },
   "completions": {
     "requirements-definition": {
       "at": "2026-11-14T18:28:22+00:00",
@@ -314,6 +326,10 @@
     },
     "test-planning": {
       "at": "2026-11-14T19:58:45+00:00",
+      "by": "cli"
+    },
+    "spec-explainer": {
+      "at": "2026-11-14T20:05:56+00:00",
       "by": "cli"
     }
   },
