@@ -1,0 +1,120 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>yaah terminal UI — design prototype</title>
+<style>
+  /* Prototype for docs/specs/issue-3 (R14, R17.8, R19.4, R21, R23). Self-contained.
+     A mock of an 80-column terminal: what is drawn here is drawn with Ink in the product. */
+  :root { --page: #e9e9e6; --term: #101214; --fg: #d7dae0; --dim: #7d8590; --accent: #e5b567; --ok: #8fd19e;
+    --err: #f29a9a; --cmd: #8ab4f8; --line: #2b3036; --focus: #ffffff; }
+  @media (prefers-color-scheme: dark) { :root { --page: #050607; } }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--page); font: 14px/1.45 ui-monospace, "SF Mono", Menlo, Consolas, monospace; padding: 24px 16px; }
+  .wrap { max-width: 82ch; margin: 0 auto; display: grid; gap: 20px; }
+  .cap { font: 13px/1.4 system-ui, sans-serif; color: #55595f; }
+  @media (prefers-color-scheme: dark) { .cap { color: #9aa0a6; } }
+  .term { background: var(--term); color: var(--fg); border-radius: 8px; padding: 12px 1ch; overflow-x: auto; }
+  pre { margin: 0; font: inherit; white-space: pre; min-width: 80ch; }
+  .dim { color: var(--dim); } .acc { color: var(--accent); } .ok { color: var(--ok); } .err { color: var(--err); }
+  .cmd { color: var(--cmd); } .b { font-weight: 700; } .inv { background: var(--fg); color: var(--term); }
+  .foc { color: var(--focus); font-weight: 700; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<div>
+<p class="cap"><strong>1. Start-up and an open task.</strong> The status line shows the task state in words, the model, and the Temporal Web UI address. The key hints on the last line are the complete and cancel controls.</p>
+<div class="term"><pre>
+<span class="b">yaah</span> <span class="dim">0.1.0 · harness http://127.0.0.1:7420 · durable: temporal-embedded</span>
+<span class="dim">Temporal Web UI  http://127.0.0.1:8233</span>
+<span class="dim">────────────────────────────────────────────────────────────────────────────────</span>
+<span class="dim">you</span>   <span class="cmd">/model</span> gpt-6.1-sol
+<span class="dim">      Model set to gpt-6.1-sol.</span>
+
+<span class="dim">you</span>   Order A-1041 arrived damaged. Can I get a refund?
+
+<span class="dim">agent ⠿ 2 tools in parallel</span>
+<span class="dim">        </span><span class="ok">✓</span> mcp.orders.lookup_order   <span class="dim">420 ms</span>
+<span class="dim">        </span><span class="ok">✓</span> mcp.policy.refund_rules   <span class="dim">1.2 s</span>
+      I found the order: a ceramic lamp, delivered on 9 November, €84.00.
+      It is inside the 30-day window, so a full refund is allowed. I need
+      two details to file it.
+
+      ╭─ Refund details ───────────────────────────────── A2UI ─╮
+      │ What happened?   <span class="foc">> (*) Arrived damaged</span>                  │
+      │                    ( ) Wrong item                       │
+      │                    ( ) Never arrived                    │
+      │ Refund to          (*) Original payment method          │
+      │                    ( ) Store credit                     │
+      │ [ ] I can send a photo of the damage                    │
+      │                                                         │
+      │ [ Submit ]  [ Skip ]                                    │
+      ╰──────────────────────────────── Tab move · Space select ╯
+
+<span class="dim">────────────────────────────────────────────────────────────────────────────────</span>
+<span class="b">></span> <span class="inv"> </span>
+<span class="dim">────────────────────────────────────────────────────────────────────────────────</span>
+<span class="dim">● Waiting for you</span> · Refund for order A-1041 · gpt-6.1-sol · effort medium
+<span class="dim">^D complete · ^X cancel · ^O open in Temporal · hold Space to talk · /exit</span>
+</pre></div>
+</div>
+
+<div>
+<p class="cap"><strong>2. The agent asks for input.</strong> The request is boxed and labelled, and the status line changes with it — the state never depends on colour alone.</p>
+<div class="term"><pre>
+<span class="dim">you</span>   <span class="dim">[form]</span> Arrived damaged · Original payment method
+
+<span class="acc">agent ┃ NEEDS YOUR INPUT</span>
+<span class="acc">      ┃</span> The refund is above the €50 auto-approval limit. Should I ask a
+<span class="acc">      ┃</span> supervisor to approve it, or offer store credit now?
+
+<span class="dim">────────────────────────────────────────────────────────────────────────────────</span>
+<span class="b">></span> Ask a supervisor<span class="inv"> </span>
+<span class="dim">────────────────────────────────────────────────────────────────────────────────</span>
+<span class="acc">▲ Needs your input</span> · Refund for order A-1041 · gpt-6.1-sol · effort medium
+<span class="dim">^D complete · ^X cancel · ^O open in Temporal · hold Space to talk · /exit</span>
+</pre></div>
+</div>
+
+<div>
+<p class="cap"><strong>3. Streaming, a failed tool, and completion.</strong> A tool failure is shown and the conversation continues. After ^D (Ctrl+D) the task is closed and the prompt starts a new one.</p>
+<div class="term"><pre>
+<span class="dim">agent ⠿ 1 tool</span>
+<span class="dim">        </span><span class="err">✗</span> mcp.payments.refund       <span class="err">timeout after 30 s</span>
+<span class="dim">          not retried: the tool is not marked safe to retry</span>
+      The payment service did not answer, so I cannot confirm the refund
+      went through. I have not retried it, to avoid refunding twice. I can
+      check its status in a minute, or hand this to a supervisor▍
+
+<span class="dim">────────────────────────────────────────────────────────────────────────────────</span>
+<span class="b">></span> <span class="inv"> </span>
+<span class="dim">────────────────────────────────────────────────────────────────────────────────</span>
+<span class="dim">◐ Working</span> · Refund for order A-1041 · gpt-6.1-sol · effort medium
+<span class="dim">^C interrupt · ^X cancel · ^O open in Temporal</span>
+
+<span class="dim">   ⋮</span>
+
+<span class="ok">✓ Completed</span> · Refund for order A-1041 <span class="dim">· closed by you at 14:02</span>
+<span class="dim">Type a message to start a new task · /exit</span>
+</pre></div>
+</div>
+
+<div>
+<p class="cap"><strong>4. No colour, not a TTY</strong> (piped, or <code>NO_COLOR</code>). Plain lines; an A2UI form becomes numbered questions.</p>
+<div class="term"><pre>
+[working] Refund for order A-1041
+agent: I found the order: a ceramic lamp, delivered on 9 November, €84.00. ...
+agent: [form] Refund details
+  1. What happened? (1) Arrived damaged (2) Wrong item (3) Never arrived
+  2. Refund to (1) Original payment method (2) Store credit
+  3. I can send a photo of the damage (y/n)
+[waiting for you] answer as: 1,1,n
+</pre></div>
+</div>
+
+</div>
+</body>
+</html>

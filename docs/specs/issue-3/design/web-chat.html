@@ -1,0 +1,230 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>yaah web chat — design prototype</title>
+<style>
+  /* Prototype for docs/specs/issue-3 (R14, R17.8, R17.10, R19.4, R20, R23, R24.4).
+     Self-contained: no network. Tokens follow shadcn/ui "neutral"; one accent. */
+  :root {
+    --background: #ffffff; --foreground: #0a0a0a; --muted: #f5f5f5; --muted-foreground: #6b6b6b;
+    --border: #e5e5e5; --card: #ffffff; --primary: #171717; --primary-foreground: #fafafa;
+    --accent: #b45309; --accent-soft: #fef3e2; --ok: #166534; --ok-soft: #e7f6ec;
+    --danger: #b91c1c; --command: #1d4ed8; --ring: #a3a3a3; --radius: 10px;
+    --sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+    --mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --background: #0a0a0a; --foreground: #fafafa; --muted: #1c1c1c; --muted-foreground: #a3a3a3;
+      --border: #2a2a2a; --card: #111111; --primary: #fafafa; --primary-foreground: #171717;
+      --accent: #f5b455; --accent-soft: #33240b; --ok: #86efac; --ok-soft: #10301c;
+      --danger: #fca5a5; --command: #93c5fd; --ring: #737373; color-scheme: dark;
+    }
+  }
+  :root[data-theme="dark"] {
+    --background: #0a0a0a; --foreground: #fafafa; --muted: #1c1c1c; --muted-foreground: #a3a3a3;
+    --border: #2a2a2a; --card: #111111; --primary: #fafafa; --primary-foreground: #171717;
+    --accent: #f5b455; --accent-soft: #33240b; --ok: #86efac; --ok-soft: #10301c;
+    --danger: #fca5a5; --command: #93c5fd; --ring: #737373; color-scheme: dark;
+  }
+  * { box-sizing: border-box; }
+  html, body { height: 100%; margin: 0; }
+  body { background: var(--background); color: var(--foreground); font: 15px/1.55 var(--sans); display: flex; flex-direction: column; }
+  button { font: inherit; color: inherit; cursor: pointer; }
+  :focus-visible { outline: 2px solid var(--ring); outline-offset: 2px; }
+
+  .proto { background: var(--muted); border-bottom: 1px dashed var(--border); padding: 6px 16px; font: 12px var(--mono);
+    color: var(--muted-foreground); display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+  .proto button { border: 1px solid var(--border); background: var(--background); border-radius: 6px; padding: 2px 8px; font: 12px var(--mono); }
+  .proto button[aria-pressed="true"] { background: var(--primary); color: var(--primary-foreground); border-color: var(--primary); }
+
+  header.bar { display: flex; align-items: center; gap: 12px; padding: 10px 16px; border-bottom: 1px solid var(--border); flex-wrap: wrap; }
+  .brand { font-weight: 600; letter-spacing: -.01em; }
+  .task { display: flex; align-items: center; gap: 8px; min-width: 0; flex: 1; }
+  .task-name { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: var(--muted-foreground); min-width: 0; }
+  .pill { font: 500 12px/1 var(--sans); padding: 5px 8px; border-radius: 999px; border: 1px solid var(--border); white-space: nowrap; display: inline-flex; gap: 6px; align-items: center; }
+  .pill::before { content: ""; width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
+  .pill.working { color: var(--foreground); }
+  .pill.waiting { color: var(--muted-foreground); }
+  .pill.input { color: var(--accent); border-color: var(--accent); background: var(--accent-soft); }
+  .pill.done { color: var(--ok); background: var(--ok-soft); border-color: transparent; }
+  .actions { display: flex; gap: 6px; align-items: center; }
+  .btn { border: 1px solid var(--border); background: var(--background); border-radius: 8px; padding: 6px 10px; font-size: 13px; }
+  .btn.primary { background: var(--primary); color: var(--primary-foreground); border-color: var(--primary); }
+  .btn.ghost { border-color: transparent; color: var(--muted-foreground); }
+  .btn[disabled] { opacity: .45; cursor: not-allowed; }
+  a.link { color: var(--muted-foreground); font-size: 13px; text-underline-offset: 3px; }
+
+  main { flex: 1; overflow-y: auto; }
+  .log { max-width: 720px; margin: 0 auto; padding: 24px 16px 12px; display: flex; flex-direction: column; gap: 20px; }
+  .msg { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+  .msg.user { align-items: flex-end; }
+  .msg.user .bubble { background: var(--muted); border-radius: var(--radius); padding: 8px 12px; max-width: 85%; }
+  .who { font-size: 12px; color: var(--muted-foreground); }
+  .cmd { color: var(--command); font-family: var(--mono); font-weight: 500; }
+  .tools { border: 1px solid var(--border); border-radius: var(--radius); font-size: 13px; overflow: hidden; }
+  .tools summary { padding: 8px 12px; cursor: pointer; color: var(--muted-foreground); }
+  .tools ul { list-style: none; margin: 0; padding: 0; border-top: 1px solid var(--border); }
+  .tools li { display: flex; justify-content: space-between; gap: 12px; padding: 6px 12px; font-family: var(--mono); font-size: 12px; }
+  .tools li + li { border-top: 1px solid var(--border); }
+  .tools .ok { color: var(--ok); } .tools .err { color: var(--danger); }
+  .ask { border: 1px solid var(--accent); background: var(--accent-soft); border-radius: var(--radius); padding: 10px 12px; }
+  .ask .label { font-size: 12px; font-weight: 600; color: var(--accent); text-transform: uppercase; letter-spacing: .05em; }
+  .a2ui { margin-top: 6px; border: 1px solid var(--border); border-radius: var(--radius); padding: 14px; background: var(--card); display: grid; gap: 12px; max-width: 420px; }
+  .a2ui h3 { margin: 0; font-size: 15px; }
+  .a2ui label { display: grid; gap: 4px; font-size: 13px; color: var(--muted-foreground); }
+  .a2ui input[type="text"], .a2ui select { font: inherit; color: var(--foreground); background: var(--background); border: 1px solid var(--border); border-radius: 8px; padding: 7px 9px; }
+  .a2ui .row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+  .a2ui .tag { font: 11px var(--mono); color: var(--muted-foreground); }
+  .caret::after { content: "▍"; animation: blink 1s steps(2) infinite; color: var(--muted-foreground); }
+  @keyframes blink { 50% { opacity: 0; } }
+  @media (prefers-reduced-motion: reduce) { .caret::after { animation: none; } }
+  .note { text-align: center; font-size: 12px; color: var(--muted-foreground); }
+
+  footer.composer { border-top: 1px solid var(--border); padding: 12px 16px calc(12px + env(safe-area-inset-bottom, 0px)); }
+  .composer-inner { max-width: 720px; margin: 0 auto; border: 1px solid var(--border); border-radius: 14px; padding: 8px; display: grid; gap: 6px; background: var(--card); }
+  .composer-inner:focus-within { border-color: var(--ring); }
+  .field { min-height: 44px; padding: 6px 8px; outline: none; white-space: pre-wrap; overflow-wrap: anywhere; }
+  .field:empty::before { content: attr(data-placeholder); color: var(--muted-foreground); }
+  .composer-row { display: flex; justify-content: space-between; align-items: center; gap: 8px; flex-wrap: wrap; }
+  .chips { display: flex; gap: 6px; flex-wrap: wrap; }
+  .chip { font: 12px var(--mono); border: 1px solid var(--border); border-radius: 999px; padding: 3px 8px; color: var(--muted-foreground); background: none; }
+  .icon { width: 34px; height: 34px; border-radius: 8px; border: 1px solid var(--border); background: var(--background); display: inline-grid; place-items: center; }
+  .icon svg { width: 16px; height: 16px; }
+  .icon.rec { border-color: var(--danger); color: var(--danger); }
+  .hint { font-size: 12px; color: var(--muted-foreground); padding: 0 8px; min-height: 18px; }
+  @media (max-width: 640px) { header.bar .task { order: 3; flex-basis: 100%; } header.bar .actions { margin-left: auto; } }
+  [hidden] { display: none !important; }
+</style>
+</head>
+<body>
+
+<div class="proto" role="group" aria-label="Prototype state (not part of the product)">
+  <span>prototype state:</span>
+  <button data-state="streaming" aria-pressed="false">streaming</button>
+  <button data-state="waiting" aria-pressed="true">awaiting next interaction</button>
+  <button data-state="input" aria-pressed="false">agent asks for input</button>
+  <button data-state="done" aria-pressed="false">completed</button>
+</div>
+
+<header class="bar">
+  <span class="brand">yaah</span>
+  <div class="task">
+    <span class="pill waiting" id="pill">Waiting for you</span>
+    <span class="task-name" title="Refund for order A-1041">Refund for order A-1041</span>
+  </div>
+  <div class="actions">
+    <a class="link" href="#" title="Open this task's workflow in the Temporal Web UI">Temporal ↗</a>
+    <button class="btn" id="cancel">Cancel task</button>
+    <button class="btn primary" id="complete">Complete task</button>
+  </div>
+</header>
+
+<main>
+  <div class="log" role="log" aria-live="polite" aria-label="Conversation">
+
+    <div class="msg user"><div class="bubble"><span class="cmd">/model</span> gpt-6.1-sol</div></div>
+    <div class="note">Model set to gpt-6.1-sol · command, not sent to the model</div>
+
+    <div class="msg user"><div class="bubble">Order A-1041 arrived damaged. Can I get a refund?</div></div>
+
+    <div class="msg agent">
+      <span class="who">Agent</span>
+      <details class="tools">
+        <summary>2 tool calls, run in parallel · 1.2 s</summary>
+        <ul>
+          <li><span>mcp.orders.lookup_order</span><span class="ok">ok · 420 ms</span></li>
+          <li><span>mcp.policy.refund_rules</span><span class="ok">ok · 1.2 s</span></li>
+        </ul>
+      </details>
+      <div>I found the order: a ceramic lamp, delivered on 9 November, €84.00. It is inside the 30-day window, so a full refund is allowed. I need two details to file it.</div>
+
+      <form class="a2ui" aria-label="Refund details" onsubmit="return false">
+        <div class="row" style="justify-content:space-between"><h3>Refund details</h3><span class="tag">A2UI · basic catalog</span></div>
+        <label>What happened?
+          <select id="reason"><option>Arrived damaged</option><option>Wrong item</option><option>Never arrived</option></select>
+        </label>
+        <label>Refund to
+          <select id="method"><option>Original payment method</option><option>Store credit</option></select>
+        </label>
+        <label class="row" style="color:var(--foreground)"><input type="checkbox" id="photo"> I can send a photo of the damage</label>
+        <div class="row"><button class="btn primary" type="submit" id="submit">Submit</button><button class="btn ghost" type="button">Skip</button></div>
+      </form>
+    </div>
+
+    <div class="msg agent" id="ask" hidden>
+      <span class="who">Agent</span>
+      <div class="ask">
+        <div class="label">Needs your input</div>
+        <div>The refund is above the €50 auto-approval limit. Should I ask a supervisor to approve it, or offer store credit now?</div>
+      </div>
+    </div>
+
+    <div class="msg agent" id="stream" hidden>
+      <span class="who">Agent</span>
+      <div class="caret">Thanks. I am filing the refund to your original payment method and</div>
+    </div>
+
+    <div class="note" id="closed" hidden>Task completed by you · 14:02</div>
+  </div>
+</main>
+
+<footer class="composer">
+  <div class="composer-inner">
+    <div class="field" id="field" contenteditable="true" role="textbox" aria-multiline="true" aria-label="Message" data-placeholder="Reply, or type / for commands"></div>
+    <div class="composer-row">
+      <div class="chips"><button class="chip" title="/model">gpt-6.1-sol</button><button class="chip" title="/effort">effort: medium</button></div>
+      <div class="actions">
+        <button class="icon" aria-label="Attach an image or audio file" title="Attach"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M21 12.5 12.5 21a5.5 5.5 0 0 1-7.8-7.8L13.5 4.4a3.7 3.7 0 0 1 5.2 5.2l-8.6 8.6a1.8 1.8 0 0 1-2.6-2.6l7.8-7.8"/></svg></button>
+        <button class="icon" id="mic" aria-label="Voice input" aria-pressed="false" title="Voice input"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/></svg></button>
+        <button class="btn primary" id="send">Send</button>
+      </div>
+    </div>
+  </div>
+  <div class="hint" id="hint" style="max-width:720px;margin:4px auto 0"></div>
+</footer>
+
+<script>
+  (function () {
+    var $ = function (id) { return document.getElementById(id); };
+    var states = {
+      streaming: { pill: ["working", "Working"], ask: false, stream: true, closed: false, open: true },
+      waiting:   { pill: ["waiting", "Waiting for you"], ask: false, stream: false, closed: false, open: true },
+      input:     { pill: ["input", "Needs your input"], ask: true, stream: false, closed: false, open: true },
+      done:      { pill: ["done", "Completed"], ask: false, stream: false, closed: true, open: false }
+    };
+    function set(name) {
+      var s = states[name];
+      $("pill").className = "pill " + s.pill[0];
+      $("pill").textContent = s.pill[1];
+      $("ask").hidden = !s.ask; $("stream").hidden = !s.stream; $("closed").hidden = !s.closed;
+      $("complete").disabled = !s.open; $("cancel").disabled = !s.open; $("send").disabled = !s.open;
+      $("field").contentEditable = s.open ? "true" : "false";
+      $("field").dataset.placeholder = s.open ? (name === "input" ? "Answer the agent" : "Reply, or type / for commands") : "This task is closed. Start a new one to continue.";
+      document.querySelectorAll(".proto button").forEach(function (b) { b.setAttribute("aria-pressed", String(b.dataset.state === name)); });
+    }
+    document.querySelectorAll(".proto button").forEach(function (b) { b.addEventListener("click", function () { set(b.dataset.state); }); });
+    $("complete").addEventListener("click", function () { set("done"); });
+    $("cancel").addEventListener("click", function () { set("done"); $("pill").textContent = "Canceled"; $("pill").className = "pill waiting"; $("closed").textContent = "Task canceled by you · 14:02"; });
+    $("submit").addEventListener("click", function () { set("streaming"); });
+
+    var commands = ["/model", "/effort", "/exit"];
+    $("field").addEventListener("input", function () {
+      var text = $("field").textContent, first = text.split(/\s/)[0];
+      if (first.charAt(0) !== "/") { $("hint").textContent = ""; $("field").style.color = ""; return; }
+      var hit = commands.indexOf(first) >= 0;
+      $("field").style.color = hit ? "var(--command)" : "";
+      $("hint").textContent = hit ? first + " is a command and will not be sent to the model." : "Commands: " + commands.join("  ");
+    });
+    $("mic").addEventListener("click", function () {
+      var on = $("mic").getAttribute("aria-pressed") !== "true";
+      $("mic").setAttribute("aria-pressed", String(on));
+      $("mic").classList.toggle("rec", on);
+      $("hint").textContent = on ? "Listening… press again to send." : "";
+    });
+  })();
+</script>
+</body>
+</html>
