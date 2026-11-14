@@ -65,5 +65,9 @@
   "llm.error.status": "{provider} answered HTTP {status} ({type}) for model {model}: {reason}",
   "llm.error.stream": "{provider} failed while model {model} was answering ({type}): {reason}",
   "llm.error.incomplete": "The answer of {provider} model {model} ended before it was complete.",
-  "llm.error.unsupported-content": "{provider} model {model} does not accept content of type {mediaType}."
+  "llm.error.unsupported-content": "{provider} model {model} does not accept content of type {mediaType}.",
+  "mcp.config.no-command": "MCP server \"{server}\" uses the stdio transport but names no command.",
+  "mcp.config.no-url": "MCP server \"{server}\" uses the http transport but has no http or https URL.",
+  "mcp.error.disconnected": "The connection to MCP server \"{server}\" was lost.",
+  "mcp.error.no-detail": "The tool reported an error without saying what went wrong."
 }
