@@ -3,3 +3,5 @@
   name: ../../harness/commands/index.ts
 - id: a2a-agents
   name: ../../harness/a2a/index.ts
+- id: tools-mcp
+  name: ../../harness/tools/mcp/index.ts

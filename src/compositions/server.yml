@@ -4,6 +4,10 @@
   name: '@cordisjs/include'
   config:
     path: ./shared/core.yml
+- id: models-layer
+  name: '@cordisjs/include'
+  config:
+    path: ./shared/models.yml
 - id: app-layer
   name: '@cordisjs/include'
   config:

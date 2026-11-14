@@ -21,6 +21,12 @@ import { startHarness } from '../support/harness.ts';
 
 const STUB = fileURLToPath(new URL('../fixtures/mcp/stub-server.ts', import.meta.url));
 
+/**
+ * These tests apply the plugin themselves (to listen to its events from the start and to
+ * shorten its delays), so the entry the composition ships is switched off.
+ */
+const OWN_PLUGIN = '[[overrides]]\nid = "tools-mcp"\ndisabled = true';
+
 /** `config.toml` text for the stub as a stdio server, started with the running runtime. */
 function stdioServer(id: string, env: readonly string[] = []): string {
   return [
@@ -30,6 +36,7 @@ function stdioServer(id: string, env: readonly string[] = []): string {
     `command = ${JSON.stringify(process.execPath)}`,
     `args = [${JSON.stringify(STUB)}]`,
     `env = ${JSON.stringify(env)}`,
+    OWN_PLUGIN,
   ].join('\n');
 }
 
@@ -39,6 +46,7 @@ function httpServer(id: string, url: string): string {
     `id = ${JSON.stringify(id)}`,
     'transport = "http"',
     `url = "${url}"`,
+    OWN_PLUGIN,
   ].join('\n');
 }
 

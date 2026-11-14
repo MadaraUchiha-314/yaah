@@ -7,7 +7,9 @@ import { createHarness, resolveComposition } from './harness.ts';
 
 /** A configuration that touches neither the user's data directory nor a fixed port. */
 function quiet(extra = ''): ReturnType<typeof parseConfig> {
-  return parseConfig(`data_dir = ":memory:"\n[server]\nport = 0\n${extra}`, 'c.toml');
+  // The model names no provider, so no credential is needed to start.
+  const head = 'data_dir = ":memory:"\nmodel = { llm = "scripted/none", effort = "medium" }';
+  return parseConfig(`${head}\n[server]\nport = 0\n${extra}`, 'c.toml');
 }
 
 describe('resolveComposition', () => {

@@ -199,20 +199,20 @@ suite. `T<n>` refers to a row of the testing plan's matrix.
 
 ### Slice 4 — models, tools, sub-agents
 
-- [ ] 23. OpenAI provider (Responses)
+- [x] 23. OpenAI provider (Responses)
   - Streaming, parallel tool calls, encrypted reasoning pass-back, cache breakpoints,
     image input, error mapping.
   - _Depends on:_ 9
   - _Requirements:_ R7.1, R7.3, R7.4
   - _Test:_ T3 — `llm.contract.ts` against recorded Responses fixtures; live variant in
     T12
-- [ ] 24. Anthropic provider and the OpenAI-compatible provider
+- [x] 24. Anthropic provider and the OpenAI-compatible provider
   - Messages API with `cache_control`; Chat Completions with `baseURL`.
   - _Depends on:_ 9
   - _Requirements:_ R7.1, R7.2, R7.4
   - _Test:_ T3 — `llm.contract.ts` against recorded fixtures for both; `Scenario: A
     provider error names provider and model`
-- [ ] 25. MCP tools
+- [x] 25. MCP tools
   - `@modelcontextprotocol/client` over stdio and Streamable HTTP; registration;
     `retrySafe` from annotations; reconnect with backoff; the stub MCP server fixture.
   - _Depends on:_ 10
