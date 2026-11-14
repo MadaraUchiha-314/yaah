@@ -1,7 +1,7 @@
 {
   "version": 1,
   "workItem": "issue-3",
-  "currentNode": "design",
+  "currentNode": "design-critic-review",
   "nodes": {
     "phase-selection": {
       "attempts": 1,
@@ -45,8 +45,16 @@
     },
     "design": {
       "attempts": 1,
-      "outcome": "",
+      "outcome": "pass",
       "enteredAt": "2026-11-14T19:35:37+00:00",
+      "exitedAt": "2026-11-14T19:51:18+00:00",
+      "lastBlock": "",
+      "forced": false
+    },
+    "design-critic-review": {
+      "attempts": 1,
+      "outcome": "",
+      "enteredAt": "2026-11-14T19:51:18+00:00",
       "exitedAt": "",
       "lastBlock": "",
       "forced": false
@@ -270,6 +278,10 @@
   "completions": {
     "requirements-definition": {
       "at": "2026-11-14T18:28:22+00:00",
+      "by": "cli"
+    },
+    "design": {
+      "at": "2026-11-14T19:51:18+00:00",
       "by": "cli"
     }
   },

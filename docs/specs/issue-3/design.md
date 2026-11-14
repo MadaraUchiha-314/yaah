@@ -37,9 +37,11 @@ Five decisions carry the design. Each is argued in [Trade-offs & decisions](#tra
 - Temporal's worker is officially supported on Node 20–24 only. It passed a smoke test on
   Bun 1.4 and Node 26 on this machine; durable modes are **supported on Node LTS and
   best-effort on Bun**.
-- Token streaming in durable modes requires the Temporal worker to run in the same
-  process as the API server. Several replicas behind a load balancer still complete
-  every task, but a client may not see token deltas for a step that ran on another pod.
+- This work item supports **one harness process per data store**. The default store
+  is a SQLite file and the stream hub is in-process, so the API server and the Temporal
+  worker run together. Running several replicas needs a shared store and a shared
+  stream hub, both of which are plugin seams here and not shipped
+  ([Durable execution](#durable-execution)).
 
 **What to check first.** [The A2A extensions](#a2a-extensions) (the public protocol
 surface), [Durable execution](#durable-execution) (the answers to the issue's Temporal
@@ -162,11 +164,13 @@ src/compositions/
   shared/core.yml        kernel services, registry, strings, o11y, persistence, core loop, context
   shared/models.yml      llm providers, system-one, speech
   shared/extensions.yml  tools/mcp, skills, plugins, hooks, commands, a2a sub-agents, channels
-  shared/server.yml      api-server, inbox, channels-api, heartbeat, durable
-  cli.yml                include core, models, extensions, server; + surface/tui
-  server.yml             include core, models, extensions, server; + web static assets
-  browser.yml            include core, models, extensions; patches: memory persistence,
-                         durable none, in-memory A2A transport, no stdio MCP, no fs
+  shared/app.yml         a2a request handler + HarnessExecutor, inbox, stream hub, durable,
+                         heartbeat, channels-api — no network listener
+  shared/http.yml        Express listener: A2A routes, agent card, origin check, web assets
+  cli.yml                include core, models, extensions, app, http; + surface/tui
+  server.yml             include core, models, extensions, app, http
+  browser.yml            include core, models, extensions, app; + surface/web;
+                         patches: memory persistence, durable none, no stdio MCP, no fs
 ```
 
 An entry is a cordis loader entry, addressed by `id` so that an operator's file can
@@ -190,6 +194,18 @@ replace it (R1.3):
   resolves `browser.yml` at build time into a static entry list and an import map, and
   the runtime walks that list with `ctx.use`. A plugin that declares
   `static runtime = ["node"]` fails that build by name (R25.3).
+- **The browser build has the whole app layer, minus the listener.** `shared/app.yml`
+  provides the SDK request handler, the inbox and the in-process runner. What differs
+  is the `HarnessTarget` service — how an A2A client reaches this harness:
+
+  | Build | `ctx.harnessTarget` | Used by |
+  | --- | --- | --- |
+  | cli, server | `{ type: "http", url }` — the listener's own address | surfaces, the `self` sub-agent |
+  | browser | `{ type: "in-memory", handler }` | the web surface, the `self` sub-agent |
+
+  The in-memory target is an implementation of the SDK's `Transport` interface whose
+  methods call the same `DefaultRequestHandler` directly, so the SDK `Client` and all of
+  its types are unchanged and no bytes leave the tab (R25.2, R11.4).
 
 ## Components & interfaces
 
@@ -259,16 +275,20 @@ interface Agent extends Entity<"agent"> {
 interface StepRunner {
   /** Runs a named step once and records its result; a recorded step is never re-run (R17.3). */
   step<N extends StepName>(name: N, input: StepInput<N>, opts?: StepOptions): Promise<StepOutput<N>>;
-  /** Resolves when the task's inbox has an undelivered item, or the wait is cancelled. */
+  /** Waits for the next undelivered inbox item. @throws TaskCancelledError on CancelTask. */
   nextInboxItem(): Promise<InboxItemRef>;
-  /** Runs `fn` in a scope that an interrupt or CancelTask aborts. */
-  cancellable<T>(fn: () => Promise<T>): Promise<T>;
-  readonly limits: { readonly maxIterations: number; readonly maxTokens: number };
+  /** Returns the items that arrived since the last call, without waiting (R15.5). */
+  drainInbox(): readonly InboxItemRef[];
+  /** Runs `fn` in a scope that an item marked `interrupt` aborts with TurnInterruptedError. */
+  interruptible<T>(fn: () => Promise<T>): Promise<T>;
+  /** Runs `fn` shielded from cancellation — for the final transition. */
+  shielded<T>(fn: () => Promise<T>): Promise<T>;
+  readonly limits: { readonly maxIterations: number; readonly maxTaskTokens: number };
 }
 
 type StepName =
-  | "context.build" | "context.compact" | "llm.invoke" | "tool.invoke"
-  | "agent.invoke" | "task.transition" | "state.write" | "command.run";
+  | "conversation.accept" | "context.build" | "context.compact" | "llm.invoke"
+  | "tool.invoke" | "agent.invoke" | "task.transition" | "state.write" | "command.run";
 
 interface StepOptions {
   readonly retry: RetryPolicy;      // default below
@@ -286,34 +306,78 @@ interface RetryPolicy {
 declare function runTask(runner: StepRunner, init: TaskRunInit): Promise<TaskOutcome>;
 ```
 
-The body is the issue's pseudocode with the waits made explicit:
+The body is the issue's pseudocode with the waits, the interrupts and the cancel path
+made explicit:
 
 ```ts
-while (true) {
-  const item = await runner.nextInboxItem();                    // wake
-  if (await isCommand(item)) { await runner.step("command.run", item); continue; }
-  if (isLifecycleAction(item)) return finish(item);            // client completes the task
-  await runner.cancellable(async () => {
-    for (let i = 0; ; i++) {
-      if (i >= runner.limits.maxIterations) throw new IterationLimitError(i);   // R3.6
-      const ctx = await runner.step("context.build", { taskId });
-      const reply = await runner.step("llm.invoke", { contextRef: ctx.ref });
-      if (reply.toolCalls.length === 0) break;
-      await Promise.all(reply.toolCalls.map((c) => invoke(runner, c)));         // R3.3–3.4
+try {
+  while (true) {
+    const item = await runner.nextInboxItem();                  // idle: wake on input
+    if (isLifecycleAction(item)) return await finish(runner, item);   // client completes
+    if (await isCommand(item)) { await runner.step("command.run", item); continue; }
+    await runner.step("conversation.accept", { items: [item] });
+
+    turn: for (let i = 0; ; i++) {
+      if (i >= runner.limits.maxIterations) throw new LimitError("iterations");   // R3.6
+      if (usage.total >= runner.limits.maxTaskTokens) throw new LimitError("tokens");
+      const late = runner.drainInbox();                         // R15.5: every iteration
+      if (late.length > 0) await runner.step("conversation.accept", { items: late });
+      try {
+        const reply = await runner.interruptible(async () => {
+          const ctx = await runner.step("context.build", { taskId });
+          const r = await runner.step("llm.invoke", { contextRef: ctx.ref });
+          await Promise.all(r.toolCalls.filter(isOrdinary).map((c) => invoke(runner, c)));  // R3.3–3.4
+          return r;
+        });
+        usage = add(usage, reply.usage);
+        const ask = reply.toolCalls.find(isAskUser);            // a suspending call
+        if (ask) {
+          await runner.step("task.transition", { to: "input-required", subState: "awaiting-user-input", question: ask });
+          const answer = await runner.nextInboxItem();          // the persisted continuation
+          await runner.step("conversation.accept", { items: [answer], asResultOf: ask.id });
+          continue turn;
+        }
+        if (reply.toolCalls.length === 0) {
+          const more = runner.drainInbox();                     // nothing unread → the turn is over
+          if (more.length === 0) break turn;
+          await runner.step("conversation.accept", { items: more });
+        }
+      } catch (e) {
+        if (!(e instanceof TurnInterruptedError)) throw e;      // interrupt: loop again with the item
+      }
     }
-  });
-  const next = await runner.step("task.transition", { taskId, reason: "turn-complete" });
-  if (isTerminal(next.state)) return next;                     // not long-running → completed
+    const next = await runner.step("task.transition", { reason: "turn-complete" });
+    if (isTerminal(next.state)) return next;                    // not long-running → completed
+  }
+} catch (e) {
+  const to = e instanceof TaskCancelledError ? "canceled" : "failed";
+  return await runner.shielded(() => runner.step("task.transition", { to, cause: describe(e) }));
 }
 ```
+
+- **`ask_user` suspends the loop, not an activity.** The call is never executed as a
+  tool. The loop moves the task to `input-required / awaiting-user-input`, waits on the
+  inbox, and stores the user's reply as that call's result (`asResultOf`). The pending
+  call id is loop state — workflow state under Temporal, the step journal in-process —
+  so a restart resumes the wait (R14.5). A model that issues `ask_user` beside other
+  calls gets the other results first; a second `ask_user` in the same reply is answered
+  with an error result telling it to ask one question at a time.
+- **Late items are read at every iteration** (`drainInbox`), and a turn does not end
+  while one is unread, so a default task cannot complete past a message (R15.5).
+- **Cancel reaches every wait.** `nextInboxItem` and every step reject with
+  `TaskCancelledError`; the outer handler records `canceled` in a shielded step, so an
+  idle long-running task is cancelled the same way as a working one (R3.5, R14.6).
+- **Token budget.** `usage` accumulates provider-reported input and output tokens for
+  the task; reaching `limits.max_task_tokens` fails the task before the next model call
+  (abuse case 9).
 
 - **Parallel tool calls** are `Promise.all` over steps; results are stored by call id
   and the next `context.build` emits them in the order the calls were issued (R3.3). A
   failed call becomes a `ToolErrorResult` for that id; the others are unaffected (R3.4).
 - **Step inputs and outputs are references and small values** — message ids, tool call
   ids, token counts — never message bodies (Decision 4).
-- **Cancel** aborts the `cancellable` scope; in-flight steps receive an `AbortSignal`,
-  and the loop runs `task.transition → canceled` in a non-cancellable scope (R3.5).
+- **In-flight steps receive an `AbortSignal`** on interrupt and on cancel, passed to the
+  provider SDK and to the tool.
 
 ### Task, plan, step, state
 
@@ -329,22 +393,45 @@ while (true) {
 
 ### Persistence
 
-One interface per concern, so that each is replaceable alone (R5.5):
+One interface per concern, so that each is replaceable alone (R5.5). Exactly-once does
+not rest on a transaction across them — a replaced store may live elsewhere — but on
+one rule: **every write is keyed by the step that makes it and replaces what that step
+wrote before.**
 
 ```ts
+/** Identifies one execution point of one task. Stable across retries and replays. */
+type StepKey = `${TaskId}/${number}/${StepName}/${string}`;
+
 interface ConversationStore {           // messages, tool calls and results, compaction summaries
-  append(taskId: TaskId, events: readonly ConversationEvent[]): Promise<void>;
+  /** Replaces whatever `key` wrote earlier; a retry therefore never duplicates (R15.6). */
+  put(key: StepKey, events: readonly ConversationEvent[]): Promise<void>;
   read(taskId: TaskId, range?: SeqRange): Promise<readonly ConversationEvent[]>;
 }
-interface StateStore { get(taskId: TaskId, key: string): Promise<Json | undefined>;
-                       set(taskId: TaskId, key: string, value: Json): Promise<void>; }
+interface StateStore { get(taskId: TaskId, k: string): Promise<Json | undefined>;
+                       set(key: StepKey, k: string, value: Json): Promise<void>; }
 interface PlanStore  { load(taskId: TaskId): Promise<Plan | undefined>;
-                       save(taskId: TaskId, plan: Plan): Promise<void>; }
+                       save(key: StepKey, plan: Plan): Promise<void>; }   // revision-checked
 interface InboxStore { put(item: InboxItem): Promise<"stored" | "duplicate">;
                        pending(taskId?: TaskId): Promise<readonly InboxItem[]>;
-                       markProcessed(id: InboxItemId): Promise<void>; }
+                       markProcessed(ids: readonly InboxItemId[]): Promise<void>; }
+interface StepJournal { get(key: StepKey): Promise<StepRecord | undefined>;      // mode "none" only
+                        record(key: StepKey, result: Json): Promise<void>; }
 // A2A tasks: the SDK's own `TaskStore` interface (save / load / list).
 ```
+
+How a crash at any point resolves, for the step `conversation.accept` (the only one that
+consumes inbox items):
+
+| Crash after | On retry of the same `StepKey` | Result |
+| --- | --- | --- |
+| nothing written | `put` writes the events | consumed once |
+| `ConversationStore.put` | `put` replaces the same events; `markProcessed` runs | consumed once |
+| `InboxStore.markProcessed` | both are no-ops; the step result is recorded | consumed once |
+
+The step result — in Temporal's history, or in `StepJournal` — is recorded last, and a
+recorded step is never run again. `llm.invoke` and `tool.invoke` follow the same rule:
+their output is `put` under their own key, so a retried model call replaces the
+abandoned attempt's partial output instead of appending to it.
 
 | Build | Default backend |
 | --- | --- |
@@ -352,7 +439,8 @@ interface InboxStore { put(item: InboxItem): Promise<"stored" | "duplicate">;
 | browser | In-memory (IndexedDB is a later plugin). |
 
 Writes complete before the step that caused them returns (R5.3). On start, every
-non-terminal task is re-attached to its run (R5.4).
+non-terminal task is re-attached to its run (R5.4). `persistenceContract(factory)`
+tests the replace-by-key rule against any implementation.
 
 ### Context window manager and compaction
 
@@ -368,6 +456,12 @@ to provider-neutral blocks and reports a content hash.
 | 5 | Plan snapshot | at turn start and at compaction | yes |
 | 6 | Conversation | every step (append-only) | yes (moving) |
 
+- **Third-party text in section 3.** MCP tool descriptions and agent-card
+  descriptions are written by whoever runs that server. They are emitted only in the
+  provider's tool-definition `description` field — never in the system prompt —
+  after stripping control characters and capping at 1,024 characters, and section 1
+  states that tool and agent descriptions are third-party data, not instructions. A
+  description that changes after registration is logged as `tool.description-changed`.
 - **Byte stability (R6.2).** A section whose hash is unchanged is emitted from a cached
   rendering; tools and skills are sorted by id; no timestamp or random id appears in
   sections 1–5.
@@ -388,7 +482,48 @@ to provider-neutral blocks and reports a content hash.
   Whole provider turns are replaced together, so opaque reasoning blocks are never
   split.
 - Compaction is its own step (`context.compact`), emits `context.compacted { before, after }`
-  (R6.5), and its strategy is an entity a plugin can replace (R6.6).
+  (R6.5). The strategy is the cordis service `ctx.compaction`; a plugin replaces it by
+  providing that service (R6.6):
+
+  ```ts
+  interface CompactionStrategy {
+    /** Chooses what to replace. MUST NOT select a pinned event or split a provider turn. */
+    select(events: readonly ConversationEvent[], budget: TokenBudget): CompactionPlan;
+    summarize(span: readonly ConversationEvent[], llm: LLM, signal: AbortSignal): Promise<string>;
+  }
+  ```
+
+### Prompts, skills and channels as entities
+
+```ts
+interface Prompt extends Entity<"prompt"> {
+  /** Markdown source, with `{{name}}` placeholders. */
+  readonly template: string;
+  readonly variables: readonly string[];
+  /** Ids of prompts appended to this one, in registration order (R10.3). */
+  readonly extensions: readonly EntityRef<"prompt">[];
+  /** @throws PromptVariableError when a declared variable is missing. */
+  render(vars: Readonly<Record<string, string>>): string;
+}
+interface Skill extends Entity<"skill"> {
+  readonly name: string;                    // equals the directory name
+  readonly root: SkillRoot;                 // opaque handle; paths are resolved under it
+  readonly metadata: SkillFrontMatter;      // license, compatibility, metadata, allowedTools
+  loadBody(): Promise<string>;
+  /** @throws PathEscapeError when `relativePath` leaves the skill root. */
+  readFile(relativePath: string): Promise<Uint8Array>;
+}
+interface Channel extends Entity<"channel"> {
+  readonly participants: readonly Participant[];
+  send(to: ParticipantId, message: Message): Promise<void>;
+  /** @throws NotAParticipantError when `from` is not in `participants` (R12.5). */
+  receive(from: ParticipantId, message: Message): Promise<void>;
+}
+```
+
+Every prompt sent to a model is a `prompt` entity loaded from `src/prompts/*.md`
+(`system`, `roles`, `compaction`, `a2ui`, `untrusted-data`); registering one with the
+same id and `override: true` replaces it, and `extends: <id>` appends to it (R10.2–10.3).
 
 ### Models
 
@@ -496,8 +631,9 @@ type ToolResult =
 - `a2a/` registers one `agent` entity per configured `{ id, cardUrl }`, after fetching
   the card with the SDK's `ClientFactory` (R11.1). The card URL's host must be in
   `agents.allowedHosts`.
-- The entity `self` is always registered: an A2A client pointed at the harness's own
-  URL. It is how the agent gets a fresh context window (R11.4).
+- The entity `self` is always registered: an A2A client on `ctx.harnessTarget` — the
+  harness's own URL, or the in-memory transport in the browser build. It is how the
+  agent gets a fresh context window (R11.4).
 - `invoke_agent { agent, message, taskId? }` runs as step `agent.invoke`. It sends with
   the task-model extension active, carrying `parentTasks` and `depth + 1`; consumes the
   stream until the sub-task is terminal or interrupted; and adds a `TaskRef` to the
@@ -520,10 +656,37 @@ Built entirely from `@a2a-js/sdk/server` (R13.1):
 `HarnessExecutor.execute(requestContext, eventBus)`:
 
 1. Activates the yaah extensions the client requested (`ctx.addActivatedExtension`).
-2. Builds an `InboxItem` from the request and calls `inbox.accept`.
-3. Subscribes the SDK event bus to the task's `StreamHub` topic and forwards
-   `statusUpdate`, `artifactUpdate` and message events.
-4. Calls `eventBus.finished()` when the task reaches a terminal or interrupted state.
+2. Reads the task's current hub sequence number and **subscribes from it**.
+3. Builds an `InboxItem` from the request and calls `inbox.accept`.
+4. Forwards hub events to the SDK event bus as `statusUpdate`, `artifactUpdate` and
+   message events.
+5. Calls `eventBus.finished()` when the task reaches a terminal or interrupted state.
+
+Subscribing before delivering, from a known sequence number, is what keeps a fast run
+from finishing unseen:
+
+```ts
+interface StreamHub {
+  /** Appends to the task's bounded log and returns the event's sequence number. */
+  publish(taskId: TaskId, event: HubEvent): number;
+  /** Replays everything after `afterSeq`, then follows live. */
+  subscribe(taskId: TaskId, afterSeq: number, signal: AbortSignal): AsyncIterable<SequencedHubEvent>;
+  head(taskId: TaskId): number;
+}
+type HubEvent =
+  | { type: "status"; update: TaskStatusUpdateEvent }
+  | { type: "artifact"; update: TaskArtifactUpdateEvent }
+  | { type: "delta"; stepKey: StepKey; text: string }
+  | { type: "reset"; stepKey: StepKey };     // an abandoned attempt's deltas are void
+```
+
+- The log holds a task's events since its last terminal or interrupted transition and
+  is dropped after it. Status and artifact events are also written to the SDK
+  `TaskStore` by the `task.transition` step **before** they are published, so the store,
+  not the hub, is the record: a subscriber that finds the log gone reads the task.
+- The executor has a backstop: if the hub is silent for 2 s it loads the task from the
+  store and, if the task is already terminal or interrupted, emits that status and
+  finishes.
 
 `cancelTask` calls `durable.cancel(taskId)`. gRPC is not served: the SDK's gRPC binding
 is Node-only and no surface needs it.
@@ -587,11 +750,11 @@ sub-task this harness delegated (abuse case 10).
 ### Inbox, heartbeat, channels
 
 - **Inbox.** `accept(item)` derives the item id from `messageId`, writes it
-  (`InboxStore.put`, which reports duplicates), then calls `durable.deliver`. The loop
-  marks an item processed in the same step that appends it to the conversation, which
-  is what makes delivery exactly-once from the agent's view (R15.6). An item for a
-  working task waits for `nextInboxItem`; with `interrupt: true` it aborts the current
-  `cancellable` scope first (R15.5).
+  (`InboxStore.put`, which reports duplicates), then calls `durable.deliver`. The step
+  `conversation.accept` moves items into the conversation under its step key and then
+  marks them processed; [Persistence](#persistence) shows why that is exactly-once
+  (R15.6). An item for a working task is read at the next loop iteration; with
+  `interrupt: true` it aborts the current `interruptible` scope first (R15.5).
 - **Heartbeat (P1).** A timer plugin emits `heartbeat.tick` every
   `heartbeat.intervalMs` (default 30 s). Its listener re-delivers `InboxStore.pending()`
   items older than one interval and emits `task.stalled` for a working task whose last
@@ -601,7 +764,11 @@ sub-task this harness delegated (abuse case 10).
   agent participant to an A2A call. `message_participant` sends and waits for a short
   reply; `create_task_for_participant` creates a sub-task with that participant as
   assignee (R12.2). Membership changes go only through the harness's `ChannelManager`
-  (R12.4).
+  (R12.4). Inbound channel messages enter through `ChannelManager.receive(channelId, from, message)`,
+  which looks the channel up and rejects the message with `NotAParticipantError` unless
+  `from` is one of its participants (R12.5). Without authentication `from` is the
+  participant id the sender declares in the `channels` extension; an authentication
+  plugin binds it to the authenticated user.
 
 ### Durable execution
 
@@ -638,8 +805,8 @@ The issue asks nine questions about Temporal. The answers:
 
 | Question | Answer |
 | --- | --- |
-| Is the core loop a workflow and each operation an activity? | Yes. One workflow per root or sub task, id `yaah-<taskId>`. `context.build`, `context.compact`, `llm.invoke`, each `tool.invoke`, each `agent.invoke` and `task.transition` are activities. |
-| When is it safe to retry an activity? | Always for `context.build`, `llm.invoke` and `task.transition` (idempotent by step id). For a tool or sub-agent call, only when the tool is `retrySafe`; otherwise `maximumAttempts: 1` and the failure goes to the model (R17.5). |
+| Is the core loop a workflow and each operation an activity? | Yes. One workflow per root or sub task, id `yaah-<taskId>`. `conversation.accept`, `context.build`, `context.compact`, `llm.invoke`, each `tool.invoke`, each `agent.invoke` and `task.transition` are activities. |
+| When is it safe to retry an activity? | Always for `conversation.accept`, `context.build`, `llm.invoke` and `task.transition` — each writes under its own step key and replaces on retry. For a tool or sub-agent call, only when the tool is `retrySafe`; otherwise `maximumAttempts: 1` and the failure goes to the model (R17.5). |
 | What is the retry policy? Exponential backoff? | Yes: 1 s initial, ×2, 60 s cap, 5 attempts, all configurable. Authentication, validation and 4xx provider errors are non-retryable. |
 | Core loop only, or the request lifecycle too? | The task's whole life after the inbox accepts it. HTTP handling, the agent card and streaming to the client stay outside Temporal. |
 | How does it meet the A2A SDK? | Inside `AgentExecutor.execute`: the executor hands the message to the inbox, which signals the workflow. `cancelTask` cancels the workflow. Clients see the same A2A behaviour in every mode (R17.6). |
@@ -655,10 +822,15 @@ Further points:
   on inbox item id.
 - **History size.** The workflow calls continue-as-new at a turn boundary once Temporal
   suggests it; open state travels as references.
-- **Streaming.** Activities publish token deltas to a `StreamHub` (in-process by
-  default). `StreamHub` is an interface, so a shared implementation
-  (`@temporalio/workflow-streams`, Redis) can replace it for multi-replica deployments;
-  none ships here.
+- **Streaming and topology.** Activities publish to the `StreamHub`, which is
+  in-process: the worker and the API server are the same process, so every delta,
+  status and artifact reaches the client exactly as in mode `none` (R17.6). That is the
+  one supported topology in this work item — one harness process per data store.
+  Several replicas would need a shared store and a shared hub (for example
+  `@temporalio/workflow-streams`); both are services a plugin can provide, and neither
+  ships here. Start-up refuses a Temporal task queue that another live harness process
+  is already polling with a different `instanceId`, rather than silently splitting
+  streams.
 - **Embedded mode** starts Temporal's development server through
   `TestWorkflowEnvironment.createLocal` with `ui: true`, fixed ports (`7233`, UI `8233`,
   both configurable, bound to loopback) and a database file at
@@ -683,9 +855,8 @@ Further points:
 
 - **Logging.** One `Logger` service writing JSON lines to stderr; one configuration in
   development and production (R18.3). Every record carries `taskId`, `contextId`,
-  `traceId`, `stepName`. A redactor replaces the value of any key matching
-  `/key|token|secret|authorization|password/i` and any string equal to a configured
-  credential value (R18.4).
+  `traceId`, `stepName`, and passes through the `Redactor`
+  ([Security design](#security-design)) before it is written (R18.4).
 - **Events.** The record types are fixed: `request.received`, `inbox.accepted`,
   `context.built`, `context.compacted`, `llm.invoked`, `tool.invoked`, `agent.invoked`,
   `state.written`, `task.transition`, `command.invoked|executed|failed` (R18.1, R23.4).
@@ -711,12 +882,35 @@ interface Renderer extends Entity<"renderer"> {
 }
 ```
 
-- **`surface/session.ts`** is shared by both UIs: it wraps the SDK `Client`
-  (`sendMessageStream`, `resubscribeTask`, `listTasks`, `cancelTask`), activates the
-  yaah and A2UI extensions, and folds stream events into a `TaskView` state machine.
-  Both renderers draw `TaskView`; neither parses A2A itself.
-- **Two surfaces on one task (R19.3).** A second surface finds the task with
-  `listTasks` (same context id) and follows it with `resubscribeTask`.
+- **`surface/session.ts`** is shared by both UIs. Both renderers draw `TaskView`;
+  neither parses A2A itself.
+
+  ```ts
+  type HarnessTarget =
+    | { readonly type: "http"; readonly url: string }
+    | { readonly type: "in-memory"; readonly handler: A2ARequestHandler };
+
+  interface HarnessSession {
+    readonly card: AgentCard;
+    readonly commands: readonly string[];          // from the commands extension
+    readonly dashboardUrl: string | null;          // from the durable-execution extension
+    /** Sends a turn; creates the task when `taskId` is absent. */
+    send(input: TurnInput, opts?: { taskId?: TaskId; longRunning?: boolean }): Promise<void>;
+    complete(taskId: TaskId): Promise<void>;
+    cancel(taskId: TaskId): Promise<void>;
+    /** Lists the tasks of this session's context. */
+    tasks(): Promise<readonly Task[]>;
+    /** Emits a fresh `TaskView` on every change, until the task is terminal. */
+    follow(taskId: TaskId, signal: AbortSignal): AsyncIterable<TaskView>;
+  }
+  ```
+- **Two surfaces on one task (R19.3).** `follow` is a loop, not one call: load the task
+  (`getTask`, with history) → `resubscribeTask` → fold events → when the stream closes
+  and the task is not terminal, load and subscribe again. The snapshot fills whatever
+  happened between two subscriptions, so an observing surface sees the turns another
+  surface drives. The SDK keeps a task's event bus alive in `INPUT_REQUIRED`
+  (`keepBusAliveStates`); the loop does not depend on that, and a two-client,
+  three-turn integration test fixes the behaviour either way.
 - **A2UI (R19.4, R19.6).** A2UI 1.0, basic catalog. Agent side: `@a2ui/agent` supplies
   the prompt snippet when the client's message offers the catalog, and parses and
   validates the model's `<a2ui>` blocks into `application/a2ui+json` data parts. Client
@@ -892,7 +1086,9 @@ max_iterations = 50
 max_agent_depth = 3
 max_body_bytes = 10485760
 max_parts = 32
-max_tasks_per_context = 100
+max_open_tasks_per_caller = 20   # caller = authenticated user, else remote address
+max_requests_per_minute = 120    # per caller
+max_task_tokens = 2000000        # input + output, cumulative per task
 
 [compaction]
 threshold = 0.8
@@ -916,12 +1112,12 @@ a message from the strings file.
 | --- | --- |
 | Bad config, unknown key, missing required credential, plugin fails to load, remote Temporal unreachable | Start aborts, exit code 1, one line naming file, key or plugin and the reason. |
 | Malformed A2A request, terminal task, unsupported required extension | The SDK's A2A error; no task is created (R13.4–13.5, R14.7). |
-| Request over a limit | `InvalidParamsError` before any model call (abuse case 8). |
+| Request over a size, open-task or rate limit | An A2A error before any model call (abuse case 8). |
 | LLM error, retryable | Retried by the step policy; logged per attempt. |
 | LLM error, exhausted or non-retryable | Task → `FAILED` with `LlmError.code` in `status.message`. |
 | Tool or sub-agent failure | A `ToolErrorResult` to the model; the task continues (R8.5, R11.6). |
 | Hook denies | A `ToolErrorResult { code: "denied", reason }` to the model. |
-| Iteration, token or depth limit | Task → `FAILED` naming the limit (R3.6), or the call is refused (R11.7). |
+| Iteration, task-token or depth limit | Task → `FAILED` naming the limit (R3.6), or the call is refused (R11.7). |
 | Renderer cannot draw a part | Textual fallback; a warning in the log (R19.5). |
 | Microphone unavailable | A message in the UI; text input unaffected (R24.6). |
 
@@ -948,16 +1144,22 @@ unidentified caller can reach and makes the missing check a single, replaceable 
     harness (abuse case 2).
 - **Input validation & injection surfaces:**
   - _A2A ingress._ The SDK validates protocol shape; yaah's extension metadata is parsed
-    with zod and an invalid payload is rejected. Body size, part count, part size and
-    tasks per context are checked before the inbox accepts (abuse case 8).
+    with zod and an invalid payload is rejected. Body size, part count and part size
+    are checked before the inbox accepts. A **caller key** — the authenticated user
+    when an authentication plugin is installed, otherwise the connection's remote
+    address — is counted against `max_open_tasks_per_caller` and a sliding-window
+    `max_requests_per_minute`; a request over either is rejected before the inbox
+    (abuse case 8). `X-Forwarded-For` is ignored unless `server.trust_proxy` is set.
   - _LLM output → actions._ A tool call is executed only if the tool is registered and
     in the task's tool set, and only after its arguments pass the tool's JSON Schema
     (abuse case 3). `invoke_agent` accepts only registered agent ids — the model cannot
     supply a URL.
-  - _Prompt injection._ Tool results, MCP tool descriptions, agent cards and sub-agent
-    replies enter the context as tool-result or delimited data blocks, never in
-    sections 1–3. No tool exists that changes configuration, registers a tool or
-    widens the tool set, so injected text has nothing to escalate to (abuse case 4).
+  - _Prompt injection._ Tool results and sub-agent replies enter the context only as
+    tool-result blocks in the conversation. Tool and agent **descriptions** appear in
+    section 3 only inside tool-definition `description` fields, sanitized and capped
+    as described under the context manager, and never in sections 1–2. No tool exists
+    that changes configuration, registers a tool or widens the tool set, so injected
+    text has nothing to escalate to (abuse case 4).
     This limits the damage of an injection; it does not prevent a model from being
     misled within the tools it already has.
   - _A2UI → DOM._ The model's A2UI is validated against the basic catalog by
@@ -977,9 +1179,13 @@ unidentified caller can reach and makes the missing check a single, replaceable 
 - **Secrets handling:** credentials are read from environment variables named in the
   configuration, at the moment a provider is constructed, and held only in that
   provider instance. They are never written to `config.toml`, the stores, prompts or
-  Temporal payloads. The logger and the span exporter share one redactor; errors
-  returned to callers carry codes and string-table messages, not upstream bodies
-  (abuse case 12). The generated config file is created with mode `0600`.
+  Temporal payloads. One `Redactor` service knows every configured credential value
+  and replaces **each occurrence as a substring**, in any string, with `[redacted]`;
+  it also blanks values under sensitive key names. It runs at four exits: log
+  records, span attributes, errors returned to callers (which carry codes and
+  string-table messages, not upstream bodies), and — so that a tool or sub-agent
+  echoing a credential cannot plant it in a prompt — every tool result and sub-agent
+  reply before it is written to the conversation (abuse case 12). The generated config file is created with mode `0600`.
 - **Least privilege:** the harness has no file, shell or network tool of its own. MCP
   stdio servers start with only the environment variables their entry lists. Plugin
   hooks can deny an action but cannot rewrite it. The browser build has no fs service
@@ -1000,11 +1206,11 @@ unidentified caller can reach and makes the missing check a single, replaceable 
   | 5 | Hostile A2UI | Catalog validation; URL scheme allowlist | Unknown component and `javascript:` URL → fallback text, no element created. |
   | 6 | Terminal escapes | Output filter | `\x1b]0;x\x07` in a reply → not present in the frame. |
   | 7 | Runtime URL fetch | Config-only URLs; host allowlist | Message containing a card URL → no outbound request (recorded by a fetch spy). |
-  | 8 | Oversized request | Limit checks before the inbox | Body, part count and task count over limit → error, zero model calls. |
-  | 9 | Runaway recursion or loop | Depth and iteration limits | Self-delegating model → refused at depth 4; looping model → `FAILED` at the limit. |
+  | 8 | Oversized or flooding request | Size limits; per-caller open-task and rate limits | Body and part count over limit, 21st open task, 121st request in a minute → error, zero model calls; a fresh context id per request does not help. |
+  | 9 | Runaway recursion, loop or spend | Depth, iteration and task-token limits | Self-delegating model → refused at depth 4; looping model → `FAILED` at the iteration limit; a scripted model reporting large usage → `FAILED` at the token limit before the next call. |
   | 10 | Forged inbox event | Delegation match | Event for an unknown task id → discarded, logged. |
   | 11 | Path escape | `realpath` containment | Skill symlinked outside root, `read_skill_file("../x")` → refused. |
-  | 12 | Credential leak | Shared redactor | Provider error echoing the key → key absent from logs, spans and the A2A error. |
+  | 12 | Credential leak | `Redactor` at four exits, substring match | Provider error `"failed using <key>"` and a tool result echoing the key → key absent from logs, spans, the A2A error and the next rendered context. |
 
 - **Accepted risk, restated.** Anyone who can reach the port can read, continue,
   complete or cancel any task and spend the operator's model budget. On the default
