@@ -29,6 +29,12 @@ jobs:
       - run: bun run typecheck
       - run: bun run test
       - run: bun run build
+      - name: Run the built package on Node
+        run: bun --config=bunfig.plain.toml test test/package
+      - name: Install the browser for the web UI tests
+        run: bunx playwright install --with-deps chromium
+      - name: Web UI end-to-end and accessibility tests
+        run: bun run test:e2e
 
   commitlint:
     name: commitlint
