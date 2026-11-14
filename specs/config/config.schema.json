@@ -167,6 +167,36 @@
             "temporal-remote"
           ]
         },
+        "retry": {
+          "default": {},
+          "type": "object",
+          "properties": {
+            "initial_interval_ms": {
+              "default": 1000,
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 9007199254740991
+            },
+            "backoff_coefficient": {
+              "default": 2,
+              "type": "number",
+              "minimum": 1
+            },
+            "maximum_interval_ms": {
+              "default": 60000,
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 9007199254740991
+            },
+            "maximum_attempts": {
+              "default": 5,
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 9007199254740991
+            }
+          },
+          "additionalProperties": false
+        },
         "temporal": {
           "default": {},
           "type": "object",

@@ -11,13 +11,20 @@ import type { Json } from '../../kernel/json.ts';
 import type { StepJournal } from './persistence.ts';
 import type {
   InboxItemRef,
+  RetryPolicy,
   RunLimits,
   StepInput,
   StepName,
   StepOutput,
   StepRunner,
 } from './step-runner.ts';
-import { RunAbandonedError, TaskCancelledError, TurnInterruptedError } from './step-runner.ts';
+import {
+  RunAbandonedError,
+  TaskCancelledError,
+  TurnInterruptedError,
+  isRetryable,
+  retryDelay,
+} from './step-runner.ts';
 import type { StepKey, TaskId } from './types.ts';
 
 /** What a step implementation is told about the call. */
@@ -26,6 +33,12 @@ export interface StepContext {
   readonly key: StepKey;
   /** Aborted when the step should stop: the task was cancelled or the turn interrupted. */
   readonly signal: AbortSignal;
+  /**
+   * True when an earlier attempt of this step was started and never reported back, and
+   * the step is not safe to repeat. The implementation must not perform the effect again;
+   * it records that the outcome is unknown instead.
+   */
+  readonly outcomeUnknown: boolean;
 }
 
 /** The implementation of every step. */
@@ -33,23 +46,15 @@ export type StepHandlers = {
   readonly [N in StepName]: (ctx: StepContext, input: StepInput<N>) => Promise<StepOutput<N>>;
 };
 
-/** Performs one step; a wrapper may add retries around `perform`. */
-export type StepInvoker = <N extends StepName>(
-  name: N,
-  ctx: StepContext,
-  input: StepInput<N>,
-  perform: () => Promise<StepOutput<N>>,
-) => Promise<StepOutput<N>>;
-
 /** Options of {@link DirectRunner}. */
 export interface DirectRunnerOptions {
   /** Record results, inbox reads and interrupts here, and replay from it. */
   readonly journal?: StepJournal | undefined;
-  /** Wraps the performing of each step. */
-  readonly invoke?: StepInvoker | undefined;
+  /** How a failed step is attempted again. Without it a failure is final. */
+  readonly retry?: RetryPolicy | undefined;
+  /** Whether a step may be attempted again after a failure or an unknown outcome. */
+  readonly isRetrySafe?: ((name: StepName, input: unknown) => boolean) | undefined;
 }
-
-const DIRECT: StepInvoker = (_name, _ctx, _input, perform) => perform();
 
 interface Waiter {
   readonly resolve: (item: InboxItemRef) => void;
@@ -61,6 +66,12 @@ interface Scope {
   /** The journal says this scope was interrupted: unrecorded steps must not run. */
   readonly replayInterrupted: boolean;
   readonly index: number;
+}
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve: () => void) => {
+    setTimeout(resolve, ms);
+  });
 }
 
 /** Rejects with `signal.reason` when `signal` aborts. Never resolves. */
@@ -98,7 +109,8 @@ export class DirectRunner implements StepRunner {
   readonly taskId: TaskId;
   readonly limits: RunLimits;
   readonly #handlers: StepHandlers;
-  readonly #invoke: StepInvoker;
+  readonly #retry: RetryPolicy | undefined;
+  readonly #isRetrySafe: (name: StepName, input: unknown) => boolean;
   readonly #journal: StepJournal | undefined;
   readonly #queue: InboxItemRef[] = [];
   /** Ids of every item ever handed to the loop, so a redelivery is not consumed twice. */
@@ -121,7 +133,8 @@ export class DirectRunner implements StepRunner {
     this.taskId = taskId;
     this.limits = limits;
     this.#handlers = handlers;
-    this.#invoke = options.invoke ?? DIRECT;
+    this.#retry = options.retry;
+    this.#isRetrySafe = options.isRetrySafe ?? ((): boolean => true);
     this.#journal = options.journal;
   }
 
@@ -190,16 +203,53 @@ export class DirectRunner implements StepRunner {
     if (signal.aborted) {
       throw signal.reason instanceof Error ? signal.reason : new TaskCancelledError();
     }
-    const ctx: StepContext = { taskId: this.taskId, key, signal };
-    const handler = this.#handlers[name];
-    const work = this.#invoke(name, ctx, input, () => handler(ctx, input));
-    // A step that ignores its signal must not hold the loop: the abort wins the race.
-    work.catch(() => {
-      // The race below reports the failure; this keeps a late rejection from being unhandled.
-    });
-    const result = await Promise.race([work, aborted(signal)]);
+    const safe = this.#isRetrySafe(name, input);
+    const started = `${key}#started`;
+    // A step that must not run twice leaves a mark before it starts. Finding the mark
+    // without a result means an earlier attempt was lost mid-flight.
+    const outcomeUnknown = !safe && (await this.#journal?.get(started)) !== undefined;
+    if (!safe) {
+      await this.#journal?.record(started, true);
+    }
+    const ctx: StepContext = { taskId: this.taskId, key, signal, outcomeUnknown };
+    const result = await this.#attempt(name, ctx, input, safe);
     await this.#journal?.record(key, toRecord(result));
     return result;
+  }
+
+  /** Performs a step, trying again per the retry policy while that is safe and useful. */
+  async #attempt<N extends StepName>(
+    name: N,
+    ctx: StepContext,
+    input: StepInput<N>,
+    safe: boolean,
+  ): Promise<StepOutput<N>> {
+    const handler = this.#handlers[name];
+    for (let attempt = 1; ; attempt += 1) {
+      const unknown = ctx.outcomeUnknown || (!safe && attempt > 1);
+      const work = handler({ ...ctx, outcomeUnknown: unknown }, input);
+      // A step that ignores its signal must not hold the loop: the abort wins the race.
+      work.catch(() => {
+        // The race below reports the failure; this keeps a late rejection from being unhandled.
+      });
+      try {
+        // oxlint-disable-next-line no-await-in-loop -- attempts are sequential by nature
+        const result = await Promise.race([work, aborted(ctx.signal)]);
+        return result;
+      } catch (error) {
+        const policy = this.#retry;
+        const final =
+          ctx.signal.aborted ||
+          policy === undefined ||
+          attempt >= policy.maximumAttempts ||
+          !isRetryable(error);
+        if (final) {
+          throw error;
+        }
+        // oxlint-disable-next-line no-await-in-loop -- the wait between attempts
+        await Promise.race([sleep(retryDelay(policy, attempt + 1)), aborted(ctx.signal)]);
+      }
+    }
   }
 
   async nextInboxItem(): Promise<InboxItemRef> {

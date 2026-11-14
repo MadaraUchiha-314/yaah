@@ -245,7 +245,7 @@ suite. `T<n>` refers to a row of the testing plan's matrix.
 
 ### Slice 5 — durable execution
 
-- [ ] 29. `DurableExecution` interface, contract suite and mode `none`
+- [x] 29. `DurableExecution` interface, contract suite and mode `none`
   - `InProcessRunner` with the retry policy and `StepJournal`; `durableContract`.
   - _Depends on:_ 22
   - _Requirements:_ R17.1, R17.4, R17.5

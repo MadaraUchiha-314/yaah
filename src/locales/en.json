@@ -79,5 +79,6 @@
   "error.llm.tool-arguments": "Model {model} from {provider} produced arguments for \"{name}\" that are not valid JSON.",
   "llm.tool-error": "Error ({code}): {message}",
   "llm.openai.description": "OpenAI model {model}, called through the Responses API.",
-  "llm.compatible.description": "Model {model} served by the OpenAI-compatible endpoint \"{provider}\"."
+  "llm.compatible.description": "Model {model} served by the OpenAI-compatible endpoint \"{provider}\".",
+  "tool.error.unknown-outcome": "\"{name}\" was started but its outcome is unknown, and it is not safe to run twice. It has not been retried. Check whether it took effect before trying again."
 }

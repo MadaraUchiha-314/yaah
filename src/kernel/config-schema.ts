@@ -66,6 +66,14 @@ const fileSchema = z.strictObject({
   durable: z
     .strictObject({
       mode: z.enum(['none', 'temporal-embedded', 'temporal-remote']).default('none'),
+      retry: z
+        .strictObject({
+          initial_interval_ms: z.int().min(1).default(1000),
+          backoff_coefficient: z.number().min(1).default(2),
+          maximum_interval_ms: z.int().min(1).default(60_000),
+          maximum_attempts: z.int().min(1).default(5),
+        })
+        .prefault({}),
       temporal: z
         .strictObject({
           address: z.string().default(''),
@@ -171,6 +179,12 @@ function toDurable(file: FileConfig): YaahConfig['durable'] {
   const { temporal } = file.durable;
   return {
     mode: file.durable.mode,
+    retry: {
+      initialIntervalMs: file.durable.retry.initial_interval_ms,
+      backoffCoefficient: file.durable.retry.backoff_coefficient,
+      maximumIntervalMs: file.durable.retry.maximum_interval_ms,
+      maximumAttempts: file.durable.retry.maximum_attempts,
+    },
     temporal: {
       address: temporal.address,
       namespace: temporal.namespace,

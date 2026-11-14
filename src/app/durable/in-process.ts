@@ -7,7 +7,7 @@ import type { StepHandlers } from '../../harness/core/direct-runner.ts';
 import { DirectRunner } from '../../harness/core/direct-runner.ts';
 import { runTask } from '../../harness/core/loop.ts';
 import type { StepJournal } from '../../harness/core/persistence.ts';
-import type { InboxItemRef, RunLimits } from '../../harness/core/step-runner.ts';
+import type { InboxItemRef, RetryPolicy, RunLimits } from '../../harness/core/step-runner.ts';
 import type { TaskId } from '../../harness/core/types.ts';
 import type { DurableExecution } from './types.ts';
 
@@ -16,6 +16,10 @@ export interface InProcessDeps {
   readonly handlers: StepHandlers;
   readonly limits: RunLimits;
   readonly journal: StepJournal;
+  /** How a failed step is attempted again. */
+  readonly retry?: RetryPolicy | undefined;
+  /** Whether a step may be attempted again after a failure or an unknown outcome. */
+  readonly isRetrySafe?: ((name: string, input: unknown) => boolean) | undefined;
   /** Told when a run ends for a reason other than a shutdown. */
   readonly onError?: ((taskId: TaskId, error: unknown) => void) | undefined;
 }
@@ -81,6 +85,8 @@ export class InProcessDurable implements DurableExecution {
     }
     const runner = new DirectRunner(taskId, this.#deps.handlers, this.#deps.limits, {
       journal: this.#deps.journal,
+      retry: this.#deps.retry,
+      isRetrySafe: this.#deps.isRetrySafe,
     });
     const finished = runTask(runner)
       .then(

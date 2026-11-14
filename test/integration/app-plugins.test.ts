@@ -114,6 +114,7 @@ describe('app plugins', () => {
     const reported: string[] = [];
     running = await startHarness({
       turns: [say('never')],
+      config: '[durable.retry]\ninitial_interval_ms = 1\nmaximum_attempts = 2',
       setup: (ctx) => {
         Object.assign(ctx.taskRuntime.handlers, {
           'task.transition': () => Promise.reject(new Error('task store is gone')),
