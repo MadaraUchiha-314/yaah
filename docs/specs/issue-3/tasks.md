@@ -147,26 +147,26 @@ suite. `T<n>` refers to a row of the testing plan's matrix.
 
 ### Slice 3 — A2A
 
-- [ ] 16. Extension schemas and the agent card
+- [x] 16. Extension schemas and the agent card
   - zod schemas for task-lifecycle, task-model, inbox-events, commands,
     durable-execution; generated JSON Schemas under `specs/a2a-extensions/`; agent card
     builder.
   - _Depends on:_ 12
   - _Requirements:_ R13.2, R13.3
   - _Test:_ T3, T6 — schema equality; agent-card snapshot
-- [ ] 17. Stream hub
+- [x] 17. Stream hub
   - `StreamHub` with a bounded per-task log, replay from a sequence number, `reset`.
   - _Depends on:_ 1
   - _Requirements:_ R17.6, R19.3
   - _Test:_ T1 — `stream-hub.test.ts`: subscribe-before-publish, replay, bound, reset
-- [ ] 18. Inbox
+- [x] 18. Inbox
   - `inbox.accept`, duplicate detection, the `conversation.accept` step, inbox-event
     parts with the delegation match.
   - _Depends on:_ 8, 11, 16
   - _Requirements:_ R15.1–15.4, R15.6; abuse case 10
   - _Test:_ T2, T8 — `Scenario: A redelivered item is consumed once` · `Scenario: A
     sub-task status event is accepted as inbox input`; negative test: forged event
-- [ ] 19. `HarnessExecutor` and the request handler
+- [x] 19. `HarnessExecutor` and the request handler
   - SDK `DefaultRequestHandler` with our executor; subscribe-then-deliver; store
     backstop; `cancelTask`.
   - _Depends on:_ 17, 18
@@ -176,7 +176,7 @@ suite. `T<n>` refers to a row of the testing plan's matrix.
     and continues on the reply` · `Scenario: A client completes an open task` ·
     `Scenario: A client cancels an idle open task` · `Scenario: A message to a
     completed task is rejected` (the first of these is the recorded red→green)
-- [ ] 20. HTTP listener
+- [x] 20. HTTP listener
   - Express 5 with the SDK's JSON-RPC, HTTP+JSON and agent-card handlers; loopback
     default; the `ctx.auth` extension point; unauthenticated-bind notice.
   - _Depends on:_ 19, 5
@@ -185,12 +185,12 @@ suite. `T<n>` refers to a row of the testing plan's matrix.
     HTTP+JSON` · `Scenario: The agent card lists every yaah extension` · `Scenario: A
     required unsupported extension is rejected` · `Scenario: A malformed request
     creates no task`; negative test: default bind
-- [ ] 21. Origin check and request limits
+- [x] 21. Origin check and request limits
   - Origin middleware; body, part and per-caller open-task and rate limits.
   - _Depends on:_ 20
   - _Requirements:_ abuse cases 2, 8
   - _Test:_ T8 — negative tests: foreign origin; oversize; 21st open task; rate
-- [ ] 22. Restart recovery in the app layer
+- [x] 22. Restart recovery in the app layer
   - On start, re-attach non-terminal tasks and re-deliver pending inbox items.
   - _Depends on:_ 19
   - _Requirements:_ R5.4, R15.6

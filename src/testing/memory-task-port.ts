@@ -1,5 +1,5 @@
 import type { TaskPort, TaskSnapshot, TaskStatusUpdate } from '../harness/core/task-port.ts';
-import type { StepKey, TaskId, TaskModel } from '../harness/core/types.ts';
+import type { ContentPart, StepKey, TaskId, TaskModel } from '../harness/core/types.ts';
 
 /** What a test may set when creating a task. */
 export interface MemoryTaskInit {
@@ -30,6 +30,8 @@ export function blankTaskModel(overrides: Partial<TaskModel> = {}): TaskModel {
 export class MemoryTaskPort implements TaskPort {
   /** Every status update, in the order applied. */
   readonly history: (TaskStatusUpdate & { readonly taskId: TaskId })[] = [];
+  /** Model output stored per step, by `<taskId>/<stepKey>`. */
+  readonly replies: Map<string, readonly ContentPart[]> = new Map();
   readonly #tasks = new Map<TaskId, TaskSnapshot>();
   readonly #applied = new Set<StepKey>();
 
@@ -64,6 +66,11 @@ export class MemoryTaskPort implements TaskPort {
     const snapshot = await this.load(taskId);
     this.#tasks.set(taskId, { ...snapshot, state: update.state, subState: update.subState });
     this.history.push({ ...update, taskId });
+  }
+
+  setReply(taskId: TaskId, key: StepKey, parts: readonly ContentPart[]): Promise<void> {
+    this.replies.set(`${taskId}/${key}`, parts);
+    return Promise.resolve();
   }
 
   async setModel(taskId: TaskId, key: StepKey, model: TaskModel): Promise<void> {

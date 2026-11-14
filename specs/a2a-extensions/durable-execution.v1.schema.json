@@ -1,0 +1,52 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/MadaraUchiha-314/yaah/extensions/durable-execution/v1",
+  "$defs": {
+    "agentCardParams": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "type": "object",
+      "properties": {
+        "mode": {
+          "type": "string",
+          "enum": [
+            "none",
+            "temporal-embedded",
+            "temporal-remote"
+          ]
+        },
+        "dashboardUrl": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "mode",
+        "dashboardUrl"
+      ],
+      "additionalProperties": false
+    },
+    "taskMetadata": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "type": "object",
+      "properties": {
+        "workflowId": {
+          "type": "string"
+        },
+        "runId": {
+          "type": "string"
+        },
+        "url": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "workflowId",
+        "runId",
+        "url"
+      ],
+      "additionalProperties": false
+    }
+  }
+}

@@ -1,0 +1,8 @@
+# The app service layer without a network listener: the browser build includes this
+# file and reaches the request handler in memory.
+- id: runtime
+  name: ../../app/runtime.ts
+- id: durable
+  name: ../../app/durable/index.ts
+- id: api-server
+  name: ../../app/api-server/index.ts

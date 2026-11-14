@@ -5,6 +5,11 @@ import { defaultConfig, parseConfig } from './config.ts';
 import { YaahError } from './errors.ts';
 import { createHarness, resolveComposition } from './harness.ts';
 
+/** A configuration that touches neither the user's data directory nor a fixed port. */
+function quiet(extra = ''): ReturnType<typeof parseConfig> {
+  return parseConfig(`data_dir = ":memory:"\n[server]\nport = 0\n${extra}`, 'c.toml');
+}
+
 describe('resolveComposition', () => {
   test('maps a shipped build name to its file', () => {
     expect(resolveComposition('cli').endsWith('compositions/cli.yml')).toBe(true);
@@ -25,15 +30,15 @@ describe('resolveComposition', () => {
 });
 
 describe('createHarness', () => {
-  test('starts the cli composition with the default configuration', async () => {
-    const harness = await createHarness();
-    expect(harness.ctx.config).toEqual(defaultConfig());
+  test('starts the cli composition from a configuration', async () => {
+    const harness = await createHarness({ config: quiet() });
+    expect(harness.ctx.config.limits).toEqual(defaultConfig().limits);
     expect(harness.ctx.strings.t('error.plugin.missing')).not.toBe('error.plugin.missing');
     await harness.dispose();
   });
 
   test('registers the shipped prompts, and the system prompt is minimal', async () => {
-    const harness = await createHarness();
+    const harness = await createHarness({ config: quiet() });
     const ids = harness.ctx.entities.list('prompt').map((prompt) => prompt.ref.id);
     expect(ids).toEqual([
       'compaction',
@@ -52,7 +57,7 @@ describe('createHarness', () => {
   });
 
   test('an override from the configuration disables a default plugin', async () => {
-    const config = parseConfig('[[overrides]]\nid = "system-prompt"\ndisabled = true\n', 'c.toml');
+    const config = quiet('[[overrides]]\nid = "system-prompt"\ndisabled = true\n');
     const harness = await createHarness({ config });
     expect(harness.ctx.entities.list('prompt')).toEqual([]);
     await harness.dispose();

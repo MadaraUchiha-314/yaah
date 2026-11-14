@@ -25,5 +25,16 @@
   "tool.state-set.description": "Store a JSON value for this task under a name, to read back later.",
   "tool.state-set.reserved": "Names starting with \"yaah.\" are reserved.",
   "tool.state-set.invalid": "The value for \"{name}\" does not match its schema: {reason}",
-  "tool.state-set.stored": "Stored \"{name}\"."
+  "tool.state-set.stored": "Stored \"{name}\".",
+  "agent.name": "yaah",
+  "agent.description": "An agent harness. It works on tasks with the tools and agents its operator configured.",
+  "server.listening": "yaah is listening on {url}",
+  "server.unauthenticated-bind": "WARNING: the A2A API has no authentication and is listening on {address}. Anyone who can reach that address can use this harness and its model account.",
+  "server.origin-rejected": "Requests from origin {origin} are not allowed.",
+  "server.limit.body": "The request body is larger than {limit} bytes.",
+  "server.limit.parts": "A message may have at most {limit} parts.",
+  "server.limit.part-size": "A message part may be at most {limit} bytes.",
+  "server.limit.open-tasks": "This caller has {limit} open tasks already. Complete or cancel one first.",
+  "server.limit.rate": "Too many requests. At most {limit} per minute.",
+  "error.durable.unavailable": "Durable mode \"{mode}\" is not available in this build."
 }

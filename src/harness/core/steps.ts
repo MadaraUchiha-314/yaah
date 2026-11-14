@@ -26,12 +26,6 @@ import type {
   ToolResult,
 } from './types.ts';
 
-/** Runs a `/command`. Provided by the commands plugin. */
-export type CommandRunner = (
-  ctx: StepContext,
-  input: StepInput<'command.run'>,
-) => Promise<StepOutput<'command.run'>>;
-
 /** Replaces older conversation with a summary. Provided by the compaction module. */
 export type Compactor = (ctx: StepContext) => Promise<StepOutput<'context.compact'>>;
 
@@ -49,7 +43,6 @@ export interface StepDeps {
   /** How long one tool call may take. */
   readonly toolTimeoutMs: number;
   readonly skills?: SkillsSection | undefined;
-  readonly commands?: CommandRunner | undefined;
   readonly compact?: Compactor | undefined;
 }
 
@@ -191,7 +184,7 @@ async function acceptItems(
 
 /** Builds the step implementations over `deps`. */
 export function createStepHandlers(deps: StepDeps): StepHandlers {
-  const { conversation, inbox } = deps.persistence;
+  const { conversation } = deps.persistence;
   return {
     'conversation.accept': (ctx, input) => acceptItems(deps, ctx, input),
     'context.build': async (ctx) => {
@@ -208,6 +201,10 @@ export function createStepHandlers(deps: StepDeps): StepHandlers {
       const result = await consume(deps, ctx, built.llm.stream(built.request, ctx.signal));
       assertCurrent(ctx);
       await conversation.put(ctx.taskId, ctx.key, result.events);
+      const [first] = result.events;
+      if (first?.type === 'message') {
+        await deps.tasks.setReply(ctx.taskId, ctx.key, first.parts);
+      }
       return result.output;
     },
     'tool.invoke': async (ctx, input) => {
@@ -227,15 +224,8 @@ export function createStepHandlers(deps: StepDeps): StepHandlers {
       await deps.tasks.setStatus(ctx.taskId, ctx.key, {
         ...status,
         message: await statusMessage(deps, ctx.taskId, input),
-        isResult: input.reason === 'turn-complete',
       });
       return status;
-    },
-    'command.run': async (ctx, input) => {
-      const outcome =
-        deps.commands === undefined ? { handled: false } : await deps.commands(ctx, input);
-      await inbox.markProcessed([input.itemId]);
-      return outcome;
     },
   };
 }

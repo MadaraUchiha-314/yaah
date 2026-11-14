@@ -37,6 +37,8 @@ export interface CoreOptions {
   readonly usagePerCall?: { readonly inputTokens: number; readonly outputTokens: number };
   readonly deps?: Partial<StepDeps>;
   readonly contextWindow?: number;
+  /** Record steps and inbox reads in the journal, so a second runner can replay them. */
+  readonly journaled?: boolean;
 }
 
 /** A running core, with the handles a test needs. */
@@ -52,7 +54,7 @@ export interface Core {
   /** Resolves when the task reaches a terminal state. */
   readonly finished: Promise<TransitionResult>;
   /** Puts a message in the inbox and hands it to the run. */
-  send(text: string, options?: { interrupt?: boolean; command?: string }): Promise<string>;
+  send(text: string, options?: { interrupt?: boolean }): Promise<string>;
   /** Puts any payload in the inbox and hands it to the run. */
   deliver(payload: InboxPayload, options?: { interrupt?: boolean }): Promise<string>;
   /** Resolves once the task's status history has `count` entries. */
@@ -126,10 +128,15 @@ export async function createCore(options: CoreOptions = {}): Promise<Core> {
     toolTimeoutMs: 2000,
     ...options.deps,
   });
-  const runner = new DirectRunner(taskId, handlers, {
-    maxIterations: options.maxIterations ?? 50,
-    maxTaskTokens: options.maxTaskTokens ?? 2_000_000,
-  });
+  const runner = new DirectRunner(
+    taskId,
+    handlers,
+    {
+      maxIterations: options.maxIterations ?? 50,
+      maxTaskTokens: options.maxTaskTokens ?? 2_000_000,
+    },
+    options.journaled === true ? { journal: persistence.journal } : {},
+  );
   let counter = 0;
   const deliver: Core['deliver'] = async (payload, deliverOptions = {}) => {
     counter += 1;
@@ -142,7 +149,7 @@ export async function createCore(options: CoreOptions = {}): Promise<Core> {
       interrupt,
       payload,
     });
-    const ref: InboxItemRef = { id, kind: payload.kind, interrupt, command: null };
+    const ref: InboxItemRef = { id, kind: payload.kind, interrupt };
     runner.deliver(ref);
     return id;
   };

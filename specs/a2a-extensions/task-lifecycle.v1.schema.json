@@ -1,0 +1,40 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/MadaraUchiha-314/yaah/extensions/task-lifecycle/v1",
+  "$defs": {
+    "messageMetadata": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "type": "object",
+      "properties": {
+        "longRunning": {
+          "type": "boolean"
+        },
+        "action": {
+          "type": "string",
+          "enum": [
+            "complete"
+          ]
+        }
+      },
+      "additionalProperties": false
+    },
+    "statusMessageMetadata": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "type": "object",
+      "properties": {
+        "subState": {
+          "type": "string"
+        },
+        "schemaVersion": {
+          "type": "number",
+          "const": 1
+        }
+      },
+      "required": [
+        "subState",
+        "schemaVersion"
+      ],
+      "additionalProperties": false
+    }
+  }
+}

@@ -30,7 +30,6 @@ describe('core loop', () => {
     await core.send('Hi');
     expect(await core.finished).toEqual({ state: 'completed', subState: null });
     const final = last(core.tasks.history);
-    expect(final?.isResult).toBe(true);
     expect(final?.message).toEqual([{ type: 'text', text: 'Hello there.' }]);
     expect(await core.transcript()).toEqual(['user: Hi', 'agent: Hello there.']);
     expect(core.deltas.join('')).toBe('Hello there.');

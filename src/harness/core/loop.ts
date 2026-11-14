@@ -7,7 +7,12 @@
  */
 import { isJsonObject } from '../../kernel/json.ts';
 import type { InboxItemRef, StepName, StepRunner, TransitionResult } from './step-runner.ts';
-import { LimitError, TaskCancelledError, TurnInterruptedError } from './step-runner.ts';
+import {
+  LimitError,
+  RunAbandonedError,
+  TaskCancelledError,
+  TurnInterruptedError,
+} from './step-runner.ts';
 import type { StepKey, ToolCall } from './types.ts';
 
 /** The name of the tool the model calls to ask a person for input. */
@@ -113,7 +118,7 @@ async function turn(run: Run): Promise<boolean> {
     }
     // Late arrivals are read at every iteration, so the model always sees them next.
     // oxlint-disable-next-line no-await-in-loop -- iterations are sequential by nature
-    if (await accept(run, run.runner.drainInbox())) {
+    if (await accept(run, await run.runner.drainInbox())) {
       return true;
     }
     // oxlint-disable-next-line no-await-in-loop -- as above
@@ -125,7 +130,8 @@ async function turn(run: Run): Promise<boolean> {
         return true;
       }
     } else if (calls !== null && calls.length === 0) {
-      const unread = run.runner.drainInbox();
+      // oxlint-disable-next-line no-await-in-loop -- as above
+      const unread = await run.runner.drainInbox();
       if (unread.length === 0) {
         return false;
       }
@@ -147,14 +153,6 @@ async function life(run: Run): Promise<TransitionResult> {
     const item = await run.runner.nextInboxItem();
     if (isComplete(item)) {
       return finish(run, 'client-complete');
-    }
-    if (item.command !== null) {
-      // oxlint-disable-next-line no-await-in-loop -- as above
-      await run.runner.step('command.run', nextKey(run, 'command.run'), {
-        itemId: item.id,
-        command: item.command,
-      });
-      continue;
     }
     // oxlint-disable-next-line no-await-in-loop -- as above
     await run.runner.step('task.transition', nextKey(run, 'task.transition'), {
@@ -180,7 +178,9 @@ async function life(run: Run): Promise<TransitionResult> {
  * Runs a task from its first inbox item to a terminal state.
  *
  * Cancellation and failure are outcomes, not exceptions: whatever happens, the final
- * status is recorded in a shielded step and returned.
+ * status is recorded in a shielded step and returned. The one exception is a shutdown.
+ *
+ * @throws RunAbandonedError when the runner is abandoned; nothing is recorded.
  *
  * @param startSequence Where step numbering resumes — the number of steps already
  *   performed, when a run continues an earlier one.
@@ -191,6 +191,9 @@ export async function runTask(runner: StepRunner, startSequence = 0): Promise<Tr
     const outcome = await life(run);
     return outcome;
   } catch (error) {
+    if (error instanceof RunAbandonedError) {
+      throw error;
+    }
     const request =
       error instanceof TaskCancelledError
         ? ({ reason: 'cancel' } as const)

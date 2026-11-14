@@ -6,7 +6,7 @@ describe('MemoryTaskPort', () => {
   test('applies a status once per step key and records it', async () => {
     const port = new MemoryTaskPort();
     port.create({ taskId: 't1' });
-    const update = { state: 'completed', subState: null, message: [], isResult: true } as const;
+    const update = { state: 'completed', subState: null, message: [] } as const;
     await port.setStatus('t1', 'k1', update);
     await port.setStatus('t1', 'k1', { ...update, state: 'failed' });
     expect((await port.load('t1')).state).toBe('completed');

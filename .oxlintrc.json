@@ -59,7 +59,10 @@
         "skipBlankLines": true,
         "skipComments": true
       }
-    ]
+    ],
+    "unicorn/consistent-function-scoping": "off",
+    "unicorn/no-useless-undefined": "off",
+    "oxc/no-map-spread": "off"
   },
   "overrides": [
     {
@@ -76,7 +79,9 @@
         "max-lines-per-function": "off",
         "max-lines": "off",
         "oxc/no-map-spread": "off",
-        "unicorn/consistent-function-scoping": "off"
+        "unicorn/consistent-function-scoping": "off",
+        "typescript/explicit-function-return-type": "off",
+        "typescript/explicit-module-boundary-types": "off"
       }
     }
   ]

@@ -33,6 +33,7 @@
     "prepare": "lefthook install"
   },
   "dependencies": {
+    "@a2a-js/sdk": "1.3.0",
     "@cfworker/json-schema": "^4.1.6",
     "@cordisjs/fs": "2.0.0-rc.0",
     "@cordisjs/fs-node": "0.1.0",
@@ -40,6 +41,7 @@
     "@cordisjs/include": "2.0.0-rc.0",
     "@cordisjs/loader": "1.0.0-rc.10",
     "cordis": "4.0.0-rc.13",
+    "express": "^5.1.0",
     "smol-toml": "1.9.1",
     "yaml": "^2.9.1",
     "zod": "4.6.7"
@@ -48,6 +50,7 @@
     "@commitlint/cli": "^21.2.4",
     "@commitlint/config-conventional": "^21.2.4",
     "@types/bun": "^1.4.4",
+    "@types/express": "^5.0.6",
     "lefthook": "^2.2.2",
     "oxfmt": "^0.78.0",
     "oxlint": "^1.93.0",

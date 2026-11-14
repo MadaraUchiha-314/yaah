@@ -1,0 +1,222 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/MadaraUchiha-314/yaah/extensions/task-model/v1",
+  "$defs": {
+    "taskMetadata": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "type": {
+          "type": "string"
+        },
+        "goal": {
+          "type": "string"
+        },
+        "description": {
+          "type": "string"
+        },
+        "acceptanceCriteria": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "subTasks": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "taskId": {
+                "type": "string"
+              },
+              "contextId": {
+                "type": "string"
+              },
+              "agent": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "taskId",
+              "contextId",
+              "agent"
+            ],
+            "additionalProperties": false
+          }
+        },
+        "parentTasks": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "taskId": {
+                "type": "string"
+              },
+              "contextId": {
+                "type": "string"
+              },
+              "agent": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "taskId",
+              "contextId",
+              "agent"
+            ],
+            "additionalProperties": false
+          }
+        },
+        "participants": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string"
+              },
+              "role": {
+                "type": "string",
+                "enum": [
+                  "assignee",
+                  "reporter",
+                  "watcher",
+                  "admin"
+                ]
+              },
+              "kind": {
+                "type": "string",
+                "enum": [
+                  "user",
+                  "agent"
+                ]
+              },
+              "displayName": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "role",
+              "kind"
+            ],
+            "additionalProperties": false
+          }
+        },
+        "depth": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "schemaVersion": {
+          "type": "number",
+          "const": 1
+        }
+      },
+      "required": [
+        "name",
+        "goal",
+        "description",
+        "acceptanceCriteria",
+        "subTasks",
+        "parentTasks",
+        "participants",
+        "depth",
+        "schemaVersion"
+      ],
+      "additionalProperties": false
+    },
+    "messageMetadata": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "type": {
+          "type": "string"
+        },
+        "goal": {
+          "type": "string"
+        },
+        "description": {
+          "type": "string"
+        },
+        "acceptanceCriteria": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "participants": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string"
+              },
+              "role": {
+                "type": "string",
+                "enum": [
+                  "assignee",
+                  "reporter",
+                  "watcher",
+                  "admin"
+                ]
+              },
+              "kind": {
+                "type": "string",
+                "enum": [
+                  "user",
+                  "agent"
+                ]
+              },
+              "displayName": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "role",
+              "kind"
+            ],
+            "additionalProperties": false
+          }
+        },
+        "parentTasks": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "taskId": {
+                "type": "string"
+              },
+              "contextId": {
+                "type": "string"
+              },
+              "agent": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "taskId",
+              "contextId",
+              "agent"
+            ],
+            "additionalProperties": false
+          }
+        },
+        "depth": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        }
+      },
+      "additionalProperties": false
+    }
+  }
+}
