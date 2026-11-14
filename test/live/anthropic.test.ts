@@ -123,6 +123,31 @@ describe('live: Anthropic', () => {
 
   /**
    * Feature: Live providers
+   * Scenario: The same task runs as a workflow on embedded Temporal
+   *   Given the harness in mode `temporal-embedded`, with a real Claude model
+   *   When the two-turn task with a tool call is worked and completed
+   *   Then it behaves as in the in-process mode, and the task links to its workflow in
+   *        the local Temporal Web UI
+   * Requirement: docs/specs/issue-3/requirements.md R17.2, R17.8, R27.4
+   */
+  live(
+    'The same task runs as a workflow on embedded Temporal',
+    async () => {
+      const done = await scenario([
+        '[durable]',
+        'mode = "temporal-embedded"',
+        '[durable.temporal]',
+        'port = 17233',
+        'ui_port = 18233',
+      ]);
+      expect(done.workflowUrl).toContain('http://127.0.0.1:18233/');
+      expect((await fetch(done.workflowUrl ?? '')).status).toBe(200);
+    },
+    180_000,
+  );
+
+  /**
+   * Feature: Live providers
    * Scenario: The same task runs as a workflow on Temporal Cloud
    *   Given the harness in mode `temporal-remote` against the project's Temporal Cloud
    *        namespace, with a real Claude model
