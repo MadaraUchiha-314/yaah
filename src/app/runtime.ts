@@ -7,6 +7,8 @@ import type { Context } from 'cordis';
 
 import { createCompactor } from '../harness/core/context/compaction.ts';
 import type { StepHandlers } from '../harness/core/direct-runner.ts';
+import type { StepMiddleware } from '../harness/core/step-middleware.ts';
+import { withMiddleware } from '../harness/core/step-middleware.ts';
 import type { RunLimits } from '../harness/core/step-runner.ts';
 import type { TurnExtension } from '../harness/core/steps.ts';
 import { createStepHandlers } from '../harness/core/steps.ts';
@@ -28,6 +30,11 @@ export interface RuntimeService {
    * extension or null when it does not apply. Returns a function that removes it.
    */
   addTurnExtension(provide: TurnExtensionProvider): () => void;
+  /**
+   * Runs `middleware` around every step of every task from now on — how logging and
+   * tracing see the loop. Returns a function that removes it.
+   */
+  addStepMiddleware(middleware: StepMiddleware): () => void;
 }
 
 /** Decides, per task and turn, whether a turn extension applies. */
@@ -61,7 +68,8 @@ export function apply(ctx: Context): void {
   const tasks = new A2aTaskPort(taskStore, hub);
   const shared = { registry: ctx.entities, persistence, tasks, defaultLlm: config.model.llm };
   const providers = new Set<TurnExtensionProvider>();
-  const handlers = createStepHandlers({
+  const middlewares = new Set<StepMiddleware>();
+  const steps = createStepHandlers({
     ...shared,
     turnExtensions: (task: TaskSnapshot): TurnExtension[] =>
       [...providers]
@@ -84,7 +92,13 @@ export function apply(ctx: Context): void {
     hub,
     taskStore,
     tasks,
-    handlers,
+    handlers: withMiddleware(steps, middlewares),
+    addStepMiddleware: (middleware: StepMiddleware): (() => void) => {
+      middlewares.add(middleware);
+      return (): void => {
+        middlewares.delete(middleware);
+      };
+    },
     addTurnExtension: (provide: TurnExtensionProvider): (() => void) => {
       providers.add(provide);
       return (): void => {

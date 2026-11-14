@@ -46,6 +46,8 @@ export interface ExecutorDeps {
   readonly callerOf?: ((request: RequestContext) => string) | undefined;
   /** Told when something a caller sent is dropped rather than accepted. */
   readonly onDiscard?: ((taskId: string, reason: string) => void) | undefined;
+  /** Told, inside the request that brought it, when an item is about to enter the inbox. */
+  readonly onAccept?: ((item: InboxItem, contextId: string) => void) | undefined;
   /** How long the stream may be silent before the task store is consulted. */
   readonly backstopMs?: number | undefined;
 }
@@ -150,6 +152,7 @@ export class HarnessExecutor implements AgentExecutor {
     }
     const cursor = this.#deps.hub.head(taskId);
     const before = statusKey(this.#deps.store.get(taskId));
+    this.#deps.onAccept?.(item, task.contextId);
     await this.#deps.inbox.accept(item);
     await this.#forward(task, cursor, before, bus);
   }

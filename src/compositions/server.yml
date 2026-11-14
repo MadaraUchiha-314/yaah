@@ -12,6 +12,8 @@
   name: '@cordisjs/include'
   config:
     path: ./shared/app.yml
+- id: o11y
+  name: ../app/o11y/index.ts
 - id: extensions-layer
   name: '@cordisjs/include'
   config:

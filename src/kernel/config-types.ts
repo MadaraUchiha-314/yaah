@@ -101,6 +101,9 @@ export interface YaahConfig {
   readonly heartbeat: { readonly intervalMs: number; readonly stalledAfterMs: number };
   readonly o11y: {
     readonly logLevel: 'debug' | 'info' | 'warn' | 'error';
+    /** Log records are appended to this file instead of being written to standard error. */
+    readonly logFile: string | undefined;
+    /** Base URL of an OTLP/HTTP collector; spans go to `<url>/v1/traces`. */
     readonly otlpEndpoint: string | undefined;
     readonly captureContent: boolean;
   };

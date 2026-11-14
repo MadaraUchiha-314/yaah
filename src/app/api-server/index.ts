@@ -8,6 +8,7 @@ import type { A2ARequestHandler, RequestContext } from '@a2a-js/sdk/server';
 import { DefaultRequestHandler, STATE_HEADERS_KEY } from '@a2a-js/sdk/server';
 import type { Context } from 'cordis';
 
+import type { InboxItem } from '../../harness/core/types.ts';
 import { Inbox } from '../inbox/inbox.ts';
 import { buildAgentCard } from './agent-card.ts';
 import type { CommandDispatcher } from './executor.ts';
@@ -46,6 +47,15 @@ declare module 'cordis' {
     /** The A2A request handling of this harness. */
     a2a: A2aService;
   }
+  interface Events {
+    /**
+     * A message is about to enter a task's inbox. Emitted synchronously inside the
+     * request that carried it, so a listener sees that request's async scope.
+     */
+    'inbox/accepted'(item: InboxItem, contextId: string): void;
+    /** Something a caller sent was dropped instead of being accepted. */
+    'inbox/discarded'(taskId: string, reason: string): void;
+  }
 }
 
 /** The harness's own version, shown in the agent card. */
@@ -68,6 +78,28 @@ function callerOf(request: RequestContext): string {
   return typeof caller === 'string' ? caller : '';
 }
 
+/**
+ * Who is calling, and reports of what the inbox takes and what it drops as events other
+ * plugins can hear.
+ */
+function callerAndEvents(ctx: Context): {
+  agentId: string;
+  callerOf: (request: RequestContext) => string;
+  onAccept: (item: InboxItem, contextId: string) => void;
+  onDiscard: (taskId: string, reason: string) => void;
+} {
+  return {
+    agentId: 'self',
+    callerOf,
+    onAccept: (item: InboxItem, contextId: string): void => {
+      ctx.emit('inbox/accepted', item, contextId);
+    },
+    onDiscard: (taskId: string, reason: string): void => {
+      ctx.emit('inbox/discarded', taskId, reason);
+    },
+  };
+}
+
 /** Builds the A2A service and picks open tasks up again. */
 export function apply(ctx: Context): void {
   const { taskRuntime: runtime, durable, strings } = ctx;
@@ -81,8 +113,7 @@ export function apply(ctx: Context): void {
     inbox,
     durable,
     tasks: runtime.tasks,
-    agentId: 'self',
-    callerOf,
+    ...callerAndEvents(ctx),
     contextSettings: (contextId: string): Partial<TaskSettings> =>
       contextSettings === null ? {} : contextSettings(contextId),
     commands: (request: RequestContext): ReturnType<CommandDispatcher> =>

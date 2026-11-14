@@ -8,6 +8,7 @@ import { CfWorkerJsonSchemaValidator } from '@modelcontextprotocol/client/valida
 
 import type { McpServerConfig } from '../../../kernel/config-types.ts';
 import type { JsonObject } from '../../../kernel/json.ts';
+import { currentTraceparent } from '../../../kernel/trace-context.ts';
 import type { McpCallResult } from './result.ts';
 import { createTransport } from './transport.ts';
 
@@ -88,11 +89,18 @@ export async function openSession(
       const listing = await client.listTools(undefined, { timeout: options.requestTimeoutMs });
       return listing.tools;
     },
-    callTool: (name, args, signal) =>
-      client.callTool(
-        { name, arguments: { ...args } },
+    callTool: (name, args, signal) => {
+      // The call continues the trace of the step making it, when there is one.
+      const traceparent = currentTraceparent();
+      return client.callTool(
+        {
+          name,
+          arguments: { ...args },
+          ...(traceparent === undefined ? {} : { _meta: { traceparent } }),
+        },
         { signal, timeout: options.requestTimeoutMs },
-      ),
+      );
+    },
     onClose: (listener) => {
       // oxlint-disable-next-line unicorn/prefer-add-event-listener -- the SDK's API is this property
       client.onclose = (): void => {

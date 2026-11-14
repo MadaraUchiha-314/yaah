@@ -330,13 +330,13 @@ suite. `T<n>` refers to a row of the testing plan's matrix.
   - _Depends on:_ 37, 38, 32
   - _Requirements:_ R22.1, R22.2, R22.6
   - _Test:_ T3, T4 — export-list equality; e2e starts from the built package
-- [ ] 41. Logging
+- [x] 41. Logging
   - `Logger` service, the fixed record types, redaction at the four exits.
   - _Depends on:_ 19
   - _Requirements:_ R18.1, R18.3, R18.4; abuse case 12
   - _Test:_ T2, T8 — `Scenario: Every step of a task is logged with task and trace
     ids`; negative test: credential leak
-- [ ] 42. Tracing
+- [x] 42. Tracing
   - OpenTelemetry spans by the GenAI conventions; OTLP exporter; `traceparent` across
     A2A and MCP.
   - _Depends on:_ 41, 25, 26

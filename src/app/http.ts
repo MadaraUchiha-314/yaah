@@ -12,7 +12,7 @@ import {
   restHandler,
 } from '@a2a-js/sdk/server/express';
 import type { Context } from 'cordis';
-import type { Express } from 'express';
+import type { Express, Request, Response } from 'express';
 import express from 'express';
 
 import { JSONRPC_PATH, REST_PATH } from './api-server/agent-card.ts';
@@ -44,6 +44,12 @@ declare module 'cordis' {
   interface Events {
     /** The listener is up. */
     'http/listening'(url: string): void;
+    /**
+     * A request arrived. A listener that wants the rest of the request to run inside a
+     * scope of its own (a trace) calls `next` itself and returns true; otherwise the
+     * listener returns nothing and the request simply continues.
+     */
+    'http/request'(request: Request, response: Response, next: () => void): boolean | undefined;
   }
 }
 
@@ -82,6 +88,11 @@ export async function apply(ctx: Context): Promise<void> {
     trustProxy: settings.trustProxy,
     openTasks: (caller: string): number => ctx.a2a.openTasks(caller),
   };
+  app.use((request: Request, response: Response, next: () => void): void => {
+    if (ctx.bail('http/request', request, response, next) !== true) {
+      next();
+    }
+  });
   app.use(originGuard(guards));
   const server = await listen(app, settings.host, settings.port);
   const address = server.address();

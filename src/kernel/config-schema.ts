@@ -115,6 +115,7 @@ const fileSchema = z.strictObject({
   o11y: z
     .strictObject({
       log_level: z.enum(['debug', 'info', 'warn', 'error']).default('info'),
+      log_file: z.string().optional(),
       otlp_endpoint: z.string().optional(),
       capture_content: z.boolean().default(false),
     })
@@ -255,6 +256,7 @@ function toConfig(file: FileConfig): YaahConfig {
     },
     o11y: {
       logLevel: file.o11y.log_level,
+      logFile: file.o11y.log_file,
       otlpEndpoint: file.o11y.otlp_endpoint,
       captureContent: file.o11y.capture_content,
     },

@@ -14,8 +14,9 @@ const SENSITIVE_KEY = /key|token|secret|authorization|password|cookie/iu;
  * attributes, errors returned to callers, and content written to a conversation.
  *
  * Two rules. Every known secret value is replaced wherever it occurs **as a substring**
- * of any string. And any value stored under a key whose name looks sensitive is blanked
- * whatever it holds.
+ * of any string. And any string, list or object stored under a key whose name looks
+ * sensitive is blanked whatever it holds (a number or a flag there is a count, not a
+ * credential).
  */
 export class Redactor {
   readonly #secrets = new Set<string>();
@@ -63,7 +64,10 @@ export class Redactor {
     if (value !== null && typeof value === 'object' && isJsonObject(value)) {
       const copy: Record<string, Json> = {};
       for (const [key, item] of Object.entries(value)) {
-        copy[key] = SENSITIVE_KEY.test(key) ? REDACTED : this.redact(item);
+        // A count (`inputTokens`) or a flag is not a credential; anything else under a
+        // sensitive name is.
+        const scalar = typeof item === 'number' || typeof item === 'boolean' || item === null;
+        copy[key] = SENSITIVE_KEY.test(key) && !scalar ? REDACTED : this.redact(item);
       }
       return copy;
     }
