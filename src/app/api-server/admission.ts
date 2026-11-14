@@ -9,6 +9,7 @@ import type { AgentExecutor, ServerCallContext, TaskStore } from '@a2a-js/sdk/se
 import { DefaultRequestHandler } from '@a2a-js/sdk/server';
 
 import { YaahError } from '../../kernel/yaah-error.ts';
+import { RequestBusManager } from './request-buses.ts';
 
 /**
  * Decides whether a message may enter. It resolves to admit the message.
@@ -66,7 +67,7 @@ export class AdmittingRequestHandler extends DefaultRequestHandler {
   readonly #gate: AdmissionGate;
 
   constructor(gate: AdmissionGate, card: AgentCard, store: TaskStore, executor: AgentExecutor) {
-    super(card, store, executor);
+    super(card, store, executor, new RequestBusManager());
     this.#gate = gate;
   }
 

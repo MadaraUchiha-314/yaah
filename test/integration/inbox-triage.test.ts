@@ -59,12 +59,7 @@ interface Working {
   readonly first: Promise<void>;
 }
 
-/**
- * Waits for a streaming call to end, however it ends. The A2A SDK gives every stream of
- * one task the same event bus, and a second message for a working task puts a second
- * `task` event on it, which the SDK reports on the open streams as an ordering violation.
- * The message is accepted all the same; these tests read the outcome from the harness.
- */
+/** Waits for a streaming call to end, however it ends: these tests read the harness. */
 async function settled(stream: Promise<unknown>): Promise<void> {
   await stream.catch(() => undefined);
 }
