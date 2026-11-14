@@ -11,6 +11,7 @@ import type { Context } from 'cordis';
 import type { InboxItem } from '../../harness/core/types.ts';
 import { VERSION } from '../../kernel/version.ts';
 import { Inbox } from '../inbox/inbox.ts';
+import { createTriage } from '../inbox/triage.ts';
 import { buildAgentCard } from './agent-card.ts';
 import type { CommandDispatcher } from './executor.ts';
 import { HarnessExecutor } from './executor.ts';
@@ -62,6 +63,7 @@ declare module 'cordis' {
 export const name = 'api-server';
 export const inject: readonly string[] = [
   'config',
+  'entities',
   'taskRuntime',
   'durable',
   'persistence',
@@ -112,6 +114,7 @@ export function apply(ctx: Context): void {
     durable,
     tasks: runtime.tasks,
     ...callerAndEvents(ctx),
+    triage: ctx.config.inbox.triage === 'system-one' ? createTriage(ctx) : undefined,
     contextSettings: (contextId: string): Partial<TaskSettings> =>
       contextSettings === null ? {} : contextSettings(contextId),
     commands: (request: RequestContext): ReturnType<CommandDispatcher> =>

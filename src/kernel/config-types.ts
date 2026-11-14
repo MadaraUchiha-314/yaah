@@ -59,6 +59,8 @@ export interface YaahConfig {
       readonly baseUrl: string | undefined;
       /** Model ids registered as `openai/<model>`. */
       readonly models: readonly string[];
+      /** The decisions model registered as the `system-one` entity `openai/<model>`. */
+      readonly systemOneModel: string;
     };
     readonly anthropic: {
       readonly apiKeyEnv: string;
@@ -106,6 +108,27 @@ export interface YaahConfig {
     /** Base URL of an OTLP/HTTP collector; spans go to `<url>/v1/traces`. */
     readonly otlpEndpoint: string | undefined;
     readonly captureContent: boolean;
+    /**
+     * Export spans to Langfuse's OTLP endpoint, `<host>/api/public/otel/v1/traces`. The
+     * two variables hold the project's public and secret key. Ignored when `otlpEndpoint`
+     * is set.
+     */
+    readonly langfuse:
+      | {
+          readonly host: string;
+          readonly publicKeyEnv: string;
+          readonly secretKeyEnv: string;
+        }
+      | undefined;
+  };
+  readonly inbox: {
+    /**
+     * `system-one`: a message that arrives for a working task without saying whether it
+     * interrupts is classified by a System One model. `off`: it never interrupts.
+     */
+    readonly triage: 'off' | 'system-one';
+    /** The id of the `system-one` entity triage asks. Defaults to OpenAI's. */
+    readonly triageModel: string;
   };
   readonly a2a: { readonly allowedHosts: readonly string[] };
   readonly mcp: { readonly servers: readonly McpServerConfig[] };

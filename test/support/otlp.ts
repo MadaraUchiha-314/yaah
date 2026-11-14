@@ -12,10 +12,31 @@ export interface CollectedSpan {
   readonly raw: string;
 }
 
+/** One HTTP request the collector received. */
+export interface CollectedRequest {
+  readonly path: string;
+  readonly headers: Readonly<Record<string, string>>;
+}
+
+/** The paths spans are accepted on: plain OTLP, and Langfuse's OTLP endpoint. */
+const TRACE_PATHS: ReadonlySet<string> = new Set(['/v1/traces', '/api/public/otel/v1/traces']);
+
+function headersOf(request: IncomingMessage): Record<string, string> {
+  const headers: Record<string, string> = {};
+  for (const [name, value] of Object.entries(request.headers)) {
+    if (typeof value === 'string') {
+      headers[name] = value;
+    }
+  }
+  return headers;
+}
+
 /** A running collector. */
 export interface Collector {
   readonly url: string;
   readonly spans: CollectedSpan[];
+  /** Every request received: its path and its headers, lower-cased names. */
+  readonly requests: CollectedRequest[];
   /** Every request body received, joined — for "this text never left the process". */
   body(): string;
   stop(): Promise<void>;
@@ -69,6 +90,7 @@ function spansOf(body: string): CollectedSpan[] {
 export async function startCollector(): Promise<Collector> {
   const spans: CollectedSpan[] = [];
   const bodies: string[] = [];
+  const requests: CollectedRequest[] = [];
   const server: Server = createServer((request: IncomingMessage, response: ServerResponse) => {
     const chunks: Buffer[] = [];
     request.on('data', (chunk: Buffer) => {
@@ -77,7 +99,8 @@ export async function startCollector(): Promise<Collector> {
     request.on('end', () => {
       const body = Buffer.concat(chunks).toString('utf8');
       bodies.push(body);
-      if (request.url === '/v1/traces') {
+      requests.push({ path: request.url ?? '', headers: headersOf(request) });
+      if (TRACE_PATHS.has(request.url ?? '')) {
         spans.push(...spansOf(body));
       }
       response.writeHead(200, { 'content-type': 'application/json' });
@@ -92,6 +115,7 @@ export async function startCollector(): Promise<Collector> {
   return {
     url: `http://127.0.0.1:${String(port)}`,
     spans,
+    requests,
     body: (): string => bodies.join('\n'),
     stop: (): Promise<void> =>
       new Promise((resolve) => {

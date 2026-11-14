@@ -82,6 +82,10 @@
               "items": {
                 "type": "string"
               }
+            },
+            "system_one_model": {
+              "default": "gpt-6-luna",
+              "type": "string"
             }
           },
           "additionalProperties": false
@@ -357,6 +361,44 @@
         "capture_content": {
           "default": false,
           "type": "boolean"
+        },
+        "langfuse": {
+          "type": "object",
+          "properties": {
+            "host": {
+              "type": "string"
+            },
+            "public_key_env": {
+              "type": "string"
+            },
+            "secret_key_env": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "host",
+            "public_key_env",
+            "secret_key_env"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "additionalProperties": false
+    },
+    "inbox": {
+      "default": {},
+      "type": "object",
+      "properties": {
+        "triage": {
+          "default": "off",
+          "type": "string",
+          "enum": [
+            "off",
+            "system-one"
+          ]
+        },
+        "triage_model": {
+          "type": "string"
         }
       },
       "additionalProperties": false

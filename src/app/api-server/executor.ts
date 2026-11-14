@@ -18,6 +18,7 @@ import type { JsonObject } from '../../kernel/json.ts';
 import { isJsonObject } from '../../kernel/json.ts';
 import type { DurableExecution } from '../durable/types.ts';
 import type { Inbox } from '../inbox/inbox.ts';
+import type { Triage } from '../inbox/triage.ts';
 import type { StreamHub } from '../stream-hub.ts';
 import { messageText, metadataObject, partsFromA2a } from './convert.ts';
 import { activityEvent, artifactEvent } from './executor-events.ts';
@@ -48,6 +49,8 @@ export interface ExecutorDeps {
   readonly onDiscard?: ((taskId: string, reason: string) => void) | undefined;
   /** Told, inside the request that brought it, when an item is about to enter the inbox. */
   readonly onAccept?: ((item: InboxItem, contextId: string) => void) | undefined;
+  /** Decides whether a message the client did not mark interrupts a working task. */
+  readonly triage?: Triage | undefined;
   /** How long the stream may be silent before the task store is consulted. */
   readonly backstopMs?: number | undefined;
 }
@@ -138,12 +141,14 @@ export class HarnessExecutor implements AgentExecutor {
     this.#deps.tasks.updateSettings(taskId, { turnMetadata: metadataObject(message.metadata) });
     bus.publish(AgentEvent.task(task));
     const inbox = readExtension(message.metadata, EXT.inboxEvents, SCHEMAS.inboxEventsRequest);
+    const id = `${taskId}:${message.messageId}`;
+    const payload = payloadOf(message);
     const item: InboxItem = {
-      id: `${taskId}:${message.messageId}`,
+      id,
       taskId,
       receivedAt: new Date().toISOString(),
-      interrupt: inbox?.interrupt === true,
-      payload: payloadOf(message),
+      interrupt: inbox?.interrupt ?? (await this.#triaged(task, id, payload, message)),
+      payload,
     };
     if (item.payload.kind === 'event' && !this.#isFromDelegate(task, item.payload.event)) {
       // An event is taken only for a sub-task this task delegated. Anything else is dropped.
@@ -155,6 +160,16 @@ export class HarnessExecutor implements AgentExecutor {
     this.#deps.onAccept?.(item, task.contextId);
     await this.#deps.inbox.accept(item);
     await this.#forward(task, cursor, before, bus);
+  }
+
+  /** What triage, when there is one, says about a message for a task that is working. */
+  #triaged(task: Task, id: string, payload: InboxPayload, message: Message): Promise<boolean> {
+    const { triage } = this.#deps;
+    const working = task.status?.state === TaskState.TASK_STATE_WORKING;
+    if (triage === undefined || !working || payload.kind !== 'message') {
+      return Promise.resolve(false);
+    }
+    return triage(task.id, id, messageText(message));
   }
 
   /** Whether `event` is about a sub-task of `task`, matched on task id and context id. */

@@ -4,6 +4,7 @@
  */
 import { z } from 'zod';
 
+import { toInbox, toO11y } from './config-sections.ts';
 import type { YaahConfig } from './config-types.ts';
 import type { Json } from './json.ts';
 
@@ -34,6 +35,7 @@ const fileSchema = z.strictObject({
           api_key_env: z.string().default('OPENAI_API_KEY'),
           base_url: z.string().optional(),
           models: z.array(z.string()).default(['gpt-6.1-sol', 'gpt-6.1-terra', 'gpt-6-astra']),
+          system_one_model: z.string().default('gpt-6-luna'),
         })
         .prefault({}),
       anthropic: z
@@ -118,6 +120,19 @@ const fileSchema = z.strictObject({
       log_file: z.string().optional(),
       otlp_endpoint: z.string().optional(),
       capture_content: z.boolean().default(false),
+      langfuse: z
+        .strictObject({
+          host: z.string(),
+          public_key_env: z.string(),
+          secret_key_env: z.string(),
+        })
+        .optional(),
+    })
+    .prefault({}),
+  inbox: z
+    .strictObject({
+      triage: z.enum(['off', 'system-one']).default('off'),
+      triage_model: z.string().optional(),
     })
     .prefault({}),
   a2a: z.strictObject({ allowed_hosts: z.array(z.string()).default([]) }).prefault({}),
@@ -160,6 +175,7 @@ function toProviders(file: FileConfig): YaahConfig['providers'] {
       apiKeyEnv: file.providers.openai.api_key_env,
       baseUrl: file.providers.openai.base_url,
       models: file.providers.openai.models,
+      systemOneModel: file.providers.openai.system_one_model,
     },
     anthropic: {
       apiKeyEnv: file.providers.anthropic.api_key_env,
@@ -254,12 +270,8 @@ function toConfig(file: FileConfig): YaahConfig {
       intervalMs: file.heartbeat.interval_ms,
       stalledAfterMs: file.heartbeat.stalled_after_ms,
     },
-    o11y: {
-      logLevel: file.o11y.log_level,
-      logFile: file.o11y.log_file,
-      otlpEndpoint: file.o11y.otlp_endpoint,
-      captureContent: file.o11y.capture_content,
-    },
+    o11y: toO11y(file.o11y),
+    inbox: toInbox(file.inbox, file.providers.openai.system_one_model),
     ...toExtensions(file),
   };
 }

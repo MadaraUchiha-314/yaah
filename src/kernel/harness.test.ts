@@ -44,6 +44,7 @@ describe('createHarness', () => {
     const ids = harness.ctx.entities.list('prompt').map((prompt) => prompt.ref.id);
     expect(ids).toEqual([
       'compaction',
+      'inbox-triage',
       'plan',
       'roles',
       'summary',

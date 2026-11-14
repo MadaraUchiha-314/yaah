@@ -6,3 +6,6 @@
   name: ../../harness/models/llm/anthropic/index.ts
 - id: llm-openai-compatible
   name: ../../harness/models/llm/openai-compatible/index.ts
+# System One: fast typed decisions. Registers one system-one entity, or nothing without a key.
+- id: system-one-openai
+  name: ../../harness/models/system-one/openai/index.ts

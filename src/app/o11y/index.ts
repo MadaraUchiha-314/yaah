@@ -6,7 +6,6 @@
  * it from a composition changes nothing but what is recorded.
  */
 import { SpanKind } from '@opentelemetry/api';
-import { OTLPTraceExporter } from '@opentelemetry/exporter-trace-otlp-http';
 import type { Context } from 'cordis';
 import type { Request, Response } from 'express';
 
@@ -15,6 +14,8 @@ import type { InboxItem } from '../../harness/core/types.ts';
 // For the heartbeat's events, which this plugin logs.
 import type { Heartbeat } from '../heartbeat/index.ts';
 import { addTraceparentSource } from '../../kernel/trace-context.ts';
+import type { TriageOutcome } from '../inbox/triage.ts';
+import { spanExporter } from './exporter.ts';
 import { Logger, fileWriter, stderrWriter } from './logger.ts';
 import { endFacts, logFacts, recordTypeOf, spanNameOf, startFacts } from './steps.ts';
 import { Tracing } from './tracing.ts';
@@ -130,6 +131,13 @@ function listen(ctx: Context): void {
   ctx.on('inbox/discarded', (taskId: string, reason: string) => {
     ctx.log.record('inbox.discarded', { taskId, reason }, 'warn');
   });
+  ctx.on('inbox/triaged', (taskId: string, itemId: string, outcome: TriageOutcome) => {
+    const level = outcome.error === null ? 'info' : 'warn';
+    ctx.log.record('harness.event', { event: 'inbox/triaged', taskId, itemId, ...outcome }, level);
+  });
+  ctx.on('system-one/unavailable', (id: string, variable: string) => {
+    ctx.log.record('harness.event', { event: 'system-one/unavailable', id, variable }, 'debug');
+  });
   ctx.on('command/invoked', (command: string) => {
     ctx.log.record('command.invoked', { command, traceId: ctx.tracing.traceId() });
   });
@@ -170,10 +178,7 @@ export function apply(ctx: Context): void {
   });
   const tracing = new Tracing({
     redactor: ctx.redactor,
-    exporter:
-      o11y.otlpEndpoint === undefined
-        ? undefined
-        : new OTLPTraceExporter({ url: `${o11y.otlpEndpoint.replace(/\/$/u, '')}/v1/traces` }),
+    exporter: spanExporter(o11y, ctx.redactor),
   });
   ctx.effect(() => {
     const releaseLogger = ctx.provide('log', logger);

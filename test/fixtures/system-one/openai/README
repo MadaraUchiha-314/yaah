@@ -1,0 +1,10 @@
+Hand-written from the documented shape of OpenAI's Decisions API (POST /v1/decisions):
+the API reference at https://developers.openai.com/api/reference/resources/decisions/methods/create,
+the guide at https://developers.openai.com/api/docs/guides/decisions, and the types of the
+installed `openai` package (resources/decisions.d.ts). None of these files is a recording:
+no live call has been made. Replace them with recorded responses when a valid key is available.
+
+decision.json answers to the three questions of systemOneContract (predicate, choice, score)
+refusal.json the same request with the second question refused
+error-429.json a rate-limit error body
+error-400.json an invalid-request error body

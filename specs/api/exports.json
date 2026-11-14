@@ -135,6 +135,16 @@
     "inject",
     "name"
   ],
+  "./harness/models/system-one": [
+    "SystemOneError"
+  ],
+  "./harness/models/system-one/openai": [
+    "OPENAI_SYSTEM_ONE_MODEL",
+    "apply",
+    "createOpenAiSystemOne",
+    "inject",
+    "name"
+  ],
   "./harness/system-prompt": [
     "apply",
     "definePrompt",
@@ -207,7 +217,11 @@
   ],
   "./testing": [
     "MemoryTaskPort",
+    "SYSTEM_ONE_CONTRACT_INPUT",
+    "SYSTEM_ONE_CONTRACT_QUESTIONS",
     "ScriptedLlm",
+    "ScriptedSystemOne",
+    "answerAll",
     "blankTaskModel",
     "call",
     "callTools",
@@ -216,6 +230,7 @@
     "persistenceContract",
     "rendererContract",
     "sampleSurface",
-    "say"
+    "say",
+    "systemOneContract"
   ]
 }
