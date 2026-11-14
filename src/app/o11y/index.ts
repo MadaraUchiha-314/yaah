@@ -72,7 +72,7 @@ async function observeStep<T>(ctx: Context, call: StepCall, next: () => Promise<
     contextId: task?.contextId,
     traceId: span.traceId,
     stepName: call.name,
-    key: call.key,
+    stepId: call.key,
   };
   const startedAt = performance.now();
   const elapsed = (): number => Math.round(performance.now() - startedAt);

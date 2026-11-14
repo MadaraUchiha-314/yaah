@@ -98,6 +98,7 @@ describe('observability', () => {
       expect(record.traceId).toBe(accepted?.traceId);
       expect(record['outcome']).toBe('ok');
       expect(typeof record['durationMs']).toBe('number');
+      expect(String(record['stepId'])).toContain(String(turn.task?.id));
     }
     expect(accepted?.traceId).toMatch(/^[0-9a-f]{32}$/u);
     const model = steps.filter((record) => record.type === 'llm.invoked');
