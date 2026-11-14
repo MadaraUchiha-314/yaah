@@ -13,7 +13,7 @@
   "tool.error.not-found": "No tool named \"{name}\" is available for this task.",
   "tool.error.invalid-arguments": "The arguments for \"{name}\" are not valid: {reason}",
   "tool.error.timeout": "\"{name}\" did not answer within {ms} ms.",
-  "tool.error.no-schema": "Tool \"{name}\" has no input schema and cannot be registered.",
+  "tool.error.no-schema": "Tool {name} declares no input schema, so it cannot be called.",
   "tool.ask-user.description": "Ask the person you are working for a question, and wait for the answer. Use it for an input, an opinion or a judgement call only they can give. Ask one question per call.",
   "tool.ask-user.one-at-a-time": "Ask one question at a time. Your first question was sent; ask this one after it is answered.",
   "tool.plan-set.description": "Record the plan for this task: a list of steps, each with the names of the steps it depends on. Replaces any earlier plan.",
@@ -113,5 +113,7 @@
   "cli.error.no-port": "No free port between {first} and {last} on {host}.",
   "cli.config-created": "Created {file} with the default settings.",
   "cli.log-file": "Logs: {file}",
-  "cli.stopping": "Stopping."
+  "cli.stopping": "Stopping.",
+  "error.path.escape": "\"{path}\" resolves outside {root} and was not loaded.",
+  "error.path.missing": "\"{path}\" does not exist under {root}."
 }

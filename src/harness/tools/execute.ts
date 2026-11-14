@@ -28,6 +28,14 @@ export interface ExecuteOptions {
  * @returns null when valid, otherwise an `invalid-arguments` error naming the first problem.
  */
 export function validateToolArgs(tool: Tool, args: Json): ToolError | null {
+  // A tool written without types may arrive with no schema at all: fail closed.
+  const schema: unknown = tool.inputSchema;
+  if (typeof schema !== 'object' || schema === null || Array.isArray(schema)) {
+    return {
+      code: 'invalid-arguments',
+      message: t('tool.error.no-schema', { name: tool.ref.id }),
+    };
+  }
   const outcome = new Validator(tool.inputSchema, '2020-12', true).validate(args);
   if (outcome.valid) {
     return null;
