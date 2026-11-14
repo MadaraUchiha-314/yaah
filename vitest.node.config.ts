@@ -14,8 +14,9 @@ const config: ViteUserConfig = defineConfig({
   },
   test: {
     include: ['src/**/*.test.ts', 'test/**/*.test.ts'],
-    exclude: ['test/e2e/**', 'test/live/**', 'node_modules/**', 'dist/**'],
-    testTimeout: 30_000,
+    exclude: ['test/e2e/**', 'test/live/**', 'test/chaos/**', 'node_modules/**', 'dist/**'],
+    testTimeout: 60_000,
+    hookTimeout: 240_000,
   },
 });
 

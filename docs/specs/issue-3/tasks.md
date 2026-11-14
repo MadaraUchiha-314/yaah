@@ -251,27 +251,27 @@ suite. `T<n>` refers to a row of the testing plan's matrix.
   - _Requirements:_ R17.1, R17.4, R17.5
   - _Test:_ T3, T2 — `durable.contract.ts` (none); `Scenario: A retryable step is
     retried with backoff` · `Scenario: A tool not marked safe is not retried`
-- [ ] 30. Temporal workflow and activities
+- [x] 30. Temporal workflow and activities
   - `runTask` bundled as a workflow; `TemporalRunner`; activities for each step name;
     signals for inbox delivery; cancellation; continue-as-new; heartbeats.
   - _Depends on:_ 29
   - _Requirements:_ R17.2, R17.3, R17.6
   - _Test:_ T3 — `durable.contract.ts` against embedded Temporal
-- [ ] 31. Embedded and remote modes
+- [x] 31. Embedded and remote modes
   - `createLocal` with UI, fixed loopback ports and a database file; remote connection
     with API key; fail-closed start; optional payload codec.
   - _Depends on:_ 30
   - _Requirements:_ R17.1, R17.7, R17.9
   - _Test:_ T2, T8 — `Scenario: Embedded mode serves the Temporal Web UI` · `Scenario:
     Unreachable remote Temporal stops start-up`
-- [ ] 32. Dashboard address and task links
+- [x] 32. Dashboard address and task links
   - `dashboard()`, `taskUrl()`; start-up output; durable-execution extension in the
     card and on tasks.
   - _Depends on:_ 31, 16
   - _Requirements:_ R17.8, R17.10
   - _Test:_ T2 — `Scenario: The Temporal Web UI address is printed and in the agent
     card` · `Scenario: A task carries a link to its workflow`
-- [ ] 33. Crash recovery
+- [x] 33. Crash recovery
   - `test:chaos`: a child-process harness killed with `SIGKILL` mid-tool and
     mid-LLM-call, restarted, with stub tools that count calls.
   - _Depends on:_ 31

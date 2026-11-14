@@ -80,5 +80,8 @@
   "llm.tool-error": "Error ({code}): {message}",
   "llm.openai.description": "OpenAI model {model}, called through the Responses API.",
   "llm.compatible.description": "Model {model} served by the OpenAI-compatible endpoint \"{provider}\".",
-  "tool.error.unknown-outcome": "\"{name}\" was started but its outcome is unknown, and it is not safe to run twice. It has not been retried. Check whether it took effect before trying again."
+  "tool.error.unknown-outcome": "\"{name}\" was started but its outcome is unknown, and it is not safe to run twice. It has not been retried. Check whether it took effect before trying again.",
+  "durable.dashboard": "Temporal Web UI: {url}",
+  "error.durable.address": "durable.temporal.address is required in mode \"temporal-remote\".",
+  "error.durable.unreachable": "Cannot reach Temporal at {address}: {reason}"
 }

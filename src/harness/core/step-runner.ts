@@ -148,6 +148,19 @@ export interface StepRunner {
   interruptible<T>(body: () => Promise<T>): Promise<T>;
   /** Runs `body` shielded from cancellation — for recording the final status. */
   shielded<T>(body: () => Promise<T>): Promise<T>;
+  /**
+   * Called each time the task goes idle, with where the run stands. A runner whose
+   * history is bounded uses it to start afresh from this point; it then never returns.
+   */
+  checkpoint?(position: RunPosition): Promise<void>;
+}
+
+/** Where a run stands between turns: enough to continue it in a fresh run. */
+export interface RunPosition {
+  /** How many steps the run has numbered so far. */
+  readonly sequence: number;
+  /** Input plus output tokens used so far. */
+  readonly tokens: number;
 }
 
 /** The task was cancelled. */

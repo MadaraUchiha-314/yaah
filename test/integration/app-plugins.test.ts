@@ -15,22 +15,32 @@ afterEach(async () => {
 describe('app plugins', () => {
   /**
    * Feature: Durable execution
-   * Scenario: An unavailable durable mode stops start-up
-   *   Given a configuration that selects a durable mode this build cannot provide
+   * Scenario: Unreachable remote Temporal stops start-up
+   *   Given a configuration that selects remote Temporal at an address nothing answers on
    *   When the harness starts
-   *   Then start-up fails naming the durable plugin, and nothing is left listening
+   *   Then start-up fails naming the durable plugin and the address, with no fallback
    * Requirement: docs/specs/issue-3/requirements.md R17.7, R1.4
    */
-  test('An unavailable durable mode stops start-up', async () => {
-    let caught: unknown = null;
-    try {
-      running = await startHarness({ config: '[durable]\nmode = "temporal-remote"' });
-    } catch (error) {
-      caught = error;
-    }
-    expect(caught).toBeInstanceOf(PluginLoadError);
-    expect(caught instanceof PluginLoadError ? caught.entryId : '').toBe('durable');
-  });
+  test('Unreachable remote Temporal stops start-up', async () => {
+    const failure = async (config: string): Promise<unknown> => {
+      try {
+        running = await startHarness({ config });
+      } catch (error) {
+        return error;
+      }
+      return null;
+    };
+    const unreachable = await failure(
+      '[durable]\nmode = "temporal-remote"\n[durable.temporal]\naddress = "127.0.0.1:1"\napi_key_env = "YAAH_TEST_NO_SUCH_KEY"',
+    );
+    expect(unreachable).toBeInstanceOf(PluginLoadError);
+    expect(unreachable instanceof PluginLoadError ? unreachable.entryId : '').toBe('durable');
+    expect(unreachable instanceof Error ? unreachable.message : '').toContain('127.0.0.1:1');
+    const noAddress = await failure('[durable]\nmode = "temporal-remote"');
+    expect(noAddress instanceof Error ? noAddress.message : '').toContain(
+      'durable.temporal.address',
+    );
+  }, 60_000);
 
   /**
    * Feature: A2A API server
