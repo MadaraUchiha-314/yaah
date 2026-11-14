@@ -91,7 +91,7 @@ suite. `T<n>` refers to a row of the testing plan's matrix.
   - _Depends on:_ 3
   - _Requirements:_ R5.1, R5.3, R5.5, R15.6
   - _Test:_ T3 — `test/contract/persistence.contract.ts` against the memory backend
-- [ ] 8. SQLite backend
+- [x] 8. SQLite backend
   - Kysely schema and stores for the five interfaces plus the SDK `DatabaseTaskStore`.
   - _Depends on:_ 7
   - _Requirements:_ R5.3, R5.4
