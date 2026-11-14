@@ -43,7 +43,8 @@
     "prepare": "lefthook install",
     "test:package": "bun run build && bun --config=bunfig.plain.toml test test/package",
     "build:web": "vite build",
-    "test:e2e": "playwright test"
+    "test:e2e": "playwright test",
+    "test:live": "bun --config=bunfig.plain.toml test test/live"
   },
   "dependencies": {
     "@a2a-js/sdk": "1.3.0",
