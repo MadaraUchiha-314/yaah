@@ -33,10 +33,21 @@ const fileSchema = z.strictObject({
         .strictObject({
           api_key_env: z.string().default('OPENAI_API_KEY'),
           base_url: z.string().optional(),
+          models: z.array(z.string()).default(['gpt-6.1-sol', 'gpt-6.1-terra', 'gpt-6-astra']),
         })
         .prefault({}),
       anthropic: z
-        .strictObject({ api_key_env: z.string().default('ANTHROPIC_API_KEY') })
+        .strictObject({
+          api_key_env: z.string().default('ANTHROPIC_API_KEY'),
+          models: z
+            .array(z.string())
+            .default([
+              'claude-opus-5-5',
+              'claude-sonnet-5-5',
+              'claude-haiku-5-5',
+              'claude-fable-5-2',
+            ]),
+        })
         .prefault({}),
       compatible: z
         .array(
@@ -44,6 +55,9 @@ const fileSchema = z.strictObject({
             id: z.string(),
             base_url: z.string(),
             api_key_env: z.string().optional(),
+            models: z.array(z.string()).default([]),
+            context_window: z.int().min(1).default(128_000),
+            max_output: z.int().min(1).default(8192),
           }),
         )
         .default([]),
@@ -136,12 +150,19 @@ function toProviders(file: FileConfig): YaahConfig['providers'] {
     openai: {
       apiKeyEnv: file.providers.openai.api_key_env,
       baseUrl: file.providers.openai.base_url,
+      models: file.providers.openai.models,
     },
-    anthropic: { apiKeyEnv: file.providers.anthropic.api_key_env },
+    anthropic: {
+      apiKeyEnv: file.providers.anthropic.api_key_env,
+      models: file.providers.anthropic.models,
+    },
     compatible: file.providers.compatible.map((provider) => ({
       id: provider.id,
       baseUrl: provider.base_url,
       apiKeyEnv: provider.api_key_env,
+      models: provider.models,
+      contextWindow: provider.context_window,
+      maxOutput: provider.max_output,
     })),
   };
 }

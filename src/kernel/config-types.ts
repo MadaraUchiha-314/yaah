@@ -31,6 +31,12 @@ export interface CompatibleProviderConfig {
   readonly id: string;
   readonly baseUrl: string;
   readonly apiKeyEnv: string | undefined;
+  /** Model ids served by this endpoint; each is registered as `<id>/<model>`. */
+  readonly models: readonly string[];
+  /** Context window assumed for this endpoint's models. */
+  readonly contextWindow: number;
+  /** Maximum output assumed for this endpoint's models. */
+  readonly maxOutput: number;
 }
 
 /** The validated configuration, with every default applied. */
@@ -48,8 +54,17 @@ export interface YaahConfig {
     readonly trustProxy: boolean;
   };
   readonly providers: {
-    readonly openai: { readonly apiKeyEnv: string; readonly baseUrl: string | undefined };
-    readonly anthropic: { readonly apiKeyEnv: string };
+    readonly openai: {
+      readonly apiKeyEnv: string;
+      readonly baseUrl: string | undefined;
+      /** Model ids registered as `openai/<model>`. */
+      readonly models: readonly string[];
+    };
+    readonly anthropic: {
+      readonly apiKeyEnv: string;
+      /** Model ids registered as `anthropic/<model>`. */
+      readonly models: readonly string[];
+    };
     readonly compatible: readonly CompatibleProviderConfig[];
   };
   readonly durable: {
