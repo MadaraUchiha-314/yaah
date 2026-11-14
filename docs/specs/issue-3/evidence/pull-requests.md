@@ -15,3 +15,4 @@ workItem: "issue-3"
 | [#9](https://github.com/MadaraUchiha-314/yaah/pull/9) | MadaraUchiha-314/yaah | Slice 3 — A2A server (tasks 16–22), on #8     | open   |
 | [#10](https://github.com/MadaraUchiha-314/yaah/pull/10) | MadaraUchiha-314/yaah | Slice 4 — models, tools, sub-agents (23–28), on #9 | open |
 | [#11](https://github.com/MadaraUchiha-314/yaah/pull/11) | MadaraUchiha-314/yaah | Slice 5 — durable execution (29–33), on #10 | open |
+| [#12](https://github.com/MadaraUchiha-314/yaah/pull/12) | MadaraUchiha-314/yaah | Slices 6–7 — surfaces, UIs, o11y, CLI (34–43), on #11 | open |
