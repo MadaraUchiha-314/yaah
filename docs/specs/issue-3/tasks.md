@@ -300,7 +300,7 @@ suite. `T<n>` refers to a row of the testing plan's matrix.
   - _Requirements:_ R19.1, R19.5
   - _Test:_ T3, T2 — `renderer.contract.ts`; `Scenario: An unknown A2UI component falls
     back to text`
-- [ ] 37. TUI
+- [x] 37. TUI
   - Ink app per `design/tui.html`: transcript, streaming, tool groups, input request,
     status line, complete and cancel keys, command highlight, the basic-catalog
     terminal renderer, the output filter, the non-TTY path.

@@ -17,12 +17,21 @@ import { VERSION } from '../kernel/version.ts';
 import type { Invocation } from './args.ts';
 import { parseArgs } from './args.ts';
 
+/** What `yaah` knows about the harness it started. */
+export interface TuiHints {
+  readonly model?: string;
+  readonly effort?: string;
+}
+
 /** What the command needs from the process it runs in. Tests pass their own. */
 export interface CliIo {
   readonly stdout: { write(text: string): unknown };
   readonly stderr: { write(text: string): unknown };
-  /** Opens the terminal UI against a harness and resolves when the user leaves it. */
-  readonly tui: (url: string) => Promise<void>;
+  /**
+   * Opens the terminal UI against a harness and resolves when the user leaves it. `about`
+   * is what the command knows of the harness it started, for the status line.
+   */
+  readonly tui: (url: string, about?: TuiHints) => Promise<void>;
   /** Resolves when the process is asked to stop (Ctrl+C, SIGTERM). */
   readonly interrupted: () => Promise<void>;
   /** The user's home directory. Defaults to the real one. */
@@ -96,7 +105,11 @@ async function chat(configPath: string | undefined, io: CliIo): Promise<void> {
   io.stderr.write(`${t('cli.log-file', { file: logFile })}\n`);
   const harness = await (io.start ?? createHarness)({ config });
   try {
-    await io.tui(urlOf(harness, config));
+    const { llm, effort } = config.model;
+    await io.tui(urlOf(harness, config), {
+      model: llm,
+      ...(effort === undefined ? {} : { effort }),
+    });
   } finally {
     await harness.dispose();
   }

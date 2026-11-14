@@ -1,0 +1,3 @@
+# For suites that drive other processes: coverage of this process says nothing there.
+[test]
+coverage = false

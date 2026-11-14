@@ -9,7 +9,7 @@
  */
 export * from './kernel/index.ts';
 export { runCli } from './cli/main.ts';
-export type { CliIo } from './cli/main.ts';
+export type { CliIo, TuiHints } from './cli/main.ts';
 export type * from './harness/core/types.ts';
 export * from './harness/models/llm/index.ts';
 export { definePrompt, renderPrompt } from './harness/system-prompt/prompt.ts';

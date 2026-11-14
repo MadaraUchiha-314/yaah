@@ -2,13 +2,15 @@
   "extends": "./tsconfig.json",
   "compilerOptions": {
     "noEmit": false,
-    "emitDeclarationOnly": true,
     "declaration": true,
+    "sourceMap": true,
     "outDir": "dist",
     "rootDir": "src",
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext",
     "allowImportingTsExtensions": true,
     "rewriteRelativeImportExtensions": true
   },
   "include": ["src"],
-  "exclude": ["src/**/*.test.ts"]
+  "exclude": ["src/**/*.test.ts", "src/**/*.test.tsx", "src/surface/renderer/web/**"]
 }
