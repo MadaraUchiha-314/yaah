@@ -8,3 +8,5 @@
   name: ../../app/api-server/index.ts
 - id: heartbeat
   name: ../../app/heartbeat/index.ts
+- id: channels-api
+  name: ../../app/channels-api/index.ts

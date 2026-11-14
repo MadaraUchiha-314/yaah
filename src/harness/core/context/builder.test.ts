@@ -76,7 +76,7 @@ describe('buildContext', () => {
     });
     expect(texts(request.messages)).toEqual([
       'SYSTEM\n\nSKILLS',
-      'TASK Refund / Refund order A-1 /  /\n\nROLES\n- Ada (user): reporter',
+      'TASK Refund / Refund order A-1 /  /\n\nROLES\n- u1 — Ada (user): reporter',
       'PLAN\n- [pending] a: first',
       'Hi',
     ]);

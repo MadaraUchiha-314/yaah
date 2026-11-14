@@ -203,6 +203,8 @@ export class HarnessExecutor implements AgentExecutor {
     const wanted = readExtension(message.metadata, EXT.taskModel, SCHEMAS.taskModelRequest);
     const text = messageText(message);
     const caller = this.#deps.callerOf?.(request) ?? '';
+    // Whoever creates a task is its reporter, under the id they declare for themselves.
+    const sender = readExtension(message.metadata, EXT.channels, SCHEMAS.channelsMessage)?.from;
     const parentTasks = wanted?.parentTasks ?? [];
     const model: TaskModel = {
       name: wanted?.name ?? text.slice(0, NAME_LENGTH),
@@ -213,7 +215,7 @@ export class HarnessExecutor implements AgentExecutor {
       subTasks: [],
       parentTasks,
       participants: wanted?.participants ?? [
-        { id: caller === '' ? 'user' : caller, role: 'reporter', kind: 'user' },
+        { id: sender ?? (caller === '' ? 'user' : caller), role: 'reporter', kind: 'user' },
         { id: this.#deps.agentId, role: 'assignee', kind: 'agent' },
       ],
       depth: wanted?.depth ?? 0,

@@ -23,6 +23,7 @@ export const EXT: {
   readonly commands: string;
   readonly durableExecution: string;
   readonly activity: string;
+  readonly channels: string;
 } = {
   taskLifecycle: `${EXTENSION_BASE}/task-lifecycle/v1`,
   taskModel: `${EXTENSION_BASE}/task-model/v1`,
@@ -30,6 +31,7 @@ export const EXT: {
   commands: `${EXTENSION_BASE}/commands/v1`,
   durableExecution: `${EXTENSION_BASE}/durable-execution/v1`,
   activity: `${EXTENSION_BASE}/activity/v1`,
+  channels: `${EXTENSION_BASE}/channels/v1`,
 };
 
 /** The media type of a part that carries an A2A event as inbox input. */
@@ -100,6 +102,17 @@ export interface ActivityStatus {
   readonly durationMs?: number | undefined;
 }
 
+/**
+ * Channels data on a message: who it comes from. There is no authentication yet, so the
+ * harness trusts the id the sender declares; an authentication plugin will bind it.
+ */
+export interface ChannelsMessage {
+  /** The participant id the sender declares as its own. */
+  readonly from: string;
+  /** The channel the message arrives on. Absent means the default channel of its task. */
+  readonly channel?: string | undefined;
+}
+
 /** Durable-execution parameters in the agent card. */
 export interface DurableExecutionParams {
   readonly mode: 'none' | 'temporal-embedded' | 'temporal-remote';
@@ -140,6 +153,7 @@ export interface ExtensionSchemas {
   readonly durableExecutionParams: z.ZodType<DurableExecutionParams>;
   readonly durableExecutionTask: z.ZodType<DurableExecutionTask>;
   readonly activityStatus: z.ZodType<ActivityStatus>;
+  readonly channelsMessage: z.ZodType<ChannelsMessage>;
 }
 
 /** The schema of each extension payload, by where it rides. */
@@ -207,6 +221,10 @@ export const SCHEMAS: ExtensionSchemas = {
     ok: z.boolean().optional(),
     durationMs: z.number().optional(),
   }),
+  channelsMessage: z.strictObject({
+    from: z.string().min(1),
+    channel: z.string().min(1).optional(),
+  }),
 };
 
 /** A payload under an extension URI did not match the extension's schema. */
@@ -268,6 +286,9 @@ export function extensionJsonSchemas(): Readonly<Record<string, Json>> {
     }),
     [file('activity.v1')]: schema(EXT.activity, {
       statusMessageMetadata: SCHEMAS.activityStatus,
+    }),
+    [file('channels.v1')]: schema(EXT.channels, {
+      messageMetadata: SCHEMAS.channelsMessage,
     }),
     [file('durable-execution.v1')]: schema(EXT.durableExecution, {
       agentCardParams: SCHEMAS.durableExecutionParams,

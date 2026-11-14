@@ -5,6 +5,8 @@
  */
 import type { Context } from 'cordis';
 
+import type { AskRoute } from '../harness/core/ask-routes.ts';
+import { withAskRoutes } from '../harness/core/ask-routes.ts';
 import { createCompactor } from '../harness/core/context/compaction.ts';
 import type { StepHandlers } from '../harness/core/direct-runner.ts';
 import type { StepMiddleware } from '../harness/core/step-middleware.ts';
@@ -35,6 +37,11 @@ export interface RuntimeService {
    * tracing see the loop. Returns a function that removes it.
    */
   addStepMiddleware(middleware: StepMiddleware): () => void;
+  /**
+   * Lets a tool put its question to the person on the task's own conversation, the way
+   * `ask_user` does. Returns a function that removes the route.
+   */
+  addAskRoute(route: AskRoute): () => void;
 }
 
 /** Decides, per task and turn, whether a turn extension applies. */
@@ -69,6 +76,7 @@ export function apply(ctx: Context): void {
   const shared = { registry: ctx.entities, persistence, tasks, defaultLlm: config.model.llm };
   const providers = new Set<TurnExtensionProvider>();
   const middlewares = new Set<StepMiddleware>();
+  const askRoutes = new Set<AskRoute>();
   const steps = createStepHandlers({
     ...shared,
     turnExtensions: (task: TaskSnapshot): TurnExtension[] =>
@@ -92,7 +100,13 @@ export function apply(ctx: Context): void {
     hub,
     taskStore,
     tasks,
-    handlers: withMiddleware(steps, middlewares),
+    handlers: withMiddleware(withAskRoutes(steps, askRoutes), middlewares),
+    addAskRoute: (route: AskRoute): (() => void) => {
+      askRoutes.add(route);
+      return (): void => {
+        askRoutes.delete(route);
+      };
+    },
     addStepMiddleware: (middleware: StepMiddleware): (() => void) => {
       middlewares.add(middleware);
       return (): void => {

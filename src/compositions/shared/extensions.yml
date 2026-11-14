@@ -1,4 +1,4 @@
-# What extends the agent: commands, tools, sub-agents.
+# What extends the agent: commands, tools, sub-agents, channels.
 - id: commands
   name: ../../harness/commands/index.ts
 - id: a2a-agents
@@ -7,3 +7,5 @@
   name: ../../harness/tools/mcp/index.ts
 - id: a2ui
   name: ../../harness/a2ui/index.ts
+- id: channels
+  name: ../../harness/channels/index.ts

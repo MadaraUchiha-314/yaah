@@ -60,12 +60,14 @@ function declare(tool: Tool): ToolDeclaration {
   };
 }
 
+/** One line per participant, led by the id the model names them by. */
 function participantLines(participants: readonly Participant[]): string {
   return participants
-    .map(
-      (participant: Participant) =>
-        `- ${participant.displayName ?? participant.id} (${participant.kind}): ${participant.role}`,
-    )
+    .map((participant: Participant) => {
+      const { displayName, id, kind, role } = participant;
+      const called = displayName === undefined ? '' : ` — ${sanitizeDescription(displayName)}`;
+      return `- ${sanitizeDescription(id)}${called} (${kind}): ${role}`;
+    })
     .join('\n');
 }
 

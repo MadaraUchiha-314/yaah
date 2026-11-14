@@ -5,13 +5,15 @@
  */
 import type { AgentCard, AgentExtension } from '@a2a-js/sdk';
 import type { A2ARequestHandler, RequestContext } from '@a2a-js/sdk/server';
-import { DefaultRequestHandler, STATE_HEADERS_KEY } from '@a2a-js/sdk/server';
+import { STATE_HEADERS_KEY } from '@a2a-js/sdk/server';
 import type { Context } from 'cordis';
 
 import type { InboxItem } from '../../harness/core/types.ts';
 import { VERSION } from '../../kernel/version.ts';
 import { Inbox } from '../inbox/inbox.ts';
 import { createTriage } from '../inbox/triage.ts';
+import type { Admission } from './admission.ts';
+import { AdmissionGate } from './admission.ts';
 import { buildAgentCard } from './agent-card.ts';
 import type { CommandDispatcher } from './executor.ts';
 import { HarnessExecutor } from './executor.ts';
@@ -39,6 +41,12 @@ export interface A2aService {
   setCommands(dispatch: CommandDispatcher, list: () => readonly CommandInfo[]): () => void;
   /** Sets where a new task's inherited settings (model, effort) come from. */
   setContextSettings(read: ContextSettings): () => void;
+  /**
+   * Adds a check every incoming message must pass before a task is created or anything
+   * reaches the inbox; a refusal is answered with an A2A error. Returns a function that
+   * removes it.
+   */
+  addAdmission(check: Admission): () => void;
 }
 
 /** Reads the settings a conversation chose, for the tasks it creates. */
@@ -100,11 +108,22 @@ function callerAndEvents(ctx: Context): {
   };
 }
 
+/** Adds to `set`; the function returned removes what was added. */
+function adder<T>(set: Set<T>): (item: T) => () => void {
+  return (item: T): (() => void) => {
+    set.add(item);
+    return (): void => {
+      set.delete(item);
+    };
+  };
+}
+
 /** Builds the A2A service and picks open tasks up again. */
 export function apply(ctx: Context): void {
   const { taskRuntime: runtime, durable, strings } = ctx;
   const inbox = new Inbox(ctx.persistence.inbox, durable);
   const extensions = new Set<AgentExtension>();
+  const gate = new AdmissionGate();
   let commands: { dispatch: CommandDispatcher; list: () => readonly CommandInfo[] } | null = null;
   let contextSettings: ContextSettings | null = null;
   const executor = new HarnessExecutor({
@@ -134,15 +153,11 @@ export function apply(ctx: Context): void {
     inbox,
     cardFor,
     handlerFor: (baseUrl: string): A2ARequestHandler =>
-      new DefaultRequestHandler(cardFor(baseUrl), handlerFacing(runtime.taskStore), executor),
+      gate.handler(cardFor(baseUrl), handlerFacing(runtime.taskStore), executor),
+    addAdmission: (check: Admission): (() => void) => gate.add(check),
     openTasks: (caller: string): number =>
       runtime.taskStore.open().filter((task) => readSettings(task).caller === caller).length,
-    addExtension: (extension: AgentExtension): (() => void) => {
-      extensions.add(extension);
-      return (): void => {
-        extensions.delete(extension);
-      };
-    },
+    addExtension: adder(extensions),
     setCommands: (
       dispatch: CommandDispatcher,
       list: () => readonly CommandInfo[],

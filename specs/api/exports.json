@@ -59,6 +59,12 @@
     "extensionJsonSchemas",
     "readExtension"
   ],
+  "./app/channels-api": [
+    "apply",
+    "createChannelAdmission",
+    "inject",
+    "name"
+  ],
   "./app/durable": [
     "apply",
     "inject",
@@ -91,6 +97,22 @@
     "A2UI_MEDIA_TYPE",
     "BASIC_CATALOG_ID",
     "apply",
+    "inject",
+    "name"
+  ],
+  "./harness/channels": [
+    "CREATE_TASK_FOR_PARTICIPANT",
+    "ChannelManager",
+    "ChannelNotFoundError",
+    "MESSAGE_PARTICIPANT",
+    "NotAParticipantError",
+    "ParticipantConflictError",
+    "apply",
+    "createAskRoute",
+    "createDefaultChannel",
+    "createMessageParticipantTool",
+    "createTaskForParticipantTool",
+    "defaultSender",
     "inject",
     "name"
   ],

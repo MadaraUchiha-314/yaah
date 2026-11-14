@@ -374,7 +374,7 @@ suite. `T<n>` refers to a row of the testing plan's matrix.
   - _Requirements:_ R9.2–9.4
   - _Test:_ T2 — `Scenario: An agent plugin registers its skills and MCP servers` ·
     `Scenario: A hook denies a tool call`; the conformance fixtures of the specification
-- [ ] 47. Participants and channels
+- [x] 47. Participants and channels
   - `Channel` entity, `ChannelManager`, the channels extension,
     `message_participant`, `create_task_for_participant`, the roles prompt.
   - _Depends on:_ 26
