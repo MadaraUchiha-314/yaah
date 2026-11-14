@@ -1,0 +1,25 @@
+# Git hooks — mirror CI so nothing surprises you on push.
+# Installed automatically by `bun install` (the `prepare` script).
+# CI (.github/workflows/ci.yml) runs the same `bun run` scripts.
+
+pre-commit:
+  parallel: true
+  jobs:
+    - name: format
+      run: bun run format:check
+    - name: lint
+      run: bun run lint
+    - name: typecheck
+      run: bun run typecheck
+    - name: test
+      run: bun run test
+
+commit-msg:
+  jobs:
+    - name: commitlint
+      run: bunx commitlint --edit {1}
+
+pre-push:
+  jobs:
+    - name: check
+      run: bun run check
