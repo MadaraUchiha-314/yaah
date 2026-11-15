@@ -8,6 +8,7 @@
  */
 import type { Context } from 'cordis';
 
+import { readCredential } from '../../../kernel/credentials.ts';
 import { registerEntity } from '../../../kernel/registry.ts';
 import type { FetchLike } from '../../models/llm/openai/content.ts';
 import { createGenerateImageTool } from './tool.ts';
@@ -29,7 +30,7 @@ export const inject: readonly string[] = ['entities', 'config', 'redactor'];
 /** Registers `generate_image` when a key is available. */
 export function apply(ctx: Context, config: ImagePluginConfig | undefined): void {
   const settings = ctx.config.providers.openai;
-  const apiKey = config?.apiKey ?? process.env[settings.apiKeyEnv] ?? '';
+  const apiKey = config?.apiKey ?? readCredential(ctx, settings.apiKeyEnv) ?? '';
   if (apiKey === '') {
     return;
   }

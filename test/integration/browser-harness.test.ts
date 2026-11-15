@@ -221,6 +221,39 @@ for (const [how, start] of Object.entries(TARGETS)) {
   scenarios(how, start);
 }
 
+describe('credentials given to the page', () => {
+  /**
+   * Feature: Browser build
+   * Scenario: Speech and image models register from the credentials the page gives
+   *   Given the browser composition, whose process environment holds no OpenAI key
+   *   And a configuration whose speech.stt and speech.tts name the OpenAI models
+   *   When the harness is created with the key among the page's credentials
+   *   Then it starts, and the speech-to-text, text-to-speech and generate_image entities
+   *        are registered
+   * Requirement: docs/specs/issue-3/requirements.md R25.1, R24.2, R24.3
+   */
+  test('Speech and image models register from page credentials', async () => {
+    const variable = 'YAAH_TEST_PAGE_OPENAI_KEY';
+    expect(process.env[variable]).toBeUndefined();
+    const browser = await startBrowserHarness({
+      config: [
+        `[providers.openai]\napi_key_env = "${variable}"`,
+        '[speech]\nstt = "openai/gpt-transcribe"\ntts = "openai/gpt-realtime-2.1-mini"',
+      ].join('\n'),
+      credentials: { [variable]: 'sk-page-secret-0008' },
+    });
+    running = browser;
+    const { entities } = browser.harness.ctx;
+    expect(entities.list('speech-to-text').map((entity) => entity.ref.id)).toEqual([
+      'openai/gpt-transcribe',
+    ]);
+    expect(entities.list('text-to-speech').map((entity) => entity.ref.id)).toEqual([
+      'openai/gpt-realtime-2.1-mini',
+    ]);
+    expect(entities.list('tool').map((entity) => entity.ref.id)).toContain('generate_image');
+  });
+});
+
 describe('in-memory transport', () => {
   /**
    * Feature: Browser build

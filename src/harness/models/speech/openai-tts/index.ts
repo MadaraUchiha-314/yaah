@@ -9,6 +9,7 @@
  */
 import type { Context } from 'cordis';
 
+import { readCredential } from '../../../../kernel/credentials.ts';
 import { registerEntity } from '../../../../kernel/registry.ts';
 import { renderPrompt } from '../../../system-prompt/prompt.ts';
 import { credentialError } from '../../llm/openai/index.ts';
@@ -48,7 +49,7 @@ const PROMPT = 'speech';
 export function apply(ctx: Context, config: OpenAiTextToSpeechPluginConfig | undefined): void {
   const settings = ctx.config.providers.openai;
   const id = `${OPENAI}/${settings.ttsModel}`;
-  const apiKey = config?.apiKey ?? process.env[settings.apiKeyEnv] ?? '';
+  const apiKey = config?.apiKey ?? readCredential(ctx, settings.apiKeyEnv) ?? '';
   if (apiKey === '') {
     if (ctx.config.speech.tts === id) {
       throw credentialError(settings.apiKeyEnv, KEY_SETTING);
