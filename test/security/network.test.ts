@@ -160,3 +160,34 @@ describe('network boundary', () => {
     expect(harness.llm.requests.length).toBe(2);
   });
 });
+
+describe('fail closed: a wider bind', () => {
+  /**
+   * Feature: Security
+   * Scenario: A non-loopback bind is announced as unauthenticated
+   *   Given a configuration that binds every interface
+   *   When the harness starts
+   *   Then it says at start-up that the API has no authentication and where it listens
+   *   And with the default bind it says nothing of the kind
+   * Requirement: docs/specs/issue-3/requirements.md Security considerations — fail closed
+   */
+  test('A non-loopback bind is announced as unauthenticated', async () => {
+    const written: string[] = [];
+    const original = process.stderr.write.bind(process.stderr);
+    process.stderr.write = (chunk: string | Uint8Array): boolean => {
+      written.push(String(chunk));
+      return true;
+    };
+    try {
+      const wide = await start({ config: '[server]\nhost = "0.0.0.0"\nport = 0' });
+      expect(written.join('')).toContain('has no authentication');
+      expect(written.join('')).toContain(wide.url);
+      await wide.stop();
+      written.length = 0;
+      await start({});
+      expect(written.join('')).not.toContain('has no authentication');
+    } finally {
+      process.stderr.write = original;
+    }
+  });
+});
