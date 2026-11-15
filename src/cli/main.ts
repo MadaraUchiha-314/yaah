@@ -35,8 +35,11 @@ export interface CliIo {
    * aborts when the process is asked to stop, and the UI is then left as if by the user.
    */
   readonly tui: (url: string, about?: TuiHints, signal?: AbortSignal) => Promise<void>;
-  /** Resolves when the process is asked to stop (Ctrl+C, SIGTERM, SIGHUP). */
-  readonly interrupted: () => Promise<void>;
+  /**
+   * Resolves when the process is asked to stop (Ctrl+C, SIGTERM, SIGHUP). Once `signal`
+   * aborts the command no longer waits, and the process's default handling is restored.
+   */
+  readonly interrupted: (signal?: AbortSignal) => Promise<void>;
   /** The user's home directory. Defaults to the real one. */
   readonly home?: string | undefined;
   /** Builds the harness. Defaults to {@link createHarness}. */
@@ -88,13 +91,19 @@ export async function freePort(host: string, first: number): Promise<number> {
  */
 async function terminal(io: CliIo, url: string, about: TuiHints): Promise<void> {
   const stop = new AbortController();
+  const left = new AbortController();
   const ui = io.tui(url, about, stop.signal);
   const asked = async (): Promise<void> => {
-    await io.interrupted();
+    await io.interrupted(left.signal);
     stop.abort();
     await ui;
   };
-  await Promise.race([ui, asked()]);
+  try {
+    await Promise.race([ui, asked()]);
+  } finally {
+    // The UI has left: a signal during the shutdown that follows is the process's again.
+    left.abort();
+  }
 }
 
 function urlOf(harness: Harness, config: YaahConfig): string {

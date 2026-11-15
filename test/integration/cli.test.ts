@@ -9,6 +9,7 @@ import { describe, expect, test } from 'bun:test';
 
 import type { CliIo } from '../../src/cli/main.ts';
 import { freePort, runCli } from '../../src/cli/main.ts';
+import { interrupted } from '../../src/cli/signals.ts';
 import type { CreateHarnessOptions } from '../../src/kernel/harness.ts';
 import { createHarness } from '../../src/kernel/harness.ts';
 import { registerEntity } from '../../src/kernel/registry.ts';
@@ -286,6 +287,33 @@ describe('the yaah command', () => {
     const tui = fakeProcess(dir, untilLeft, Promise.resolve());
     expect(await runCli(['tui', '--url', 'http://127.0.0.1:9'], tui.io)).toBe(0);
     expect(left).toBe(true);
+  });
+
+  /**
+   * Feature: CLI
+   * Scenario: Once the terminal UI is left, stop requests go back to the process
+   *   Given `yaah` listening for SIGINT, SIGTERM and SIGHUP while the terminal UI is open
+   *   When the user leaves the UI, and the command goes on to shut down
+   *   Then it no longer listens for them, so a Ctrl+C during a slow shutdown ends the process
+   * Requirement: docs/specs/issue-3/requirements.md R22.1, R21.3
+   */
+  test('Once the terminal UI is left, stop requests go back to the process', async () => {
+    const before = ['SIGINT', 'SIGTERM', 'SIGHUP'].map((name) => process.listenerCount(name));
+    const run = fakeProcess(tempHome(), () => Promise.resolve());
+    const counts: number[][] = [];
+    const io: CliIo = {
+      ...run.io,
+      interrupted: (signal?: AbortSignal) => {
+        const waiting = interrupted(signal);
+        counts.push(['SIGINT', 'SIGTERM', 'SIGHUP'].map((name) => process.listenerCount(name)));
+        return waiting;
+      },
+    };
+    expect(await runCli(['tui', '--url', 'http://127.0.0.1:9'], io)).toBe(0);
+    expect(counts).toEqual([before.map((count) => count + 1)]);
+    expect(['SIGINT', 'SIGTERM', 'SIGHUP'].map((name) => process.listenerCount(name))).toEqual(
+      before,
+    );
   });
 
   test('a busy port is skipped, and running out of ports is an error', async () => {

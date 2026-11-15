@@ -3,14 +3,7 @@
 import { runTui } from '../surface/renderer/tui/index.ts';
 import type { TuiHints } from './main.ts';
 import { runCli } from './main.ts';
-
-function interrupted(): Promise<void> {
-  return new Promise((resolve: () => void) => {
-    process.once('SIGINT', resolve);
-    process.once('SIGTERM', resolve);
-    process.once('SIGHUP', resolve);
-  });
-}
+import { interrupted } from './signals.ts';
 
 process.exitCode = await runCli(process.argv.slice(2), {
   stdout: process.stdout,
