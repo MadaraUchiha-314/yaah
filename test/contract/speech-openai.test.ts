@@ -270,6 +270,36 @@ describe('openai text to speech', () => {
     expect(error instanceof Error ? error.message : KEY).not.toContain(KEY);
   });
 
+  test('instructions that cannot be rendered fail the call before a socket is opened', async () => {
+    const sockets = scriptedSockets({ events: fixture('realtime-speech.jsonl') });
+    const model = createOpenAiTextToSpeech({
+      apiKey: KEY,
+      instructions: () => {
+        throw new Error('no prompt is registered as speech');
+      },
+      socket: sockets.open,
+    });
+    const error = await failure(() => spoken(model, SPEECH_CONTRACT_TEXT));
+    expect(error instanceof SpeechError).toBe(true);
+    expect(sockets.connections.length).toBe(0);
+  });
+
+  test('a throw inside a socket listener fails the call instead of escaping it', async () => {
+    const sockets = scriptedSockets({ silent: true });
+    const model = createOpenAiTextToSpeech({
+      apiKey: KEY,
+      instructions: () => '',
+      socket: (url, headers) => ({
+        ...sockets.open(url, headers),
+        send: (): void => {
+          throw new Error('the socket closed before it was written to');
+        },
+      }),
+    });
+    const error = await failure(() => spoken(model, SPEECH_CONTRACT_TEXT));
+    expect(error instanceof SpeechError).toBe(true);
+  });
+
   test('frames that are not events are ignored', async () => {
     const events = `not json\n{"no":"type"}\n${fixture('realtime-speech.jsonl')}`;
     expect((await spoken(tts({ events }), SPEECH_CONTRACT_TEXT)).length).toBe(2);

@@ -175,20 +175,37 @@ async function* speak(
     queue.fail(abortedError(scope));
   };
   signal.addEventListener('abort', abort, { once: true });
+  // A socket listener runs outside this generator: what it throws fails the call instead.
+  const guarded =
+    (listener: (data: unknown) => void) =>
+    (event: { readonly data?: unknown }): void => {
+      try {
+        listener(event.data);
+      } catch (error) {
+        queue.fail(toSpeechError(scope, error, signal));
+      }
+    };
   try {
+    const events = utterance(text, speaker.voice, speaker.instructions());
     socket = speaker.open(speaker.url, { Authorization: `Bearer ${speaker.apiKey}` });
     const opened = socket;
-    opened.addEventListener('open', () => {
-      for (const event of utterance(text, speaker.voice, speaker.instructions())) {
-        opened.send(JSON.stringify(event));
-      }
-    });
-    opened.addEventListener('message', (event) => {
-      onEvent(scope, queue, event.data);
-    });
-    const dropped = (): void => {
+    opened.addEventListener(
+      'open',
+      guarded(() => {
+        for (const event of events) {
+          opened.send(JSON.stringify(event));
+        }
+      }),
+    );
+    opened.addEventListener(
+      'message',
+      guarded((data) => {
+        onEvent(scope, queue, data);
+      }),
+    );
+    const dropped = guarded(() => {
       queue.fail(endedEarly(scope));
-    };
+    });
     opened.addEventListener('error', dropped);
     opened.addEventListener('close', dropped);
     yield* queue;
