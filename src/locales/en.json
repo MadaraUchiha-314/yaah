@@ -257,6 +257,7 @@
   "error.browser.not-a-plugin": "Entry {entryId} names \"{module}\", which does not export a plugin (no apply function).",
   "error.browser.node-only": "Entry {entryId} names \"{module}\", a plugin that runs on {runtime} only and cannot be part of the browser build. Remove the entry or replace it with a browser-compatible plugin.",
   "error.browser.builtin": "Entry {entryId} names \"{module}\", which cannot be loaded in a browser: it imports {builtin} through {chain}. Remove the entry or replace it with a browser-compatible plugin.",
+  "error.browser.unchecked": "Entry {entryId} names \"{module}\", which the browser build could not find among the modules it bundled, so it cannot check that it runs in a browser.",
   "error.browser.override-name": "The override for entry {entryId} names the module \"{name}\". A browser build cannot load a module by name: add the plugin to the composition and rebuild.",
   "error.browser.waiting": "it is waiting for a service nothing in the composition provides: {services}",
   "error.browser.node-import": "\"{module}\" is not part of the browser build: {importer} loads it only where Node is available.",

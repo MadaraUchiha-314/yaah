@@ -75,7 +75,7 @@ function browserBuild(entries: readonly ResolvedEntry[], prompts: Record<string,
       }
       return null;
     },
-    buildEnd(error) {
+    async buildEnd(error) {
       if (error !== undefined) {
         return;
       }
@@ -83,9 +83,19 @@ function browserBuild(entries: readonly ResolvedEntry[], prompts: Record<string,
         importsOf: (id: string): readonly string[] => this.getModuleInfo(id)?.importedIds ?? [],
         isBuiltin: isRuntimeBuiltin,
       };
+      const ids = new Set(this.getModuleIds());
       for (const entry of entries) {
-        const resolved = [...this.getModuleIds()].find((id) => id === entry.module);
-        const found = resolved === undefined ? null : findBuiltinPath(graph, resolved);
+        // An entry is found by what its name resolves to — a package name is not a module
+        // id — and an entry the bundle does not hold cannot be checked, so it fails.
+        // oxlint-disable-next-line no-await-in-loop -- the first entry at fault ends the build
+        const resolved = (await this.resolve(entry.module, COMPOSITION))?.id;
+        if (resolved === undefined || !ids.has(resolved)) {
+          const params = { entryId: entry.id, module: entry.name };
+          this.error(
+            new BrowserBuildError('browser.unchecked', t('error.browser.unchecked', params), entry),
+          );
+        }
+        const found = findBuiltinPath(graph, resolved);
         if (found !== null) {
           const chain = found.chain.map(shown).join(' → ');
           const params = { entryId: entry.id, module: entry.name, builtin: found.builtin, chain };

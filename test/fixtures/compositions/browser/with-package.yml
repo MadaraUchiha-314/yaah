@@ -1,0 +1,5 @@
+# A plugin named by its package, that says nothing about its runtime and imports node:fs.
+- id: prompts
+  name: ../../../../src/browser/plugins/prompts.ts
+- id: reads-files
+  name: yaah-fixture-reads-files
