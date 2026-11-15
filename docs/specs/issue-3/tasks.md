@@ -316,7 +316,7 @@ suite. `T<n>` refers to a row of the testing plan's matrix.
   - _Requirements:_ R20.1–20.5, R19.4
   - _Test:_ T4 — `test/e2e/web.spec.ts` (Playwright): send, stream, form, input
     request, complete, cancel, command highlight
-- [ ] 39. Visual and accessibility pass
+- [x] 39. Visual and accessibility pass
   - Screenshots per state and theme against the prototypes; axe; keyboard-only flow.
   - _Depends on:_ 37, 38
   - _Requirements:_ R20.6, R21.2
