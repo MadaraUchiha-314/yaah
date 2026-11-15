@@ -18,12 +18,27 @@ test('behind a trusted proxy the caller is the address the proxy appended, not t
 
 test('a caller whose requests have all left the minute is forgotten', () => {
   const rate = new RequestRate();
-  expect(rate.hit('a', 1000)).toBe(1);
-  expect(rate.hit('b', 2000)).toBe(1);
-  expect(rate.hit('a', 3000)).toBe(2);
+  expect(rate.hit('a', 1000, 10)).toBe(true);
+  expect(rate.hit('b', 2000, 10)).toBe(true);
+  expect(rate.hit('a', 3000, 10)).toBe(true);
+  expect(rate.stored('a')).toBe(2);
   expect(rate.size).toBe(2);
   // A minute after a's last request and b's: both are gone, c is counted afresh.
-  expect(rate.hit('c', 64_000)).toBe(1);
+  expect(rate.hit('c', 64_000, 10)).toBe(true);
   expect(rate.size).toBe(1);
-  expect(rate.hit('a', 64_001)).toBe(1);
+  expect(rate.hit('a', 64_001, 10)).toBe(true);
+  expect(rate.stored('a')).toBe(1);
+  expect(rate.stored('nobody')).toBe(0);
+});
+
+test('a flood stores no more than the limit, so each hit costs the same (self-review 2, #6)', () => {
+  const rate = new RequestRate();
+  const limit = 5;
+  const allowed = Array.from({ length: 10_000 }, (_, index) => rate.hit('a', 1000 + index, limit));
+  expect(allowed.filter(Boolean)).toHaveLength(limit);
+  expect(rate.stored('a')).toBe(limit);
+  // Once the first requests leave the minute, the caller may send again.
+  expect(rate.hit('a', 61_000, limit)).toBe(true);
+  expect(rate.hit('a', 61_001, limit)).toBe(true);
+  expect(rate.stored('a')).toBe(limit);
 });

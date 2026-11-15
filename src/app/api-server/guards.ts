@@ -71,7 +71,11 @@ export function callerKey(request: CallerSource, trustProxy: boolean): string {
   return request.socket.remoteAddress ?? 'unknown';
 }
 
-/** Recent request times per caller, over a sliding minute. Callers gone quiet are forgotten. */
+/**
+ * Recent accepted request times per caller, over a sliding minute. A refused request is
+ * not recorded, so a caller never has more stamps than the limit and a flood costs the
+ * same per request as a trickle. Callers gone quiet are forgotten.
+ */
 export class RequestRate {
   readonly #recent = new Map<string, number[]>();
   #swept = 0;
@@ -81,8 +85,16 @@ export class RequestRate {
     return this.#recent.size;
   }
 
-  /** Records a request of `caller` at `now` and returns how many it made in the last minute. */
-  hit(caller: string, now: number): number {
+  /** How many request times are stored for `caller`. */
+  stored(caller: string): number {
+    return this.#recent.get(caller)?.length ?? 0;
+  }
+
+  /**
+   * Counts a request of `caller` at `now` against `limit` requests a minute. Returns
+   * whether it is within the limit; only then is it recorded.
+   */
+  hit(caller: string, now: number, limit: number): boolean {
     const since = now - MINUTE_MS;
     if (now - this.#swept >= MINUTE_MS) {
       this.#swept = now;
@@ -92,10 +104,16 @@ export class RequestRate {
         }
       }
     }
-    const stamps = (this.#recent.get(caller) ?? []).filter((stamp: number) => stamp > since);
-    stamps.push(now);
+    const stamps = this.#recent.get(caller) ?? [];
+    // Stamps are in time order: the ones that left the minute are at the front.
+    const kept = stamps.findIndex((stamp: number) => stamp > since);
+    stamps.splice(0, kept === -1 ? stamps.length : kept);
     this.#recent.set(caller, stamps);
-    return stamps.length;
+    if (stamps.length >= limit) {
+      return false;
+    }
+    stamps.push(now);
+    return true;
   }
 }
 
@@ -197,7 +215,7 @@ export function limitGuard(deps: GuardDeps): RequestHandler {
     const caller = callerKey(request, deps.trustProxy);
     // Overwrites whatever the client sent: only this layer names the caller.
     request.headers[CALLER_HEADER] = caller;
-    if (rate.hit(caller, now()) > limits.maxRequestsPerMinute) {
+    if (!rate.hit(caller, now(), limits.maxRequestsPerMinute)) {
       reject(
         response,
         429,
