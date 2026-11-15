@@ -21,6 +21,12 @@ describe('text', () => {
     expect(plainText('a\u001B[2J\u0007b\tc\nd\u009Be\u007F')).toBe('a[2Jb\tc\nde');
   });
 
+  test('removes bidi controls and zero-width format characters, and keeps the joiners', () => {
+    const formats = '\u202E\u2066\u2069\u200B\u200F\u2028\u2029\uFEFF\u061C\u2060\u2065';
+    expect(plainText(`a${formats}b\tc\nd`)).toBe('ab\tc\nd');
+    expect(plainText('👩\u200D💻')).toBe('👩\u200D💻');
+  });
+
   test('writes a duration in milliseconds below a second and in seconds above', () => {
     expect(formatDuration(419.6)).toBe('420 ms');
     expect(formatDuration(1240)).toBe('1.2 s');

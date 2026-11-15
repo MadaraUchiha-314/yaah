@@ -30,14 +30,29 @@ const SEQUENCES = new RegExp(
 const CONTROLS = /[\u0000-\u0008\u000B-\u001F\u007F-\u009F]/gu;
 
 /**
+ * Invisible format characters that change how text reads rather than what it says: bidi
+ * embeddings, overrides, isolates and marks (which can make `exe.txt` show as
+ * `txt.exe`), zero-width spaces, word joiners, line and paragraph separators, and the
+ * byte-order mark. The zero-width joiner and non-joiner stay: emoji sequences and
+ * several scripts need them, and they reorder nothing.
+ */
+const FORMATS = /[\u061C\u200B\u200E\u200F\u2028-\u202E\u2060-\u206F\uFEFF]/gu;
+
+/**
  * Removes terminal control from a string: escape sequences (CSI, OSC, DCS and the
- * rest) together with their payload, then every remaining C0/C1 control character.
+ * rest) together with their payload, then every remaining C0/C1 control character and
+ * every invisible bidi or spacing format character.
  *
  * Invariant: the result contains no character below U+0020 except newline and tab, no
- * DEL and no C1 control — so no byte of it can start or continue an escape sequence.
+ * DEL and no C1 control — so no byte of it can start or continue an escape sequence —
+ * and no bidi control, so it reads in the order it is stored.
  */
 export function sanitize(text: string): string {
-  return text.replaceAll('\r\n', '\n').replaceAll(SEQUENCES, '').replaceAll(CONTROLS, '');
+  return text
+    .replaceAll('\r\n', '\n')
+    .replaceAll(SEQUENCES, '')
+    .replaceAll(CONTROLS, '')
+    .replaceAll(FORMATS, '');
 }
 
 /**
