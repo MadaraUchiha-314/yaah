@@ -119,34 +119,66 @@ export class RequestRate {
 
 const LOOPBACK_HOSTS: readonly string[] = ['localhost', '127.0.0.1', '[::1]'];
 const WILDCARD_HOSTS: ReadonlySet<string> = new Set(['0.0.0.0', '::', '[::]']);
+/** The port a `Host` without one names: the listener speaks plain HTTP. */
+const HTTP_PORT = 80;
+const DEFAULT_PORTS: Readonly<Record<string, number>> = { 'http:': 80, 'https:': 443 };
 
-/** A host that is an IP literal, which no DNS answer can rebind. */
-function isIpLiteral(host: string): boolean {
-  return /^\d{1,3}(?:\.\d{1,3}){3}(?::\d+)?$/u.test(host) || host.startsWith('[');
+/** A `Host` value split into its name, in lower case, and its port when it has one. */
+interface HostName {
+  readonly name: string;
+  readonly port: number | undefined;
 }
 
-/** The `Host` values naming the listener itself: its bound host and, on loopback, every loopback name. */
-function ownHosts(address: ListenerAddress): string[] {
-  const bound = address.host.includes(':') ? `[${address.host}]` : address.host;
-  const names = LOOPBACK_HOSTS.includes(bound) ? LOOPBACK_HOSTS : [bound];
-  return names.map((name: string) => `${name}:${String(address.port)}`);
+function splitHost(host: string): HostName {
+  const groups = /^(?<name>.*?)(?::(?<port>\d+))?$/u.exec(host.toLowerCase())?.groups;
+  const port = groups?.['port'];
+  return { name: groups?.['name'] ?? '', port: port === undefined ? undefined : Number(port) };
+}
+
+/** A host name that is an IP literal, which no DNS answer can rebind. */
+function isIpLiteral(name: string): boolean {
+  return /^\d{1,3}(?:\.\d{1,3}){3}$/u.test(name) || name.startsWith('[');
 }
 
 /**
- * Whether `host` (a request's `Host`) names this listener or an allowed origin. A host
- * taken from the request alone proves nothing: a page whose name was rebound to this
- * address sends its own name. A wildcard bind cannot list the machine's addresses, so
- * there an IP literal is accepted too.
+ * The names of the listener itself: its bound host and, on loopback or on a wildcard bind
+ * (which listens on loopback too), every loopback name.
  */
-function knownHost(host: string, deps: GuardDeps): boolean {
+function ownNames(address: ListenerAddress): string[] {
+  const bound = (address.host.includes(':') ? `[${address.host}]` : address.host).toLowerCase();
+  const loopback = LOOPBACK_HOSTS.includes(bound) || WILDCARD_HOSTS.has(address.host);
+  return loopback ? [...LOOPBACK_HOSTS, bound] : [bound];
+}
+
+/** Whether `host` names allowed `origin`: its name, and its port or none for a default one. */
+function namesOrigin(origin: string, host: HostName): boolean {
+  const url = URL.parse(origin);
+  if (url === null || url.hostname !== host.name) {
+    return false;
+  }
+  if (host.port === undefined) {
+    return url.port === '';
+  }
+  return host.port === (url.port === '' ? DEFAULT_PORTS[url.protocol] : Number(url.port));
+}
+
+/**
+ * Whether `host` (a request's `Host`) names this listener or an allowed origin, in any
+ * case; a `Host` without a port names port 80. A host taken from the request alone proves
+ * nothing: a page whose name was rebound to this address sends its own name. A wildcard
+ * bind cannot list the machine's addresses, so there an IP literal is accepted too.
+ */
+export function knownHost(host: string, deps: GuardDeps): boolean {
   const address = deps.listener?.();
   if (address === undefined) {
     return true;
   }
+  const named = splitHost(host);
+  const port = named.port ?? HTTP_PORT;
   return (
-    ownHosts(address).includes(host) ||
-    deps.allowedOrigins.some((origin: string) => URL.parse(origin)?.host === host) ||
-    (WILDCARD_HOSTS.has(address.host) && isIpLiteral(host))
+    (port === address.port && ownNames(address).includes(named.name)) ||
+    deps.allowedOrigins.some((origin: string) => namesOrigin(origin, named)) ||
+    (WILDCARD_HOSTS.has(address.host) && isIpLiteral(named.name))
   );
 }
 
@@ -170,7 +202,7 @@ export function originGuard(deps: GuardDeps): RequestHandler {
       return;
     }
     // The Host is now known to be this listener's, so the origin it implies is too.
-    const own = `${request.protocol}://${host}`;
+    const own = `${request.protocol}://${host.toLowerCase()}`;
     if (origin !== own && !deps.allowedOrigins.includes(origin)) {
       reject(response, 403, -32_600, t('server.origin-rejected', { origin }));
       return;

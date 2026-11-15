@@ -1,6 +1,7 @@
 import { expect, test } from 'bun:test';
 
-import { RequestRate, callerKey } from './guards.ts';
+import type { GuardDeps } from './guards.ts';
+import { RequestRate, callerKey, knownHost } from './guards.ts';
 
 const socket = { remoteAddress: '10.0.0.2' };
 
@@ -41,4 +42,29 @@ test('a flood stores no more than the limit, so each hit costs the same (self-re
   expect(rate.hit('a', 61_000, limit)).toBe(true);
   expect(rate.hit('a', 61_001, limit)).toBe(true);
   expect(rate.stored('a')).toBe(limit);
+});
+
+test('a Host without a port names port 80, in any case (self-review 2, #7)', () => {
+  const deps = (host: string, port: number, allowedOrigins: string[] = []): GuardDeps => ({
+    limits: { maxParts: 1, maxPartBytes: 1, maxOpenTasksPerCaller: 1, maxRequestsPerMinute: 1 },
+    allowedOrigins,
+    listener: () => ({ host, port }),
+    trustProxy: false,
+    openTasks: () => 0,
+  });
+  expect(knownHost('localhost', deps('127.0.0.1', 80))).toBe(true);
+  expect(knownHost('LocalHost:80', deps('127.0.0.1', 80))).toBe(true);
+  expect(knownHost('localhost', deps('127.0.0.1', 7420))).toBe(false);
+  expect(knownHost('Harness.Example', deps('harness.example', 80))).toBe(true);
+  expect(knownHost('[::1]:7420', deps('::', 7420))).toBe(true);
+  expect(knownHost('localhost:7421', deps('0.0.0.0', 7420))).toBe(false);
+  // An allowed origin matches with or without its default port, and only on its own port.
+  const allowed = deps('127.0.0.1', 7420, ['https://App.example', 'http://other.example:8080']);
+  expect(knownHost('app.example', allowed)).toBe(true);
+  expect(knownHost('app.example:443', allowed)).toBe(true);
+  expect(knownHost('app.example:8443', allowed)).toBe(false);
+  expect(knownHost('other.example:8080', allowed)).toBe(true);
+  expect(knownHost('other.example', allowed)).toBe(false);
+  expect(knownHost('evil.example', allowed)).toBe(false);
+  expect(knownHost('', allowed)).toBe(false);
 });

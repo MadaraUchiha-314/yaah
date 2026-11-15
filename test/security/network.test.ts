@@ -301,3 +301,39 @@ describe('fail closed: a wider bind', () => {
     }
   });
 });
+
+describe('the names of the listener', () => {
+  /**
+   * Feature: Security
+   * Scenario: The listener is reached by its loopback names in any case, on a wildcard bind too
+   *   Given a harness bound to every interface, and one bound to loopback
+   *   When requests name the harness as localhost:<port>, LOCALHOST:<port> or [::1]:<port>
+   *   Then each is served
+   *   And a name that is neither loopback, the bound host nor an allowed origin is refused
+   * Requirement: docs/specs/issue-3/requirements.md abuse case 2 (self-review 2, #7)
+   */
+  test('The listener is reached by its loopback names in any case, on a wildcard bind too', async () => {
+    const original = process.stderr.write.bind(process.stderr);
+    process.stderr.write = (): boolean => true;
+    try {
+      for (const config of ['[server]\nhost = "0.0.0.0"\nport = 0', '[server]\nport = 0']) {
+        // oxlint-disable-next-line no-await-in-loop -- one harness at a time
+        const harness = await start({ config });
+        const { port } = new URL(harness.url);
+        const card = (host: string) =>
+          withHost(harness.url, host, { path: '/.well-known/agent-card.json' });
+        for (const host of [`localhost:${port}`, `LOCALHOST:${port}`, `[::1]:${port}`]) {
+          // oxlint-disable-next-line no-await-in-loop -- requests in order
+          expect([host, (await card(host)).status]).toEqual([host, 200]);
+        }
+        // oxlint-disable-next-line no-await-in-loop -- requests in order
+        expect((await card(`evil.example:${port}`)).status).toBe(403);
+        // oxlint-disable-next-line no-await-in-loop -- one harness at a time
+        await harness.stop();
+        running = undefined;
+      }
+    } finally {
+      process.stderr.write = original;
+    }
+  });
+});
