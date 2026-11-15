@@ -15,7 +15,9 @@ import type { Persistence } from '../../src/harness/core/persistence.ts';
 import type { InboxItemRef, TransitionResult } from '../../src/harness/core/step-runner.ts';
 import type { StepDeps } from '../../src/harness/core/steps.ts';
 import { createStepHandlers } from '../../src/harness/core/steps.ts';
+import type { StreamedAudio } from '../../src/harness/core/task-port.ts';
 import type { ContentPart, InboxPayload } from '../../src/harness/core/types.ts';
+import type { LlmCapabilities } from '../../src/harness/models/llm/types.ts';
 import { definePrompt } from '../../src/harness/system-prompt/prompt.ts';
 import type { Tool } from '../../src/harness/tools/types.ts';
 import { assetPath } from '../../src/kernel/assets.ts';
@@ -37,6 +39,8 @@ export interface CoreOptions {
   readonly usagePerCall?: { readonly inputTokens: number; readonly outputTokens: number };
   readonly deps?: Partial<StepDeps>;
   readonly contextWindow?: number;
+  /** What the scripted model says it accepts beyond text. */
+  readonly capabilities?: Partial<LlmCapabilities>;
   /** Record steps and inbox reads in the journal, so a second runner can replay them. */
   readonly journaled?: boolean;
 }
@@ -53,6 +57,8 @@ export interface Core {
   readonly deltas: string[];
   /** Tool activity as `<name> <phase>`, in order. */
   readonly activities: string[];
+  /** Every piece of spoken answer the steps streamed, in order. */
+  readonly audio: StreamedAudio[];
   /** Resolves when the task reaches a terminal state. */
   readonly finished: Promise<TransitionResult>;
   /** Puts a message in the inbox and hands it to the run. */
@@ -101,9 +107,10 @@ export async function createCore(options: CoreOptions = {}): Promise<Core> {
   const llm = new ScriptedLlm(options.turns ?? [], {
     ...(options.llmDelayMs === undefined ? {} : { delayMs: options.llmDelayMs }),
     ...(options.usagePerCall === undefined ? {} : { usagePerCall: options.usagePerCall }),
-    ...(options.contextWindow === undefined
-      ? {}
-      : { capabilities: { contextWindow: options.contextWindow } }),
+    capabilities: {
+      ...options.capabilities,
+      ...(options.contextWindow === undefined ? {} : { contextWindow: options.contextWindow }),
+    },
   });
   registry.register(llm);
   for (const tool of [...createBuiltinTools(persistence), ...(options.tools ?? [])]) {
@@ -113,6 +120,7 @@ export async function createCore(options: CoreOptions = {}): Promise<Core> {
   tasks.create({ ...options.task, taskId });
   const deltas: string[] = [];
   const activities: string[] = [];
+  const audio: StreamedAudio[] = [];
   const handlers = createStepHandlers({
     registry,
     persistence,
@@ -126,6 +134,9 @@ export async function createCore(options: CoreOptions = {}): Promise<Core> {
       },
       activity: (_task, activity) => {
         activities.push(`${activity.name} ${activity.phase}`);
+      },
+      audio: (_task, _key, chunk) => {
+        audio.push(chunk);
       },
     },
     redactor: new Redactor(),
@@ -169,6 +180,7 @@ export async function createCore(options: CoreOptions = {}): Promise<Core> {
     handlers,
     deltas,
     activities,
+    audio,
     finished: runTask(runner),
     deliver,
     send: (text, sendOptions = {}) =>

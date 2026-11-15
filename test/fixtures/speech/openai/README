@@ -1,0 +1,31 @@
+Hand-written from the documented shapes of two OpenAI APIs and the types of the installed
+`openai` package (7.57.0). None of these files is a recording: no live call has been made
+(the key on the machine that wrote them was expired). Replace them with recorded traffic
+when a valid key is available.
+
+Speech to text — POST /v1/audio/transcriptions with `stream: true`
+guide https://developers.openai.com/api/docs/guides/speech-to-text (Streaming)
+SDK types resources/audio/transcriptions.d.ts: TranscriptionCreateParamsStreaming,
+TranscriptionTextDeltaEvent, TranscriptionTextDoneEvent
+
+transcription.sse the server-sent events of one transcription: three
+`transcript.text.delta` events and the `transcript.text.done` that
+carries the whole text
+transcription-truncated.sse the same stream cut off before `transcript.text.done`
+error-429.json a rate-limit error body
+error-400.json an invalid-request error body
+
+Text to speech — the Realtime API over a WebSocket, wss://api.openai.com/v1/realtime?model=…
+guides https://developers.openai.com/api/docs/guides/realtime-websocket
+https://developers.openai.com/api/docs/guides/realtime-conversations
+SDK types resources/realtime/realtime.d.ts: SessionUpdateEvent,
+ConversationItemCreateEvent, ResponseCreateEvent, ResponseAudioDeltaEvent
+(`response.output_audio.delta`), ResponseDoneEvent, RealtimeErrorEvent
+
+realtime-speech.jsonl the server events of one spoken response, one JSON object per
+line, in the order the server sends them: session.created,
+session.updated, response.created, two
+response.output_audio.delta events (base64 of 8 and 4 bytes of
+PCM), response.output_audio.done, response.done (completed)
+realtime-failed.jsonl a response that ends with status `failed` and a server_error
+realtime-error.jsonl an `error` event for an invalid request

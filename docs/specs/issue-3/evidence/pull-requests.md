@@ -16,3 +16,4 @@ workItem: "issue-3"
 | [#10](https://github.com/MadaraUchiha-314/yaah/pull/10) | MadaraUchiha-314/yaah | Slice 4 — models, tools, sub-agents (23–28), on #9 | open |
 | [#11](https://github.com/MadaraUchiha-314/yaah/pull/11) | MadaraUchiha-314/yaah | Slice 5 — durable execution (29–33), on #10 | open |
 | [#12](https://github.com/MadaraUchiha-314/yaah/pull/12) | MadaraUchiha-314/yaah | Slices 6–7 — surfaces, UIs, o11y, CLI (34–43), on #11 | open |
+| [#13](https://github.com/MadaraUchiha-314/yaah/pull/13) | MadaraUchiha-314/yaah | Slices 8–9 — P1: extensibility, modalities, browser build (44–52), on #12 | open |

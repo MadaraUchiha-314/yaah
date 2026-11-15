@@ -1,5 +1,5 @@
 /**
- * Builds the web chat, starts the harness of `harness-launcher.ts` with Bun, and tells the
+ * Builds the web chat and the browser build, starts the harness of `harness-launcher.ts` with Bun, and tells the
  * specs where it listens (`YAAH_E2E_URL`). Returns the teardown that stops it.
  */
 import type { ChildProcess } from 'node:child_process';
@@ -29,6 +29,10 @@ export default async function globalSetup(): Promise<() => void> {
   const built = spawnSync('bun', ['run', 'build:web'], { cwd: ROOT, stdio: 'inherit' });
   if (built.status !== 0) {
     throw new Error('bun run build:web failed.');
+  }
+  const browser = spawnSync('bun', ['run', 'build:browser'], { cwd: ROOT, stdio: 'inherit' });
+  if (browser.status !== 0) {
+    throw new Error('bun run build:browser failed.');
   }
   const child = spawn('bun', ['run', 'test/e2e/harness-launcher.ts'], {
     cwd: ROOT,

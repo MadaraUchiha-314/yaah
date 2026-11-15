@@ -36,6 +36,33 @@ describe('terminal output filter', () => {
     expect(cleaned).toContain('never closed');
   });
 
+  test('removes bidi controls, zero-width spaces, separators and the byte-order mark', () => {
+    const formats = [
+      '\u202E',
+      '\u202A',
+      '\u2066',
+      '\u2067',
+      '\u2068',
+      '\u2069',
+      '\u200B',
+      '\u200E',
+      '\u200F',
+      '\u2028',
+      '\u2029',
+      '\uFEFF',
+      '\u061C',
+      '\u2060',
+      '\u2061',
+      '\u2064',
+    ];
+    for (const format of formats) {
+      expect(sanitize(`a${format}b\n\tc`)).toBe('ab\n\tc');
+    }
+    expect(sanitize('invoice\u202Etxt.exe')).toBe('invoicetxt.exe');
+    // The joiners stay: an emoji sequence is one picture, not three.
+    expect(sanitize('👩\u200D💻')).toBe('👩\u200D💻');
+  });
+
   test('keeps newlines, tabs and ordinary text, and drops carriage returns', () => {
     expect(sanitize('one\n\ttwo — ünïcödé ✓')).toBe('one\n\ttwo — ünïcödé ✓');
     expect(sanitize('one\r\ntwo\rthree')).toBe('one\ntwothree');

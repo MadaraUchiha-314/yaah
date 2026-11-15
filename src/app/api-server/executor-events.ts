@@ -3,11 +3,11 @@ import type { Task } from '@a2a-js/sdk';
 import { TaskState } from '@a2a-js/sdk';
 import type { AgentEvent } from '@a2a-js/sdk/server';
 
-import type { Activity } from '../../harness/core/task-port.ts';
+import type { Activity, StreamedAudio } from '../../harness/core/task-port.ts';
 import type { HubEvent } from '../stream-hub.ts';
 import { agentMessage, metadataObject, resultArtifact } from './convert.ts';
 import { EXT } from './extensions/index.ts';
-import { replyArtifactId } from './task-port.ts';
+import { replyArtifactId, speechArtifactId } from './task-port.ts';
 
 type StatusUpdate = Parameters<typeof AgentEvent.statusUpdate>[0];
 type ArtifactUpdate = Parameters<typeof AgentEvent.artifactUpdate>[0];
@@ -33,6 +33,22 @@ export function activityEvent(task: Task, activity: Activity): StatusUpdate {
   };
 }
 
+/** One piece of a spoken answer: raw audio, with how to play it as voice-extension data. */
+function speechArtifact(artifactId: string, chunk: StreamedAudio): ArtifactUpdate['artifact'] {
+  const { parts } = resultArtifact(artifactId, [
+    { type: 'file', mediaType: chunk.mediaType, source: { kind: 'base64', data: chunk.data } },
+  ]);
+  const format = { sampleRate: chunk.sampleRate, channels: chunk.channels, encoding: 's16le' };
+  return {
+    artifactId,
+    name: 'speech',
+    description: '',
+    parts,
+    metadata: metadataObject({ [EXT.voice]: format }),
+    extensions: [EXT.voice],
+  };
+}
+
 /**
  * The artifact update for what a model call streamed or stored: a chunk appended to the
  * call's artifact, a reset that voids what was streamed, or the final content.
@@ -43,8 +59,12 @@ export function artifactEvent(
 ): ArtifactUpdate {
   const base = { taskId: task.id, contextId: task.contextId, metadata: undefined };
   if (event.type === 'artifact') {
-    const artifact = resultArtifact(event.artifactId, event.parts);
+    const artifact = resultArtifact(event.artifactId, event.parts, event.name);
     return { ...base, artifact, append: false, lastChunk: true };
+  }
+  if (event.type === 'audio') {
+    const artifact = speechArtifact(speechArtifactId(event.key), event.chunk);
+    return { ...base, artifact, append: true, lastChunk: event.chunk.last };
   }
   const artifactId = replyArtifactId(event.key);
   if (event.type === 'reset') {

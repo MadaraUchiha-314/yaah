@@ -1,28 +1,48 @@
 /**
  * The A2A SDK client is fetch-based and runs in a browser, but it names Node's `Buffer`
- * global in two places: to tell a JSON object from bytes, and to carry binary (`raw`)
- * parts. The chat sends and shows text and A2UI data only, so this gives the SDK just
- * enough: nothing is ever a Buffer, and bytes it decodes stay a `Uint8Array`.
+ * global for binary (`raw`) parts: `Buffer.from(base64, 'base64')` to decode one,
+ * `Buffer.from(bytes).toString('base64')` to encode one, and `Buffer.isBuffer` to tell
+ * bytes from a JSON object. This is that much of `Buffer` — bytes in and out of base64 —
+ * so images and audio travel in a browser exactly as they do under Node.
  */
+import { fromBase64, toBase64 } from '../../../bytes.ts';
 
-/** The slice of `Buffer` the SDK client touches on the paths the chat uses. */
-export interface BufferShim {
-  isBuffer(value: unknown): boolean;
-  from(value: string | ArrayLike<number>, encoding?: string): Uint8Array;
+/** Bytes that know their base64 form: what the stand-in's `from` returns. */
+export interface BrowserBuffer extends Uint8Array {
+  /** The bytes as base64 when asked for it, as UTF-8 text otherwise. */
+  toString(encoding?: string): string;
 }
 
-function decodeBase64(text: string): Uint8Array {
-  return Uint8Array.from(atob(text), (character) => character.codePointAt(0) ?? 0);
+/** The slice of `Buffer` the SDK client touches. */
+export interface BufferShim {
+  isBuffer(value: unknown): boolean;
+  from(value: string | ArrayLike<number>, encoding?: string): BrowserBuffer;
+}
+
+/** Every buffer the stand-in made: how `isBuffer` knows its own. */
+const made = new WeakSet();
+
+function browserBuffer(bytes: ArrayLike<number>): BrowserBuffer {
+  const buffer: Uint8Array = Uint8Array.from(bytes);
+  const withText = Object.assign(buffer, {
+    toString: (encoding?: string): string =>
+      encoding === 'base64' ? toBase64(buffer) : new TextDecoder().decode(buffer),
+  });
+  made.add(withText);
+  return withText;
 }
 
 /** The stand-in installed by {@link installBufferShim}. */
 export const bufferShim: BufferShim = {
-  isBuffer: (): boolean => false,
-  from: (value, encoding): Uint8Array => {
+  isBuffer: (value: unknown): boolean =>
+    typeof value === 'object' && value !== null && made.has(value),
+  from: (value, encoding): BrowserBuffer => {
     if (typeof value !== 'string') {
-      return Uint8Array.from(value);
+      return browserBuffer(value);
     }
-    return encoding === 'base64' ? decodeBase64(value) : new TextEncoder().encode(value);
+    return browserBuffer(
+      encoding === 'base64' ? fromBase64(value) : new TextEncoder().encode(value),
+    );
   },
 };
 

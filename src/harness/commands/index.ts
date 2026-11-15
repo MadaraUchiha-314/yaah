@@ -7,7 +7,7 @@ import type { Message } from '@a2a-js/sdk';
 import type { RequestContext } from '@a2a-js/sdk/server';
 import type { Context } from 'cordis';
 
-import { agentMessage, messageText } from '../../app/api-server/convert.ts';
+import { agentMessage, messageText, partsToA2a } from '../../app/api-server/convert.ts';
 import type { CommandInfo, CommandOutcome } from '../../app/api-server/extensions/index.ts';
 import { EXT } from '../../app/api-server/extensions/index.ts';
 import type { TaskSettings } from '../../app/api-server/task-port.ts';
@@ -23,10 +23,10 @@ export type { Command, CommandContext, CommandFunction, CommandResult } from './
 /** The commands service. */
 export interface CommandsService {
   /**
-   * Registers a command as a name and a function. It is removed when the registering
-   * plugin is disposed.
+   * Registers a command as a name and a function. It is removed when the function this
+   * returns is called, or at the latest when the commands plugin is disposed.
    */
-  register(name: string, run: CommandFunction, description?: string): void;
+  register(name: string, run: CommandFunction, description?: string): () => void;
 }
 
 declare module 'cordis' {
@@ -121,7 +121,7 @@ async function run(
   ctx: Context,
   parsed: { name: string; args: string },
   where: CommandContext,
-): Promise<{ text: string; status: CommandOutcome['status'] }> {
+): Promise<{ text: string; status: CommandOutcome['status']; prompt?: string | undefined }> {
   const { strings, entities } = ctx;
   const ref = { kind: 'command', id: parsed.name, version: null } as const;
   if (!entities.has(ref)) {
@@ -139,7 +139,7 @@ async function run(
   try {
     const result = await command.run(parsed.args, where);
     ctx.emit('command/executed', parsed.name);
-    return { text: result.text, status: 'executed' };
+    return { text: result.text, status: 'executed', prompt: result.prompt };
   } catch (error) {
     ctx.emit('command/failed', parsed.name, error);
     const reason = error instanceof Error ? error.message : String(error);
@@ -154,8 +154,11 @@ async function run(
 /** Starts the commands plugin. */
 export function apply(ctx: Context): void {
   const selections = new Map<string, Selection>();
-  const register = (command: Command): void => {
-    ctx.effect(() => ctx.entities.register(command));
+  const register = (command: Command): (() => void) => {
+    const dispose = ctx.effect(() => ctx.entities.register(command));
+    return (): void => {
+      void dispose();
+    };
   };
   for (const command of selectionCommands(ctx, selections)) {
     register(command);
@@ -169,9 +172,8 @@ export function apply(ctx: Context): void {
     }),
   );
   ctx.provide('commands', {
-    register: (commandName: string, fn: CommandFunction, description = ''): void => {
-      register(defineCommand({ name: commandName, description, run: fn }));
-    },
+    register: (commandName: string, fn: CommandFunction, description = ''): (() => void) =>
+      register(defineCommand({ name: commandName, description, run: fn })),
   });
   const dispatch = async (request: RequestContext): Promise<Message | null> => {
     const parsed = parseCommand(messageText(request.userMessage));
@@ -180,6 +182,11 @@ export function apply(ctx: Context): void {
     }
     const taskId = request.task === undefined ? null : request.taskId;
     const outcome = await run(ctx, parsed, { taskId, contextId: request.contextId });
+    if (outcome.prompt !== undefined) {
+      // A prompt command: the turn goes on, with the prompt as what the user said.
+      request.userMessage.parts = partsToA2a([{ type: 'text', text: outcome.prompt }]);
+      return null;
+    }
     const data: CommandOutcome = { command: parsed.name, status: outcome.status };
     return agentMessage({
       messageId: `command-${request.userMessage.messageId}`,

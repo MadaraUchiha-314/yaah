@@ -125,14 +125,15 @@ The `o11y` plugin only listens. Every step passes through step middleware
 one OpenTelemetry span, named by the GenAI conventions (`chat <model>`,
 `execute_tool <name>`, `invoke_agent <id>`). A request span continues the caller's W3C
 `traceparent`; the steps of the task it reaches are its children; calls to other agents
-and MCP servers carry it on. Log records, span attributes, errors returned to callers and
-content written to a conversation all pass through the `Redactor`.
+and MCP servers carry it on. Log records, span attributes, errors returned to callers,
+content written to a conversation and the step failures Temporal records all pass through
+the `Redactor`.
 
 ## Security posture
 
 The A2A API has no authentication in this version
 ([decision-012](../decisions/decision-012.md)). The listener binds loopback by default,
-rejects foreign browser origins, and limits body size, parts, open tasks and request rate
+rejects foreign browser origins and any `Host` that is not its own (DNS rebinding), and limits body size, parts, open tasks and request rate
 per caller. The harness never fetches a URL it was given at run time: agent cards and MCP
 servers come from the operator's configuration only. The threat model and the test for
 each abuse case are in the

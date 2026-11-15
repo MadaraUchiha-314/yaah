@@ -1,0 +1,9 @@
+Hand-written from the documented shape of OpenAI's image API (POST /v1/images/generations):
+the guide at https://developers.openai.com/api/docs/guides/image-generation and the types
+of the installed `openai` package (resources/images.d.ts: ImageGenerateParamsNonStreaming,
+ImagesResponse, Image). Not a recording: no live call has been made. Replace it with a
+recorded response when a valid key is available.
+
+image.json one generated image, returned as `data[0].b64_json` (a 1x1 PNG), as the GPT
+image models return it by default
+empty.json a response with no image in it

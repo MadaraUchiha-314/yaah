@@ -103,6 +103,7 @@ describe('llm-openai plugin', () => {
         contextWindow: 1_050_000,
         maxOutput: 128_000,
         input: ['image'],
+        inputUrls: ['image'],
         efforts: ['low', 'medium', 'high', 'xhigh', 'max'],
       });
       expect(sol.locality).toEqual({
@@ -191,6 +192,7 @@ describe('llm-openai-compatible plugin', () => {
     models: ['llama4', 'qwen4'],
     contextWindow: 32_000,
     maxOutput: 4096,
+    input: [],
   };
   const router = {
     id: 'router',
@@ -199,6 +201,7 @@ describe('llm-openai-compatible plugin', () => {
     models: ['vendor/model-1'],
     contextWindow: 200_000,
     maxOutput: 8192,
+    input: ['image' as const],
   };
 
   test('declares its name and the services it needs', () => {
@@ -215,7 +218,7 @@ describe('llm-openai-compatible plugin', () => {
       expect(model.capabilities).toEqual({
         contextWindow: 200_000,
         maxOutput: 8192,
-        input: [],
+        input: ['image'],
         efforts: [],
       });
       expect(model.locality).toEqual({ type: 'remote', protocol: 'https', url: router.baseUrl });

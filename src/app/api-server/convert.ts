@@ -156,10 +156,14 @@ export function toA2aStatus(init: StatusInit): TaskStatus {
 }
 
 /** Builds the artifact that holds a task's result. */
-export function resultArtifact(artifactId: string, parts: readonly ContentPart[]): Artifact {
+export function resultArtifact(
+  artifactId: string,
+  parts: readonly ContentPart[],
+  name = 'response',
+): Artifact {
   return {
     artifactId,
-    name: 'response',
+    name,
     description: '',
     parts: partsToA2a(parts),
     metadata: undefined,

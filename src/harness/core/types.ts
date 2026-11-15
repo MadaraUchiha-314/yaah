@@ -41,14 +41,23 @@ export interface ToolCall {
 
 /** Why a tool call did not produce a result. */
 export interface ToolError {
-  /** Stable code: `not-found`, `invalid-arguments`, `denied`, `timeout`, `failed`, `unknown-outcome`. */
+  /** Stable code: `not-found`, `invalid-arguments`, `denied`, `timeout`, `failed`, `cancelled`, `unknown-outcome`. */
   readonly code: string;
   readonly message: string;
 }
 
 /** What a tool call produced. Failures are values: they go to the model, not up the stack. */
 export type ToolResult =
-  | { readonly ok: true; readonly content: readonly ContentPart[]; readonly structured?: Json }
+  | {
+      readonly ok: true;
+      readonly content: readonly ContentPart[];
+      readonly structured?: Json;
+      /**
+       * Content delivered to the person as an artifact of the task — an image the tool
+       * made, for example. It is not shown to the model and not kept in the conversation.
+       */
+      readonly artifacts?: readonly ContentPart[];
+    }
   | { readonly ok: false; readonly error: ToolError };
 
 /** Provider-specific data that must be sent back unchanged (reasoning items, signatures). */

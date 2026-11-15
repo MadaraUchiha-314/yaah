@@ -1,0 +1,59 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/MadaraUchiha-314/yaah/extensions/voice/v1",
+  "$defs": {
+    "agentCardParams": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "type": "object",
+      "properties": {
+        "transcription": {
+          "type": "boolean"
+        },
+        "output": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "transcription",
+        "output"
+      ],
+      "additionalProperties": false
+    },
+    "messageMetadata": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "type": "object",
+      "properties": {
+        "output": {
+          "type": "boolean"
+        }
+      },
+      "additionalProperties": false
+    },
+    "artifactMetadata": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "type": "object",
+      "properties": {
+        "sampleRate": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 9007199254740991
+        },
+        "channels": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 9007199254740991
+        },
+        "encoding": {
+          "type": "string",
+          "const": "s16le"
+        }
+      },
+      "required": [
+        "sampleRate",
+        "channels",
+        "encoding"
+      ],
+      "additionalProperties": false
+    }
+  }
+}

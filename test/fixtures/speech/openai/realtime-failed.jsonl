@@ -1,0 +1,3 @@
+{"type":"session.created","event_id":"event_001","session":{"type":"realtime","object":"realtime.session","id":"sess_002","model":"gpt-realtime-2.1-mini"}}
+{"type":"response.created","event_id":"event_002","response":{"object":"realtime.response","id":"resp_002","status":"in_progress","output":[]}}
+{"type":"response.done","event_id":"event_003","response":{"object":"realtime.response","id":"resp_002","status":"failed","status_details":{"type":"failed","error":{"type":"server_error","code":"server_error"}},"output":[]}}

@@ -33,6 +33,22 @@ const form = (a2ui: unknown[] = refundForm()): TranscriptItem => ({
 const COMMANDS = [{ name: 'model' }, { name: 'exit' }];
 
 describe('terminal UI components', () => {
+  test('a transcript taller than the terminal shows its latest lines, with input and status', () => {
+    const items: TranscriptItem[] = Array.from({ length: 40 }, (_unused, index) => ({
+      kind: 'note',
+      id: `n${String(index)}`,
+      text: `line ${String(index)}`,
+    }));
+    const frame = renderToText(view('awaiting-next-interaction', ...items), { rows: 12 });
+    const lines = frame.split('\n');
+    expect(lines.length).toBeLessThanOrEqual(11);
+    expect(frame).toContain('line 39');
+    expect(frame).not.toContain('line 0\n');
+    expect(frame).toContain(t('view.state.awaiting-next-interaction'));
+    // With no known height, everything is drawn.
+    expect(renderToText(view('idle', ...items))).toContain('line 0');
+  });
+
   test('the status line names the state with a glyph, then the task, model, effort and Temporal', () => {
     const frame = renderToText(view('working'), {
       taskName: 'Refund for order A-1041',
@@ -158,14 +174,14 @@ describe('terminal UI components', () => {
     expect(frame).not.toContain(t('tui.a2ui.hint'));
   });
 
-  test('the entities describe a text surface that draws the basic catalog', () => {
+  test('the entities describe a text and voice surface that draws the basic catalog', () => {
     expect(tuiRenderer.ref).toEqual({ kind: 'renderer', id: 'tui', version: null });
     expect(tuiRenderer.a2uiCatalogs).toEqual([
       'https://a2ui.org/specification/v1_0/catalogs/basic/catalog.json',
     ]);
     expect(tuiSurface.ref).toEqual({ kind: 'surface', id: 'tui', version: null });
     expect(tuiSurface.renderer).toBe(tuiRenderer);
-    expect(tuiSurface.modalities).toEqual(['text']);
+    expect(tuiSurface.modalities).toEqual(['text', 'audio']);
   });
 
   test('plain mode is chosen without a terminal or with NO_COLOR', () => {

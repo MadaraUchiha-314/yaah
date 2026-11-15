@@ -100,4 +100,64 @@ describe('StreamHub', () => {
     controller.abort();
     expect(await pending).toBe(0);
   });
+
+  test('drops a finished task log a while after its final status (self-review 1, core #8)', async () => {
+    const hub = new StreamHub(2000, 20);
+    hub.publish('t1', delta('all'));
+    hub.publish('t1', { type: 'status', state: 'completed', subState: null, messageId: 'm' });
+    hub.publish('t2', { type: 'status', state: 'input-required', subState: null, messageId: 'm' });
+    // A subscriber that comes right after still gets the final events.
+    expect((await take(hub, 't1', 0, 2)).length).toBe(2);
+    await new Promise((resolve) => {
+      setTimeout(resolve, 40);
+    });
+    expect(hub.replay('t1', 0)).toEqual([]);
+    expect(hub.size).toBe(1);
+  });
+
+  test('clears a resting task log a while after it came to rest (self-review 2, #5)', async () => {
+    const hub = new StreamHub(2000, 20);
+    const rest = {
+      type: 'status',
+      state: 'input-required',
+      subState: null,
+      messageId: 'm',
+    } as const;
+    hub.publish('t2', delta('answer'));
+    hub.publish('t2', rest);
+    hub.publish('t3', rest);
+    // A request that came in meanwhile started a new turn on t3: its events are kept.
+    hub.publish('t3', delta('next'));
+    await new Promise((resolve) => {
+      setTimeout(resolve, 40);
+    });
+    // An abandoned conversation keeps no events, but its numbering goes on.
+    expect(hub.replay('t2', 0)).toEqual([]);
+    expect(hub.head('t2')).toBe(2);
+    expect(hub.replay('t3', 0)).toHaveLength(2);
+    // The next turn, followed from the head as the executor does, is seen in full.
+    const next = take(hub, 't2', hub.head('t2'), 1);
+    hub.publish('t2', delta('again'));
+    expect((await next).map((entry) => entry.seq)).toEqual([3]);
+  });
+
+  test('following a task nobody has published for leaves nothing behind', async () => {
+    const hub = new StreamHub();
+    // A subscriber waiting for a task's first event still gets it.
+    const pending = take(hub, 'new', 0, 1);
+    hub.publish('new', delta('a'));
+    expect((await pending).length).toBe(1);
+    // One that gives up before anything is published leaves no log behind.
+    const controller = new AbortController();
+    const ghost = (async (): Promise<number> => {
+      let count = 0;
+      for await (const event of hub.subscribe('ghost', 0, controller.signal)) {
+        count += event.seq;
+      }
+      return count;
+    })();
+    controller.abort();
+    expect(await ghost).toBe(0);
+    expect(hub.size).toBe(1);
+  });
 });

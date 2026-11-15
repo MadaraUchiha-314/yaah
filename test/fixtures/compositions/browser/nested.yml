@@ -1,0 +1,13 @@
+- id: first
+  name: ../../plugins/tool-a.ts
+  config:
+    text: from the root
+- id: 'off'
+  name: ../../plugins/tool-b.ts
+  disabled: true
+- id: layer
+  name: '@cordisjs/include'
+  config:
+    path: ./nested-layer.yml
+- id: packaged
+  name: '@example/yaah-plugin'

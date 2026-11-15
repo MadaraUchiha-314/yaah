@@ -99,7 +99,7 @@ describe('sub-agent availability and trust', () => {
         });
         // The shipped entry is disabled above so that this test can use a short retry delay.
         await ctx.inject(
-          ['entities', 'config', 'strings', 'taskRuntime', 'harnessTarget'],
+          ['entities', 'config', 'strings', 'persistence', 'taskRuntime', 'harnessTarget'],
           (inner) => {
             applySubAgents(inner, { retryMs: 20 });
           },

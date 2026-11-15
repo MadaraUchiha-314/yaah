@@ -11,7 +11,7 @@
     "builtin": true,
     "es2024": true
   },
-  "ignorePatterns": ["dist/**", "coverage/**", "node_modules/**"],
+  "ignorePatterns": ["dist/**", "coverage/**", "node_modules/**", "test/e2e/terminal-page.js"],
   "rules": {
     "typescript/no-explicit-any": "error",
     "typescript/no-non-null-assertion": "error",

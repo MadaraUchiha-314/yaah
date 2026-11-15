@@ -1,0 +1,12 @@
+event: transcript.text.delta
+data: {"type":"transcript.text.delta","delta":"Where "}
+
+event: transcript.text.delta
+data: {"type":"transcript.text.delta","delta":"is my "}
+
+event: transcript.text.delta
+data: {"type":"transcript.text.delta","delta":"order?"}
+
+event: transcript.text.done
+data: {"type":"transcript.text.done","text":"Where is my order?","languages":[{"code":"en"}]}
+

@@ -1,0 +1,2 @@
+Temporal Web UI: http://127.0.0.1:18233/namespaces/default
+READY http://127.0.0.1:7421

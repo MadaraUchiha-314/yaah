@@ -1,0 +1,72 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "properties": {
+    "$schema": {
+      "type": "string"
+    },
+    "hooks": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "event": {
+            "type": "string",
+            "enum": [
+              "message.received",
+              "llm.before",
+              "llm.after",
+              "tool.before",
+              "tool.after",
+              "agent.before",
+              "task.transition"
+            ],
+            "description": "The lifecycle point the hook runs at."
+          },
+          "match": {
+            "description": "A glob (* and ?) over the tool id for tool.* events and the agent id for agent.before. Absent: every event.",
+            "type": "string",
+            "minLength": 1
+          },
+          "run": {
+            "type": "object",
+            "properties": {
+              "type": {
+                "type": "string",
+                "const": "mcp-tool"
+              },
+              "server": {
+                "type": "string",
+                "minLength": 1,
+                "description": "A server of the plugin's own mcp.json."
+              },
+              "tool": {
+                "type": "string",
+                "minLength": 1,
+                "description": "The name of the tool on that server."
+              }
+            },
+            "required": [
+              "type",
+              "server",
+              "tool"
+            ],
+            "additionalProperties": false,
+            "description": "The tool is called with the event as its arguments ({ \"event\": name, ...fields }) and answers { \"decision\": \"allow\" | \"deny\", \"reason\"?: string } as structured content or as JSON text. At message.received, tool.before and agent.before, anything else — an error, a timeout, a malformed answer — denies."
+          }
+        },
+        "required": [
+          "event",
+          "run"
+        ],
+        "additionalProperties": false
+      }
+    }
+  },
+  "required": [
+    "hooks"
+  ],
+  "additionalProperties": false,
+  "$id": "https://github.com/MadaraUchiha-314/yaah/specs/plugins/hooks.v1.schema.json",
+  "title": "Hooks of an agent plugin (io.github.madarauchiha-314.yaah/hooks.json)"
+}

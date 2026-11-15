@@ -23,6 +23,12 @@ import { mkdir, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 
 const DEFAULT_MODEL = 'gpt-6.1-sol';
+/**
+ * The Chat Completions recordings use a model without reasoning: GPT 6.1 refuses function
+ * tools on that API ("use /v1/responses"), and what the compatible provider targets —
+ * OpenRouter, Ollama — is the plain Chat Completions shape.
+ */
+const CHAT_MODEL = 'gpt-4.1-mini';
 const BASE_URL = 'https://api.openai.com/v1';
 const FIXTURES = join(import.meta.dirname, '..', 'test', 'fixtures', 'llm');
 
@@ -38,19 +44,27 @@ const CALL_BOTH =
   'Call the lookup tool for order A-1 and the rules tool, both in this same turn, in ' +
   'parallel, lookup first. Do not write any text.';
 
+const THINK_THEN_CALL =
+  'Three orders are A-1, A-2 and A-3. Exactly one of them has an id whose digit is the ' +
+  'number of prime numbers below 6. Work out which, then call the lookup tool for it.';
+
 interface Scenario {
   readonly file: string;
   readonly path: string;
   readonly body: Record<string, unknown>;
 }
 
-function responsesBody(model: string, prompt: string): Record<string, unknown> {
+function responsesBody(
+  model: string,
+  prompt: string,
+  effort: string = 'low',
+): Record<string, unknown> {
   return {
     model,
     stream: true,
     store: false,
     include: ['reasoning.encrypted_content'],
-    reasoning: { effort: 'low' },
+    reasoning: { effort },
     max_output_tokens: 2000,
     input: [
       { role: 'system', content: [{ type: 'input_text', text: 'Be brief.' }] },
@@ -107,14 +121,20 @@ function scenarios(model: string): readonly Scenario[] {
       body: responsesBody(model, CALL_BOTH),
     },
     {
+      // A turn the model reasons about first, so the stream carries a reasoning item.
+      file: 'openai/reasoning-tools.sse',
+      path: '/responses',
+      body: responsesBody(model, THINK_THEN_CALL, 'high'),
+    },
+    {
       file: 'openai-compatible/text.sse',
       path: '/chat/completions',
-      body: chatBody(model, SAY_HELLO),
+      body: chatBody(CHAT_MODEL, SAY_HELLO),
     },
     {
       file: 'openai-compatible/parallel-tools.sse',
       path: '/chat/completions',
-      body: chatBody(model, CALL_BOTH),
+      body: chatBody(CHAT_MODEL, CALL_BOTH),
     },
   ];
 }

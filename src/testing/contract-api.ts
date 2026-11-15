@@ -10,7 +10,8 @@
  */
 export interface ContractApi {
   readonly describe: (name: string, body: () => void) => void;
-  readonly test: (name: string, body: () => void | Promise<void>) => void;
+  /** `timeoutMs`, when given, replaces the runner's default limit for that test. */
+  readonly test: (name: string, body: () => void | Promise<void>, timeoutMs?: number) => void;
   readonly expect: (actual: unknown) => ContractMatchers;
 }
 

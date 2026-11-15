@@ -40,6 +40,18 @@ function isRecord(value: unknown): value is Readonly<Record<string, unknown>> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
+/** Whether two batches are the same: the same value, or equal as JSON. */
+function sameBatch(a: unknown, b: unknown): boolean {
+  if (a === b) {
+    return true;
+  }
+  try {
+    return JSON.stringify(a) === JSON.stringify(b);
+  } catch {
+    return false;
+  }
+}
+
 interface Resolved {
   readonly resolver: NodeResolver;
   /** The live nodes of the last reading, by the id the drawn tree knows them by. */
@@ -54,19 +66,12 @@ interface Resolved {
  */
 export class A2uiModel {
   readonly #actions: A2uiAction[] = [];
-  readonly #processor: MessageProcessor = new MessageProcessor([basicCatalog], (action) => {
-    this.#actions.push({
-      name: action.name,
-      surfaceId: action.surfaceId,
-      sourceComponentId: action.sourceComponentId,
-      timestamp: action.timestamp,
-      context: action.context,
-    });
-  });
+  #processor: MessageProcessor = this.#createProcessor();
   readonly #resolved = new Map<string, Resolved>();
   /** Values the user set on controls that are not bound to the data model. */
   readonly #local = new Map<string, unknown>();
-  #applied = 0;
+  /** The batches fed so far, in order. */
+  #fed: readonly unknown[] = [];
   #rejected = 0;
 
   /** How many message batches were malformed and therefore not applied. */
@@ -76,11 +81,20 @@ export class A2uiModel {
 
   /**
    * Feeds the batches of an answer. Batches already fed are skipped, so this can be
-   * called with the growing list of a streaming answer.
+   * called with the growing list of a streaming answer. A list that does not extend the
+   * one fed — the answer's step was retried and streamed anew — starts the surfaces over.
    */
   apply(batches: readonly unknown[]): void {
-    for (const batch of batches.slice(this.#applied)) {
-      this.#applied += 1;
+    if (!this.#fed.every((batch, index) => sameBatch(batches[index], batch))) {
+      this.dispose();
+      this.#processor = this.#createProcessor();
+      this.#local.clear();
+      this.#fed = [];
+      this.#rejected = 0;
+    }
+    const fresh = batches.slice(this.#fed.length);
+    this.#fed = [...batches];
+    for (const batch of fresh) {
       try {
         if (this.#processor.processMessagesWithErrors(sanitizeDeep(batch)).length > 0) {
           this.#rejected += 1;
@@ -158,6 +172,18 @@ export class A2uiModel {
     }
     this.#resolved.clear();
     this.#processor.dispose();
+  }
+
+  #createProcessor(): MessageProcessor {
+    return new MessageProcessor([basicCatalog], (action) => {
+      this.#actions.push({
+        name: action.name,
+        surfaceId: action.surfaceId,
+        sourceComponentId: action.sourceComponentId,
+        timestamp: action.timestamp,
+        context: action.context,
+      });
+    });
   }
 
   /** Reads a resolved value out as plain JSON, noting each live node on the way. */

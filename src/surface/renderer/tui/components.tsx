@@ -40,10 +40,18 @@ export interface InputLineProps {
   readonly state: ViewState;
   /** Whether the keyboard is on the input line (and not on an A2UI control). */
   readonly focused: boolean;
+  /** Whether a voice message is being recorded, and how it ends. */
+  readonly recording?: 'off' | 'hold' | 'toggle' | undefined;
 }
 
 /** Properties of {@link Screen}. */
 export interface ScreenProps extends StatusLineProps, InputLineProps {
+  /**
+   * The height of the terminal, in rows, when it is known. The screen then never grows
+   * taller than the terminal: the transcript shows its latest lines and older ones leave
+   * at the top. Without it the whole transcript is drawn.
+   */
+  readonly rows?: number | undefined;
   readonly models: ModelLookup;
   readonly focus: TranscriptFocus | null;
   /** True while a turn is under way. */
@@ -62,6 +70,8 @@ const STATE_MARK: Readonly<Record<ViewState, readonly [glyph: string, color: str
 };
 
 const RULE_WIDTH = 80;
+/** The least height the screen is drawn at: the input, the status and a little transcript. */
+const MIN_ROWS = 8;
 const SEPARATOR = ' · ';
 
 /**
@@ -102,6 +112,7 @@ export function KeyHints(props: { readonly view: TaskView; readonly busy: boolea
   const { view, busy } = props;
   const open = view.taskId !== null && isOpen(view);
   const hints = [
+    busy ? '' : t('tui.hint.voice'),
     open && !busy ? t('tui.hint.complete') : '',
     open ? t('tui.hint.cancel') : '',
     open ? '' : t('tui.hint.new'),
@@ -111,7 +122,10 @@ export function KeyHints(props: { readonly view: TaskView; readonly busy: boolea
   return <Text dimColor>{hints.join(SEPARATOR)}</Text>;
 }
 
-function placeholder(state: ViewState): string {
+function placeholder(state: ViewState, recording: InputLineProps['recording']): string {
+  if (recording === 'hold' || recording === 'toggle') {
+    return t(`tui.voice.recording.${recording}`);
+  }
   if (state === 'awaiting-user-input') {
     return t('view.input.placeholder.ask');
   }
@@ -138,7 +152,7 @@ export function InputLine(props: InputLineProps): ReactNode {
         </Text>
         {sanitize(text.slice(head.length))}
         {focused ? '▍' : ''}
-        {text === '' ? <Text dimColor> {placeholder(props.state)}</Text> : null}
+        {text === '' ? <Text dimColor> {placeholder(props.state, props.recording)}</Text> : null}
       </Text>
       {command === null ? null : (
         <Text color="magenta">{t('view.command.hint', { name: head })}</Text>
@@ -156,15 +170,31 @@ function Rule(): ReactNode {
 
 /** The whole screen: transcript, input line, status line and key hints. */
 export function Screen(props: ScreenProps): ReactNode {
+  // One row is left free: a frame as tall as the terminal makes it scroll.
+  const height = props.rows === undefined ? undefined : Math.max(props.rows - 1, MIN_ROWS);
   return (
-    <Box flexDirection="column">
-      <Transcript view={props.view} models={props.models} focus={props.focus} />
+    <Box flexDirection="column" {...(height === undefined ? {} : { height })}>
+      <Box flexDirection="column" flexShrink={1} overflow="hidden" justifyContent="flex-end">
+        <Box flexDirection="column" flexShrink={0}>
+          <Transcript view={props.view} models={props.models} focus={props.focus} />
+        </Box>
+      </Box>
+      <Chrome {...props} />
+    </Box>
+  );
+}
+
+/** What stays on screen whatever the transcript's length: input, status and key hints. */
+function Chrome(props: ScreenProps): ReactNode {
+  return (
+    <Box flexDirection="column" flexShrink={0}>
       <Rule />
       <InputLine
         text={props.text}
         commands={props.commands}
         state={props.view.state}
         focused={props.focused}
+        recording={props.recording}
       />
       <Rule />
       <StatusLine

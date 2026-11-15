@@ -8,6 +8,7 @@
  */
 import type { Context } from 'cordis';
 
+import { readCredential } from '../../../../kernel/credentials.ts';
 import { ConfigError } from '../../../../kernel/errors.ts';
 import { registerEntity } from '../../../../kernel/registry.ts';
 import { t } from '../../../../kernel/strings.ts';
@@ -54,7 +55,7 @@ export function credentialError(variable: string, key: string): ConfigError {
  */
 export function apply(ctx: Context, config: OpenAiPluginConfig | undefined): void {
   const settings = ctx.config.providers.openai;
-  const apiKey = config?.apiKey ?? process.env[settings.apiKeyEnv] ?? '';
+  const apiKey = config?.apiKey ?? readCredential(ctx, settings.apiKeyEnv) ?? '';
   if (apiKey === '') {
     if (ctx.config.model.llm.startsWith(`${OPENAI}/`)) {
       throw credentialError(settings.apiKeyEnv, KEY_SETTING);

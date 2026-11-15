@@ -104,8 +104,7 @@ describe('terminal UI', () => {
       [callTools(call('c1', 'lookup')), say('Your order is on its way to you today.')],
       5,
     );
-    expect(ui.frame()).toContain(`○ ${t('view.state.idle')}`);
-    expect(ui.frame()).toContain(t('view.input.placeholder'));
+    await ui.shows(`○ ${t('view.state.idle')}`, t('view.input.placeholder'));
     await ui.enter('Where is my order?');
     await ui.shows(
       'Your order is on its way to you today.',
@@ -214,16 +213,15 @@ describe('terminal UI', () => {
   test('A matched command is highlighted and never reaches the model', async () => {
     const ui = await openTui([]);
     await ui.press('/mod');
-    expect(ui.frame()).toContain(t('view.command.list', { names: '' }).trim());
-    expect(ui.frame()).toContain('/model');
-    expect(ui.frame()).toContain('/exit');
+    // Each check waits for the redraw: a fixed pause is not enough on a busy machine.
+    await ui.shows(t('view.command.list', { names: '' }).trim(), '/model', '/exit');
     expect(ui.frame()).not.toContain(t('view.command.hint', { name: '/mod' }));
 
     await ui.press('el');
-    expect(ui.frame()).toContain(t('view.command.hint', { name: '/model' }));
+    await ui.shows(t('view.command.hint', { name: '/model' }));
     expect(ui.frame()).not.toContain(t('view.command.list', { names: '' }).trim());
     await ui.press(' x', KEY.backspace, KEY.backspace);
-    expect(ui.frame()).toContain('> /model▍');
+    await ui.shows('> /model▍');
 
     await ui.press(KEY.enter);
     await ui.shows('scripted/model');
@@ -256,16 +254,16 @@ describe('terminal UI', () => {
     expect(ui.frame()).toContain(t('tui.a2ui.hint'));
 
     await ui.press(KEY.tab);
-    expect(ui.frame()).toContain('> (*) Arrived damaged');
+    await ui.shows('> (*) Arrived damaged');
     await ui.press(KEY.down);
-    expect(ui.frame()).toContain('> ( ) Wrong item');
+    await ui.shows('> ( ) Wrong item');
     await ui.press(KEY.space);
-    expect(ui.frame()).toContain('> (*) Wrong item');
+    await ui.shows('> (*) Wrong item');
     expect(ui.frame()).toContain('  ( ) Arrived damaged');
     await ui.press(KEY.tab, KEY.space);
-    expect(ui.frame()).toContain('> [x] I can send a photo');
+    await ui.shows('> [x] I can send a photo');
     await ui.press(KEY.tab);
-    expect(ui.frame()).toContain('> [ Submit refund ]');
+    await ui.shows('> [ Submit refund ]');
     await ui.press(KEY.enter);
 
     await ui.shows('agent Refund filed.');
@@ -391,5 +389,47 @@ describe('terminal UI', () => {
       expect(keyboard.rawModes).toEqual([true, false]);
     }
     expect(running.llm.requests.length).toBe(0);
+  });
+
+  /**
+   * Feature: Terminal UI
+   * Scenario: The process asking to stop leaves the terminal UI
+   *   Given the terminal UI open on a terminal, or in plain-line mode
+   *   When the signal it was given aborts
+   *   Then it leaves as if the user had, and gives the terminal back
+   * Requirement: docs/specs/issue-3/requirements.md R21.3
+   */
+  test('The process asking to stop leaves the terminal UI', async () => {
+    running = await startHarness({ turns: [say('Hello there.')] });
+    for (const tty of [true, false]) {
+      const keyboard = new FakeKeyboard();
+      const display = new FakeDisplay(tty);
+      const stop = new AbortController();
+      const done = runTui({
+        url: running.url,
+        stdin: keyboard,
+        stdout: display,
+        env: {},
+        signal: stop.signal,
+      });
+      // oxlint-disable-next-line no-await-in-loop -- one run after the other
+      await waitFor(
+        () => display.text.length > 0,
+        () => display.text,
+      );
+      stop.abort();
+      // oxlint-disable-next-line no-await-in-loop -- as above
+      await done;
+      expect(keyboard.rawModes).toEqual(tty ? [true, false] : []);
+    }
+    const early = new AbortController();
+    early.abort();
+    await runTui({
+      url: running.url,
+      stdin: new FakeKeyboard(),
+      stdout: new FakeDisplay(false),
+      env: {},
+      signal: early.signal,
+    });
   });
 });

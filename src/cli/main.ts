@@ -21,6 +21,8 @@ import { parseArgs } from './args.ts';
 export interface TuiHints {
   readonly model?: string;
   readonly effort?: string;
+  /** Take up the task that is already open on the harness. */
+  readonly attach?: boolean;
 }
 
 /** What the command needs from the process it runs in. Tests pass their own. */
@@ -29,11 +31,15 @@ export interface CliIo {
   readonly stderr: { write(text: string): unknown };
   /**
    * Opens the terminal UI against a harness and resolves when the user leaves it. `about`
-   * is what the command knows of the harness it started, for the status line.
+   * is what the command knows of the harness it started, for the status line; `signal`
+   * aborts when the process is asked to stop, and the UI is then left as if by the user.
    */
-  readonly tui: (url: string, about?: TuiHints) => Promise<void>;
-  /** Resolves when the process is asked to stop (Ctrl+C, SIGTERM). */
-  readonly interrupted: () => Promise<void>;
+  readonly tui: (url: string, about?: TuiHints, signal?: AbortSignal) => Promise<void>;
+  /**
+   * Resolves when the process is asked to stop (Ctrl+C, SIGTERM, SIGHUP). Once `signal`
+   * aborts the command no longer waits, and the process's default handling is restored.
+   */
+  readonly interrupted: (signal?: AbortSignal) => Promise<void>;
   /** The user's home directory. Defaults to the real one. */
   readonly home?: string | undefined;
   /** Builds the harness. Defaults to {@link createHarness}. */
@@ -79,6 +85,27 @@ export async function freePort(host: string, first: number): Promise<number> {
   throw new YaahError('cli.no-port', t('cli.error.no-port', { first, last, host }));
 }
 
+/**
+ * Runs the terminal UI until the user leaves it or the process is asked to stop; then
+ * the UI is told to leave, so whatever the caller holds open is released in order.
+ */
+async function terminal(io: CliIo, url: string, about: TuiHints): Promise<void> {
+  const stop = new AbortController();
+  const left = new AbortController();
+  const ui = io.tui(url, about, stop.signal);
+  const asked = async (): Promise<void> => {
+    await io.interrupted(left.signal);
+    stop.abort();
+    await ui;
+  };
+  try {
+    await Promise.race([ui, asked()]);
+  } finally {
+    // The UI has left: a signal during the shutdown that follows is the process's again.
+    left.abort();
+  }
+}
+
 function urlOf(harness: Harness, config: YaahConfig): string {
   const http = harness.ctx.get('http');
   if (http === undefined) {
@@ -106,7 +133,7 @@ async function chat(configPath: string | undefined, io: CliIo): Promise<void> {
   const harness = await (io.start ?? createHarness)({ config });
   try {
     const { llm, effort } = config.model;
-    await io.tui(urlOf(harness, config), {
+    await terminal(io, urlOf(harness, config), {
       model: llm,
       ...(effort === undefined ? {} : { effort }),
     });
@@ -146,7 +173,7 @@ async function dispatch(invocation: Invocation, io: CliIo): Promise<number> {
     io.stderr.write(`${t('cli.usage')}\n`);
     return EXIT.usage;
   } else if (invocation.command === 'tui') {
-    await io.tui(invocation.url);
+    await terminal(io, invocation.url, { attach: invocation.attach });
   } else if (invocation.command === 'serve') {
     await serve(invocation.config, io);
   } else {

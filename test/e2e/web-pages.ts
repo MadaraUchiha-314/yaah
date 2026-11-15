@@ -6,6 +6,7 @@ import type { Locator, Page } from '@playwright/test';
 import { expect } from '@playwright/test';
 
 import { t } from '../../src/kernel/strings.ts';
+import { solidPng } from '../support/png.ts';
 
 /** Where the harness of this run listens. */
 export function harnessUrl(): string {
@@ -53,6 +54,19 @@ export async function modelCalls(page: Page, containing: string): Promise<number
   return typeof body === 'object' && body !== null && 'count' in body ? Number(body.count) : -1;
 }
 
+/** A small PNG a test attaches: an orange square. */
+export function sampleImage(name = 'lamp.png'): { name: string; mimeType: string; buffer: Buffer } {
+  return { name, mimeType: 'image/png', buffer: solidPng(64, [230, 120, 40]) };
+}
+
+/** Chooses files in the composer's image picker, as the attach button's dialog would. */
+export async function attach(
+  page: Page,
+  ...files: readonly { name: string; mimeType: string; buffer: Buffer }[]
+): Promise<void> {
+  await page.locator('[data-slot="attach-input"]').setInputFiles([...files]);
+}
+
 /** The states the design shows, and how to reach each from a freshly opened page. */
 export const STATES: Readonly<Record<string, (page: Page) => Promise<void>>> = {
   empty: async () => {
@@ -90,6 +104,16 @@ export const STATES: Readonly<Record<string, (page: Page) => Promise<void>>> = {
   hostile: async (page) => {
     await say(page, 'Send the hostile surface');
     await expectState(page, 'awaiting-next-interaction');
+  },
+  attachment: async (page) => {
+    await attach(page, sampleImage());
+    await expect(page.locator('[data-slot="attachment"] img')).toBeVisible();
+    await input(page).fill('What is this?');
+  },
+  image: async (page) => {
+    await say(page, 'Please draw a lamp');
+    await expectState(page, 'awaiting-next-interaction');
+    await expect(page.locator('[data-slot="image"] img')).toBeVisible();
   },
   completed: async (page) => {
     await say(page, 'Where is my order?');

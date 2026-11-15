@@ -87,8 +87,13 @@ const FAST: RetryPolicy = {
   maximumAttempts: 4,
 };
 
+/** How long one contract test may take: its waits, plus starting the backend. */
+const TEST_MS = 30_000;
+/** How long a test waits for the backend to reach a state. */
+const WAIT_MS = 20_000;
+
 async function until(condition: () => boolean): Promise<void> {
-  const deadline = Date.now() + 20_000;
+  const deadline = Date.now() + WAIT_MS;
   while (!condition() && Date.now() < deadline) {
     // oxlint-disable-next-line no-await-in-loop -- polling
     await new Promise((resolve) => {
@@ -109,7 +114,11 @@ export function durableContract(
   create: DurableFactory,
   uniqueTask: () => string,
 ): void {
-  const { describe, expect, test } = api;
+  const { describe, expect } = api;
+  // A durable backend may start a worker per test; give each the time its own waits allow.
+  const test = (title: string, body: () => Promise<void>): void => {
+    api.test(title, body, TEST_MS);
+  };
   const build = (state: Recorder, retrySafeTools: boolean): Promise<DurableExecution> =>
     create({
       handlers: state.handlers,

@@ -44,6 +44,23 @@ export function stdioEnvironment(
   return env;
 }
 
+/**
+ * How a server added at run time is started or reached, beyond what a configured entry
+ * can say. Used for the servers an agent plugin declares.
+ */
+export interface McpLaunch {
+  /** stdio: variables set for the process, by value, besides those passed through. */
+  readonly env?: Readonly<Record<string, string>> | undefined;
+  /** stdio: the working directory of the process. */
+  readonly cwd?: string | undefined;
+  /**
+   * http: fixed headers sent with every request. They never reach another origin: the
+   * SDK's transport follows a redirect only within the origin of the request, and that
+   * default (`redirectPolicy: 'same-origin'`) is stated here so it cannot change unseen.
+   */
+  readonly headers?: Readonly<Record<string, string>> | undefined;
+}
+
 function httpUrl(server: McpServerConfig): URL {
   const url = server.url === undefined || !URL.canParse(server.url) ? null : new URL(server.url);
   if (url === null || (url.protocol !== 'http:' && url.protocol !== 'https:')) {
@@ -61,9 +78,15 @@ function httpUrl(server: McpServerConfig): URL {
  * @throws McpConfigError when a stdio server has no command, or an http server has no
  *   `http:` / `https:` URL.
  */
-export async function createTransport(server: McpServerConfig): Promise<Transport> {
+export async function createTransport(
+  server: McpServerConfig,
+  launch: McpLaunch = {},
+): Promise<Transport> {
   if (server.transport === 'http') {
-    return new StreamableHTTPClientTransport(httpUrl(server));
+    return new StreamableHTTPClientTransport(httpUrl(server), {
+      redirectPolicy: 'same-origin',
+      ...(launch.headers === undefined ? {} : { requestInit: { headers: { ...launch.headers } } }),
+    });
   }
   if (server.command === undefined || server.command === '') {
     throw new McpConfigError(t('mcp.config.no-command', { server: server.id }));
@@ -72,7 +95,8 @@ export async function createTransport(server: McpServerConfig): Promise<Transpor
   return new StdioClientTransport({
     command: server.command,
     args: [...server.args],
-    env: stdioEnvironment(server.env),
+    env: { ...stdioEnvironment(server.env), ...launch.env },
+    ...(launch.cwd === undefined ? {} : { cwd: launch.cwd }),
   });
 }
 

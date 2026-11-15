@@ -3,7 +3,8 @@
  * starts it again on the same data directory.
  *
  * Environment: DATA_DIR, PORT, LOG_FILE (one line per model call and per tool run),
- * HANG_FILE (while it exists, tools never return), and optionally TEMPORAL_ADDRESS.
+ * HANG_FILE (while it exists, tools never return), and optionally TEMPORAL_ADDRESS with
+ * TEMPORAL_NAMESPACE and TEMPORAL_KEY_ENV (the variable holding the API key).
  */
 import { appendFileSync, existsSync } from 'node:fs';
 
@@ -64,7 +65,7 @@ const config = parseConfig(
     `[server]\nport = ${env('PORT')}`,
     temporal === ''
       ? '[durable.retry]\ninitial_interval_ms = 5\nmaximum_attempts = 3'
-      : `[durable]\nmode = "temporal-remote"\n[durable.temporal]\naddress = ${JSON.stringify(temporal)}\napi_key_env = "YAAH_NO_KEY"\ntask_queue = ${JSON.stringify(env('TASK_QUEUE'))}`,
+      : `[durable]\nmode = "temporal-remote"\n[durable.temporal]\naddress = ${JSON.stringify(temporal)}\nnamespace = ${JSON.stringify(env('TEMPORAL_NAMESPACE') || 'default')}\napi_key_env = ${JSON.stringify(env('TEMPORAL_KEY_ENV') || 'YAAH_NO_KEY')}\ntask_queue = ${JSON.stringify(env('TASK_QUEUE'))}`,
   ].join('\n'),
   'chaos.toml',
 );

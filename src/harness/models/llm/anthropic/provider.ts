@@ -9,7 +9,7 @@ import type { Locality } from '../../../../kernel/entity.ts';
 import { t } from '../../../../kernel/strings.ts';
 import type { LLM, LlmCapabilities, LlmEvent, LlmRequest } from '../types.ts';
 import { ResponseAccumulator, abortedError, incompleteError, toLlmError } from './events.ts';
-import { PROVIDER, buildParams } from './request.ts';
+import { IMAGE_MEDIA_TYPES, PROVIDER, buildParams } from './request.ts';
 
 /** The `fetch` the SDK calls; tests pass one that replays recorded responses. */
 export type AnthropicFetch = NonNullable<ClientOptions['fetch']>;
@@ -21,6 +21,8 @@ const CLAUDE_5: LlmCapabilities = {
   contextWindow: 1_000_000,
   maxOutput: 128_000,
   input: ['image'],
+  inputUrls: ['image'],
+  inputMediaTypes: IMAGE_MEDIA_TYPES,
   efforts: ['low', 'medium', 'high', 'xhigh', 'max'],
 };
 
@@ -28,6 +30,8 @@ const UNKNOWN: LlmCapabilities = {
   contextWindow: 200_000,
   maxOutput: 16_384,
   input: ['image'],
+  inputUrls: ['image'],
+  inputMediaTypes: IMAGE_MEDIA_TYPES,
   efforts: [],
 };
 
@@ -79,6 +83,9 @@ export function createAnthropicLlm(options: AnthropicLlmOptions): LLM {
     authToken: null,
     baseURL: ANTHROPIC_URL,
     maxRetries: 0,
+    // In a browser the SDK refuses to start without this. Whoever starts a harness in a tab
+    // has already decided whose key or proxy it calls; on Node the flag does nothing.
+    dangerouslyAllowBrowser: true,
     // The SDK's debug log prints request headers; yaah reports failures itself.
     logLevel: 'off',
     ...(options.fetch === undefined ? {} : { fetch: options.fetch }),

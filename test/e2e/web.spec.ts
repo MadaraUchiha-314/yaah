@@ -132,7 +132,8 @@ test('A matched command is highlighted and never reaches the model', async ({ pa
   await input(page).fill('/model');
   await expect(input(page)).toHaveAttribute('data-command', 'true');
   await expect(page.getByText(t('view.command.hint', { name: '/model' }))).toBeVisible();
-  expect(await colour()).not.toBe(plain);
+  // The colour arrives through a transition: wait for it rather than read it once.
+  await expect.poll(colour).not.toBe(plain);
 
   await input(page).press('Enter');
   await expect(page.locator('[data-slot="note"]')).toContainText('scripted/model');

@@ -115,6 +115,69 @@ describe('A2UI', () => {
 
   /**
    * Feature: Surfaces and renderers
+   * Scenario: An <a2ui> tag that is never closed is kept as text
+   *   Given a client that offers the basic catalog
+   *   When the model only mentions the <a2ui> tag, or its reply is cut off inside a block
+   *        before any of the block is valid
+   *   Then the whole answer reaches the client as text, from the tag on too
+   *   And no A2UI part leaves the harness
+   *   When a reply is cut off inside a block of which a surface could be read
+   *   Then that surface leaves the harness and the block's markup is not shown as text
+   * Requirement: docs/specs/issue-3/requirements.md R19.4; abuse case 5
+   */
+  test('An <a2ui> tag that is never closed is kept as text', async () => {
+    const mention = 'To write UI you use the <a2ui> tag. The answer is 42.';
+    const cut = 'Here is the form.\n<a2ui>\nroot = Col';
+    const partial = 'Here is the form.\n<a2ui>\nroot = Column([Text("Refund';
+    running = await startHarness({ turns: [say(mention), say(cut), say(partial)] });
+    const answer = async (): Promise<{ text: string; ui: boolean }> => {
+      const turn = await running?.send('Go', { metadata: offered });
+      const parts = running === undefined ? [] : await artifactParts(running, turn?.task?.id ?? '');
+      const text = parts
+        .map((part) => (part.content?.$case === 'text' ? part.content.value : ''))
+        .join('');
+      return { text, ui: parts.some((part) => part.mediaType === A2UI_MEDIA_TYPE) };
+    };
+    expect(await answer()).toEqual({ text: mention, ui: false });
+    expect(await answer()).toEqual({ text: cut, ui: false });
+    const shown = await answer();
+    expect(shown.ui).toBe(true);
+    expect(shown.text).not.toContain('<a2ui>');
+  });
+
+  /**
+   * Feature: Surfaces and renderers
+   * Scenario: A reply that mentions the <a2ui> tag more than once keeps all its text
+   *   Given a client that offers the basic catalog
+   *   When the model mentions the <a2ui> tag twice and never closes it
+   *   Then the whole answer reaches the client as text
+   *   When the model writes a closed A2UI block, then mentions the tag without closing it
+   *   Then the block's surface leaves the harness and all the text after the block does too
+   * Requirement: docs/specs/issue-3/requirements.md R19.4 (self-review 2, #11)
+   */
+  test('A reply that mentions the <a2ui> tag more than once keeps all its text', async () => {
+    const twice =
+      'Use the <a2ui> tag for UI. Also the <a2ui> tag can hold forms. The answer is 42.';
+    const after = 'Also the <a2ui> tag can hold forms. The answer is 42.';
+    running = await startHarness({ turns: [say(twice), say(`${FORM}\n${after}`)] });
+    const answer = async (): Promise<{ text: string; ui: boolean }> => {
+      const turn = await running?.send('Go', { metadata: offered });
+      const parts = running === undefined ? [] : await artifactParts(running, turn?.task?.id ?? '');
+      const text = parts
+        .map((part) => (part.content?.$case === 'text' ? part.content.value : ''))
+        .join('');
+      return { text, ui: parts.some((part) => part.mediaType === A2UI_MEDIA_TYPE) };
+    };
+    expect(await answer()).toEqual({ text: twice, ui: false });
+    const shown = await answer();
+    expect(shown.ui).toBe(true);
+    expect(shown.text).toContain('Fill it in when ready.');
+    expect(shown.text).toContain(after);
+    expect(shown.text).not.toContain('root =');
+  });
+
+  /**
+   * Feature: Surfaces and renderers
    * Scenario: A user's action on an A2UI surface reaches the model
    *   Given a long-running task that showed an A2UI form
    *   When the client sends the user's action as an A2UI data part

@@ -66,7 +66,21 @@ describe('defaultCompactionStrategy.select', () => {
     expect(range).toEqual({ from: 0, to: 4 });
   });
 
-  test('never replaces a tool call that has no result yet', () => {
+  test('never replaces a tool call of the newest model turn that has no result yet', () => {
+    const list = events(
+      user('u1'),
+      agent('a1', 'l1'),
+      user('u2'),
+      toolCall('c1', 'l2'),
+      // An event that arrives while the call waits does not make it older.
+      { type: 'event', sourceId: 'e1', event: { pad } },
+      { type: 'event', sourceId: 'e2', event: { pad } },
+    );
+    expect(defaultCompactionStrategy.select(list, 150)).toEqual({ from: 0, to: 2 });
+  });
+
+  test('replaces a call an interrupt left without a result, once the model has moved on', () => {
+    // self-review 1, core #6: the abandoned call c1 must not stop compaction for good.
     const list = events(
       user('u1'),
       agent('a1', 'l1'),
@@ -74,8 +88,10 @@ describe('defaultCompactionStrategy.select', () => {
       toolCall('c1', 'l2'),
       user('u3'),
       agent('a3', 'l3'),
+      user('u4'),
+      agent('a4', 'l4'),
     );
-    expect(defaultCompactionStrategy.select(list, 150)).toEqual({ from: 0, to: 2 });
+    expect(defaultCompactionStrategy.select(list, 250)).toEqual({ from: 0, to: 6 });
   });
 
   test('never replaces a pinned message', () => {

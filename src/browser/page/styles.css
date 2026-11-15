@@ -1,0 +1,6 @@
+/*
+ * The page of the browser build wears the web chat's stylesheet. The chat's components
+ * live outside this page's directory, so Tailwind is told where to find their classes.
+ */
+@import '../../surface/renderer/web/styles.css';
+@source '../../surface/renderer/web';

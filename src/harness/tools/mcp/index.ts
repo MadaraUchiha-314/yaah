@@ -10,14 +10,43 @@
 import type { Context } from 'cordis';
 
 import type { McpServerConfig } from '../../../kernel/config-types.ts';
+import { YaahError } from '../../../kernel/errors.ts';
+import { t } from '../../../kernel/strings.ts';
 import type { BackoffConfig } from './backoff.ts';
 import { resolveBackoff } from './backoff.ts';
 import type { McpEvents, McpSkipReason } from './connection.ts';
 import { ServerConnection } from './connection.ts';
+import { serverIdsClash } from './naming.ts';
 import type { McpSession } from './session.ts';
 import { openSession } from './session.ts';
+import type { McpLaunch } from './transport.ts';
+
+export type { McpLaunch } from './transport.ts';
+
+/** The MCP service: adds servers after start-up. Used by the agent-plugin loader. */
+export interface McpService {
+  /**
+   * Connects to `server` the way a configured server is connected — same retries, same
+   * tool naming, same events — and resolves once the first attempt has succeeded or
+   * failed. Never rejects on account of the server.
+   *
+   * @returns a function that closes the connection and removes the server's tools.
+   * @throws YaahError `mcp.server-id` when the id is in use (see {@link McpService.hasServer}):
+   *   a second server under one id could answer for the first.
+   */
+  addServer(server: McpServerConfig, launch?: McpLaunch): Promise<() => Promise<void>>;
+  /**
+   * Whether a server is connected or being connected under `id`, or under an id whose
+   * tools would bear the same names.
+   */
+  hasServer(id: string): boolean;
+}
 
 declare module 'cordis' {
+  interface Context {
+    /** MCP servers added at run time. */
+    mcp: McpService;
+  }
   interface Events {
     /** An MCP server is connected and its tools, named by `toolIds`, are registered. */
     'tools/mcp-connected'(serverId: string, toolIds: readonly string[]): void;
@@ -71,29 +100,50 @@ function events(ctx: Context): McpEvents {
 
 /**
  * Starts one connection per configured server and waits — at most `startupWaitMs` — for
- * their first attempts. Never throws on account of a server.
+ * their first attempts. Never throws on account of a server. Provides the `mcp` service.
  */
 export async function apply(ctx: Context, config: McpPluginConfig = {}): Promise<void> {
   const requestTimeoutMs = config.requestTimeoutMs ?? DEFAULT_REQUEST_TIMEOUT_MS;
-  const shared = {
-    backoff: resolveBackoff(config.backoff),
-    registry: ctx.entities,
-    events: events(ctx),
-    open: (server: McpServerConfig): Promise<McpSession> =>
-      openSession(server, { requestTimeoutMs }),
-  };
-  const connections = ctx.config.mcp.servers.map(
-    (server: McpServerConfig) => new ServerConnection({ ...shared, server }),
+  const shared = { backoff: resolveBackoff(config.backoff), registry: ctx.entities };
+  const connect = (server: McpServerConfig, launch?: McpLaunch): ServerConnection =>
+    new ServerConnection({
+      ...shared,
+      events: events(ctx),
+      server,
+      open: (entry: McpServerConfig): Promise<McpSession> =>
+        openSession(entry, { requestTimeoutMs, launch }),
+    });
+  const connections = new Map<ServerConnection, string>(
+    ctx.config.mcp.servers.map((server: McpServerConfig) => [connect(server), server.id]),
   );
+  const hasServer = (id: string): boolean =>
+    [...connections.values()].some((known: string) => serverIdsClash(known, id));
   ctx.effect(() => async (): Promise<void> => {
-    await Promise.all(connections.map((connection: ServerConnection) => connection.stop()));
+    await Promise.all(
+      [...connections.keys()].map((connection: ServerConnection) => connection.stop()),
+    );
+  });
+  ctx.provide('mcp', {
+    hasServer,
+    addServer: async (server: McpServerConfig, launch?: McpLaunch) => {
+      if (hasServer(server.id)) {
+        throw new YaahError('mcp.server-id', t('mcp.error.server-id', { server: server.id }));
+      }
+      const connection = connect(server, launch);
+      connections.set(connection, server.id);
+      await connection.start();
+      return async (): Promise<void> => {
+        connections.delete(connection);
+        await connection.stop();
+      };
+    },
   });
   let timer: ReturnType<typeof setTimeout> | undefined;
   const waited = new Promise<void>((resolve: () => void) => {
     timer = setTimeout(resolve, config.startupWaitMs ?? DEFAULT_STARTUP_WAIT_MS);
   });
   const started = Promise.all(
-    connections.map((connection: ServerConnection) => connection.start()),
+    [...connections.keys()].map((connection: ServerConnection) => connection.start()),
   );
   await Promise.race([started, waited]);
   clearTimeout(timer);

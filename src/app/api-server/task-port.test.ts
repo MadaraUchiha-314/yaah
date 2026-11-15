@@ -65,6 +65,17 @@ describe('A2aTaskPort', () => {
     expect(hub.head('t1')).toBe(2);
   });
 
+  test('a function given as the model is applied to the current one, losing no change', async () => {
+    const { port } = setup();
+    const add = (taskId: string) => (model: ReturnType<typeof emptyTaskModel>) => ({
+      ...model,
+      subTasks: [...model.subTasks, { taskId, contextId: 'c', agent: 'a' }],
+    });
+    await Promise.all([port.setModel('t1', 'k1', add('s1')), port.setModel('t1', 'k2', add('s2'))]);
+    const { model } = await port.load('t1');
+    expect(model.subTasks.map((ref) => ref.taskId)).toEqual(['s1', 's2']);
+  });
+
   test('settings and the task model live in the task metadata', async () => {
     const { store, port } = setup();
     port.updateSettings('t1', { longRunning: true, llm: 'openai/x', effort: 'high' });

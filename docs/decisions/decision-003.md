@@ -6,7 +6,7 @@
 
 ## Decision
 
-Between turns a long-running task is in `TASK_STATE_INPUT_REQUIRED`. What it is actually waiting for (`idle`, `awaiting-user`) travels in the status message's metadata, defined by the `task-lifecycle` extension. A client ends the task with a message carrying `{ action: "complete" }`.
+Between turns a long-running task is in `TASK_STATE_INPUT_REQUIRED`. What it is actually waiting for (`awaiting-next-interaction`, `awaiting-user-input`) travels in the status message's metadata, defined by the `task-lifecycle` extension. A client ends the task with a message carrying `{ action: "complete" }`.
 
 ## Alternative considered
 

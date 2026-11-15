@@ -14,7 +14,7 @@ import { forgetModules, useDom } from './dom.ts';
 
 export type { RenderResult } from '@testing-library/react';
 export type { ActionMessage } from '../../src/surface/renderer/web/a2ui/stage.ts';
-export type { Chat, ChatSession } from '../../src/surface/renderer/web/use-chat.ts';
+export type { Chat, ChatSession, SpeechPlayer } from '../../src/surface/renderer/web/use-chat.ts';
 
 // The server side loads Lit too (through `@a2ui/agent`), and Lit decides once, when it is
 // evaluated, whether it has a browser. A server test that ran first would leave the web
@@ -34,6 +34,9 @@ export const { ChatScreen } = await import('../../src/surface/renderer/web/chat.
 export const { A2uiBlock, SurfaceBoundary } =
   await import('../../src/surface/renderer/web/components/a2ui-block.tsx');
 export const { Composer } = await import('../../src/surface/renderer/web/components/composer.tsx');
+export const { FileBlock } =
+  await import('../../src/surface/renderer/web/components/file-block.tsx');
+export const { useVoiceInput } = await import('../../src/surface/renderer/web/use-voice.ts');
 export const { StatePill } =
   await import('../../src/surface/renderer/web/components/state-pill.tsx');
 export const { TaskHeader } =

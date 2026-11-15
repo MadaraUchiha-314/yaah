@@ -6,6 +6,7 @@ import { join } from 'node:path';
 import type { TemporalLink } from '../../src/app/durable/temporal/connection.ts';
 import { connectRemote, startEmbedded } from '../../src/app/durable/temporal/connection.ts';
 import { TemporalDurable } from '../../src/app/durable/temporal/durable.ts';
+import { Redactor } from '../../src/kernel/redactor.ts';
 import { durableContract } from '../../src/testing/durable-contract.ts';
 import { freePort } from '../support/ports.ts';
 
@@ -46,6 +47,7 @@ durableContract(
       limits: deps.limits,
       retry: deps.retry,
       isRetrySafe: deps.isRetrySafe,
+      redactor: new Redactor(),
     });
   },
   () => `contract-${run}-${String(counter + 1)}`,

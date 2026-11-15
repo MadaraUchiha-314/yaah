@@ -2,7 +2,7 @@ import { describe, expect, test } from 'bun:test';
 import { fileURLToPath } from 'node:url';
 
 import { bootstrap } from '../../src/kernel/bootstrap.ts';
-import { PluginLoadError } from '../../src/kernel/errors.ts';
+import { ConfigError, PluginLoadError } from '../../src/kernel/errors.ts';
 
 const fixture = (name: string): string =>
   fileURLToPath(new URL(`../fixtures/compositions/${name}`, import.meta.url));
@@ -67,6 +67,36 @@ describe('composition', () => {
     });
     expect(harness.ctx.entities.resolve(FIXTURE_PROMPT).template).toBe('from operator');
     await harness.dispose();
+  });
+
+  /**
+   * Feature: Plugin kernel and composition
+   * Scenario: An override for an entry the composition does not have stops start-up
+   *   Given a composition with no entry "fixtrue"
+   *   When the operator overrides the entry "fixtrue" along with the entry "fixture"
+   *   Then start-up fails with a configuration error naming the file, the key and the id
+   *   And nothing is left running
+   * Requirement: docs/specs/issue-3/requirements.md R1.3
+   */
+  test('An override for an entry the composition does not have stops start-up', async () => {
+    const error = await failure(() =>
+      bootstrap({
+        root: fixture('root.yml'),
+        overrides: [
+          { id: 'fixture', config: { text: 'from operator' } },
+          { id: 'fixtrue', disabled: true },
+        ],
+      }),
+    );
+    expect(error).toBeInstanceOf(ConfigError);
+    if (error instanceof ConfigError) {
+      expect([error.code, error.file, error.key]).toEqual([
+        'config.override-unknown',
+        'config.toml',
+        'overrides',
+      ]);
+      expect(error.message).toContain('"fixtrue"');
+    }
   });
 
   /**

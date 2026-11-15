@@ -78,6 +78,7 @@ export async function startTemporal(
     limits: ctx.taskRuntime.limits,
     retry: ctx.config.durable.retry,
     isRetrySafe,
+    redactor: ctx.redactor,
   });
   return durable;
 }

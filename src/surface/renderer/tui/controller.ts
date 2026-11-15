@@ -9,6 +9,9 @@ import type { TaskView, TranscriptItem } from '../../view.ts';
 import { EMPTY_VIEW, isOpen } from '../../view.ts';
 import type { A2uiAction } from './a2ui-model.ts';
 import { A2uiModel } from './a2ui-model.ts';
+import type { Followable } from '../../attach.ts';
+import { attach } from '../../attach.ts';
+import { VoiceRecorder } from './recorder.ts';
 
 /** The part of a {@link HarnessSession} the terminal UI uses. */
 export type TuiSession = Pick<
@@ -24,7 +27,15 @@ export interface TuiState {
   readonly busy: boolean;
   /** True once the user has left; nothing changes afterwards. */
   readonly exited: boolean;
+  /**
+   * Whether a voice message is being recorded, and how it ends: `hold` when releasing
+   * the key ends it, `toggle` when pressing the key again does.
+   */
+  readonly recording: 'off' | 'hold' | 'toggle';
 }
+
+/** The part of a {@link VoiceRecorder} the terminal UI uses. */
+export type TuiRecorder = Pick<VoiceRecorder, 'start' | 'stop'>;
 
 /** The command that leaves the interface. */
 export const EXIT_COMMAND = '/exit';
@@ -39,15 +50,38 @@ export class TuiController {
   readonly session: TuiSession;
   readonly #listeners = new Set<() => void>();
   readonly #models = new Map<string, A2uiModel>();
-  #state: TuiState = { view: EMPTY_VIEW, busy: false, exited: false };
+  readonly #recorder: TuiRecorder;
+  #state: TuiState = { view: EMPTY_VIEW, busy: false, exited: false, recording: 'off' };
+  /** Set while the recorder is starting: what to do with the recording once it runs. */
+  #starting: { stop: boolean; send: boolean } | null = null;
   #notes = 0;
   /** Counts turns and closings; a stream started under an older count is void. */
   #generation = 0;
   /** The generation of the turn whose stream is still being read, or null. */
   #streaming: number | null = null;
+  /** Stops following other surfaces. */
+  #detach: () => void = () => undefined;
 
-  constructor(session: TuiSession) {
+  /** @param recorder Records voice messages; the system's recorder unless given. */
+  constructor(session: TuiSession, recorder: TuiRecorder = new VoiceRecorder()) {
     this.session = session;
+    this.#recorder = recorder;
+  }
+
+  /**
+   * Shows what other surfaces do on the current task while this one is not in a turn.
+   * With `adopt`, it first takes up the task that is already open on the harness.
+   */
+  attach(session: Followable, adopt = false): void {
+    this.#detach();
+    this.#detach = attach(session, {
+      adopt,
+      current: () => this.#state.view,
+      busy: () => this.#state.busy || this.#state.exited,
+      show: (view: TaskView) => {
+        this.#set({ view });
+      },
+    });
   }
 
   /** The current state. The same object until something changes. */
@@ -85,6 +119,65 @@ export class TuiController {
   async act(action: A2uiAction): Promise<void> {
     const a2uiAction = { version: '1.0', action };
     await this.#turn(() => this.session.send({ text: '', a2uiAction }, this.#state.view));
+  }
+
+  /**
+   * Starts recording a voice message. When no recorder program exists, or it cannot
+   * start, a note says so and nothing else changes: typing works as before.
+   *
+   * @param hold True when the key that started it will report its release.
+   */
+  async startVoice(hold: boolean): Promise<void> {
+    const { busy, exited, recording } = this.#state;
+    if (busy || exited || recording !== 'off' || this.#starting !== null) {
+      return;
+    }
+    this.#starting = { stop: false, send: true };
+    // At its size limit the recording ends itself, and is sent as if the user stopped it.
+    const outcome = await this.#recorder.start(() => {
+      void this.stopVoice();
+    });
+    const asked = this.#starting;
+    this.#starting = null;
+    if (outcome.ok && this.#state.exited) {
+      // The user left while the recorder was starting: it must not outlive the interface.
+      void this.#recorder.stop();
+      return;
+    }
+    if (!outcome.ok) {
+      this.note(
+        outcome.reason === 'no-recorder'
+          ? t('tui.voice.unavailable')
+          : t('tui.voice.failed', { reason: outcome.message }),
+      );
+      return;
+    }
+    this.#set({ recording: hold ? 'hold' : 'toggle' });
+    if (asked.stop) {
+      // The key was released before the recorder was running.
+      await this.stopVoice(asked.send);
+    }
+  }
+
+  /** Ends the recording; sends it as the user's turn unless `send` is false. */
+  async stopVoice(send = true): Promise<void> {
+    if (this.#starting !== null) {
+      this.#starting = { stop: true, send };
+      return;
+    }
+    if (this.#state.recording === 'off') {
+      return;
+    }
+    this.#set({ recording: 'off' });
+    const file = await this.#recorder.stop();
+    if (!send) {
+      return;
+    }
+    if (file === null) {
+      this.note(t('tui.voice.empty'));
+      return;
+    }
+    await this.#turn(() => this.session.send({ text: '', files: [file] }, this.#state.view));
   }
 
   /** Completes the open task. Does nothing when there is none. */
@@ -130,7 +223,11 @@ export class TuiController {
   /** Leaves the interface. */
   exit(): void {
     if (!this.#state.exited) {
-      this.#set({ exited: true });
+      if (this.#state.recording !== 'off') {
+        void this.#recorder.stop();
+      }
+      this.#detach();
+      this.#set({ exited: true, recording: 'off' });
       for (const model of this.#models.values()) {
         model.dispose();
       }
@@ -180,7 +277,12 @@ export class TuiController {
       const closed = await end(view);
       // From here on the views of a turn still streaming are dropped.
       this.#generation += 1;
-      this.#set({ view: busy ? { ...this.#state.view, state: closed.state } : closed });
+      const shown = busy ? { ...this.#state.view, state: closed.state } : closed;
+      // An answer cut off by the close will not be finished: it is no longer streaming.
+      const items = shown.items.map((item): TranscriptItem =>
+        item.kind === 'agent' && item.streaming ? { ...item, streaming: false } : item,
+      );
+      this.#set({ view: { ...shown, items } });
     } catch (error) {
       this.#fail(error);
     } finally {

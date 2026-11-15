@@ -43,38 +43,53 @@ export interface ContextInputs {
  * Makes third-party text safe to show a model as a description: control characters are
  * removed and the text is capped. It is still data — the system prompt says so.
  */
-export function sanitizeDescription(text: string): string {
+export function sanitizeDescription(text: string, max: number = MAX_DESCRIPTION_LENGTH): string {
   // oxlint-disable-next-line no-control-regex -- removing control characters is the point
   const cleaned = text.replaceAll(/[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F-\u009F]/gu, '');
-  return cleaned.length > MAX_DESCRIPTION_LENGTH
-    ? cleaned.slice(0, MAX_DESCRIPTION_LENGTH)
-    : cleaned;
+  return cleaned.length > max ? cleaned.slice(0, max) : cleaned;
 }
 
 function declare(tool: Tool): ToolDeclaration {
   const schema: JsonObject = tool.inputSchema;
   return {
     name: tool.ref.id,
-    description: sanitizeDescription(tool.description),
+    description: sanitizeDescription(tool.description, tool.maxDescriptionLength),
     inputSchema: schema,
   };
 }
 
+/** The longest short caller-supplied value — a name, an id, a criterion — shown as data. */
+const MAX_LABEL_LENGTH = 200;
+
+/**
+ * Shows a value a caller supplied as data: on one line, capped, and quoted as a JSON
+ * string, so that no newline, heading or closing quote in it can pass for the section's
+ * own text.
+ */
+function quoted(text: string, max: number = MAX_DESCRIPTION_LENGTH): string {
+  const line = sanitizeDescription(text).replaceAll(/\s+/gu, ' ').trim();
+  return JSON.stringify(line.length > max ? line.slice(0, max) : line);
+}
+
+/** One line per participant, led by the id the model names them by. */
 function participantLines(participants: readonly Participant[]): string {
   return participants
-    .map(
-      (participant: Participant) =>
-        `- ${participant.displayName ?? participant.id} (${participant.kind}): ${participant.role}`,
-    )
+    .map((participant: Participant) => {
+      const { displayName, id, kind, role } = participant;
+      const called = displayName === undefined ? '' : ` — ${quoted(displayName, MAX_LABEL_LENGTH)}`;
+      return `- ${quoted(id, MAX_LABEL_LENGTH)}${called} (${kind}): ${role}`;
+    })
     .join('\n');
 }
 
 function taskSection(registry: EntityRegistry, model: TaskModel): string {
   const task = renderPrompt(registry, 'task', {
-    name: model.name,
-    goal: model.goal,
-    description: model.description,
-    acceptanceCriteria: model.acceptanceCriteria.join('; '),
+    name: quoted(model.name, MAX_LABEL_LENGTH),
+    goal: quoted(model.goal),
+    description: quoted(model.description),
+    acceptanceCriteria: model.acceptanceCriteria
+      .map((criterion: string) => quoted(criterion, MAX_LABEL_LENGTH))
+      .join('; '),
   });
   const roles = renderPrompt(registry, 'roles', {
     participants: participantLines(model.participants),
@@ -134,7 +149,21 @@ export function buildContext(inputs: ContextInputs): LlmRequest {
   };
 }
 
+/** What an inline file is counted as, in characters: about a thousand tokens. */
+const FILE_ESTIMATE = 'x'.repeat(4096);
+
+/** Counts an inline file as a fixed size: its base64 length says nothing about its tokens. */
+function withoutFileData(_key: string, value: unknown): unknown {
+  const inline =
+    typeof value === 'object' &&
+    value !== null &&
+    'kind' in value &&
+    value.kind === 'base64' &&
+    'data' in value;
+  return inline ? { kind: 'base64', data: FILE_ESTIMATE } : value;
+}
+
 /** A rough token count for a request: four characters per token. */
 export function estimateTokens(value: unknown): number {
-  return Math.ceil(JSON.stringify(value).length / 4);
+  return Math.ceil(JSON.stringify(value, withoutFileData).length / 4);
 }

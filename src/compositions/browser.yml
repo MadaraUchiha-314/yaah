@@ -1,0 +1,37 @@
+# Root composition of the browser build: the harness in a tab, with no yaah server.
+# `bun run build:browser` resolves this file, includes and all, into a static list of
+# plugin modules, and fails — naming the entry — if one of them needs Node.
+#
+# Against the server build: the prompts are bundled instead of read from a directory, the
+# stores are in memory, an in-memory target takes the place of the HTTP listener, and what
+# needs a file system or a child process (o11y, a2ui, skills, agent plugins) is left out.
+
+# Replaces shared/core.yml's system-prompt: the same prompt entities, from the bundle.
+- id: system-prompt
+  name: ../browser/plugins/prompts.ts
+# Replaces shared/core.yml's core: the same stores, in memory — a tab has no SQLite.
+- id: core
+  name: ../browser/plugins/core.ts
+- id: models-layer
+  name: '@cordisjs/include'
+  config:
+    path: ./shared/models.yml
+- id: app-layer
+  name: '@cordisjs/include'
+  config:
+    path: ./shared/app.yml
+# Replaces shared/http.yml's listener: surfaces and the `self` sub-agent reach the request
+# handler through the in-memory A2A transport.
+- id: harness-target
+  name: ../browser/plugins/target.ts
+- id: commands
+  name: ../harness/commands/index.ts
+- id: a2a-agents
+  name: ../harness/a2a/index.ts
+# Streamable HTTP servers only: the stdio transport starts a child process.
+- id: tools-mcp
+  name: ../harness/tools/mcp/index.ts
+- id: channels
+  name: ../harness/channels/index.ts
+- id: hooks
+  name: ../harness/hooks/index.ts

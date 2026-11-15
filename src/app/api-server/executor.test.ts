@@ -8,9 +8,18 @@ import type { DurableExecution } from '../durable/types.ts';
 import { Inbox } from '../inbox/inbox.ts';
 import { createMemoryPersistence } from '../../harness/core/memory-persistence.ts';
 import { StreamHub } from '../stream-hub.ts';
+import { ConnectedCaller } from './caller.ts';
 import { HarnessExecutor } from './executor.ts';
+import { RequestBusManager } from './request-buses.ts';
 import { A2aTaskPort } from './task-port.ts';
 import { MemoryTaskStore } from './task-store.ts';
+
+/** A bus of a request's own: the one an overlapping request gets. */
+function ownBus(): ExecutionEventBus {
+  const buses = new RequestBusManager();
+  buses.createOrGetByTaskId('t1');
+  return buses.createOrGetByTaskId('t1');
+}
 
 function collect(bus: ExecutionEventBus): {
   events: AgentExecutionEvent[];
@@ -27,7 +36,7 @@ function collect(bus: ExecutionEventBus): {
   return { events, finished: () => done };
 }
 
-function request(taskId: string, task?: Task): RequestContext {
+function request(taskId: string, task?: Task, closed?: AbortSignal): RequestContext {
   const message = {
     messageId: `m-${String(Math.random())}`,
     contextId: 'c1',
@@ -49,7 +58,7 @@ function request(taskId: string, task?: Task): RequestContext {
     { tenant: '', message, configuration: undefined, metadata: undefined },
     taskId,
     'c1',
-    new ServerCallContext(),
+    new ServerCallContext(closed === undefined ? {} : { user: new ConnectedCaller(closed) }),
     task,
   );
 }
@@ -161,6 +170,24 @@ describe('HarnessExecutor', () => {
       TaskState.TASK_STATE_FAILED,
     );
     expect(seen.finished()).toBe(true);
+  });
+
+  test('stops forwarding to a bus of its own when the caller goes away', async () => {
+    // The run never says anything more, and the store never changes.
+    const { executor } = setup(() => undefined, 60_000);
+    const closed = new AbortController();
+    const bus = ownBus();
+    const seen = collect(bus);
+    const done = executor.execute(request('t1', undefined, closed.signal), bus);
+    setTimeout(() => {
+      closed.abort();
+    }, 10);
+    await done;
+    expect(seen.finished()).toBe(true);
+    // A caller gone before forwarding begins is not waited for either.
+    const gone = new AbortController();
+    gone.abort();
+    await executor.execute(request('t1', undefined, gone.signal), ownBus());
   });
 
   test('cancelTask on an unknown task finishes quietly', async () => {

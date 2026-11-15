@@ -392,12 +392,14 @@ describe('Composer', () => {
     expect(container.ownerDocument.activeElement).toBe(field);
   });
 
-  test('attach and microphone are present, disabled, and say they come later', () => {
+  test('attach and microphone are real controls, each named for what it does', () => {
     const { container } = composer();
-    for (const key of ['web.attach.label', 'web.voice.label']) {
+    for (const key of ['web.attach.label', 'web.voice.start']) {
       const button = container.querySelector(`button[aria-label="${t(key)}"]`);
-      expect(button?.getAttribute('aria-disabled')).toBe('true');
+      expect(button === null).toBe(false);
+      expect(button?.hasAttribute('disabled')).toBe(false);
     }
-    expect(t('web.attach.label')).toContain(t('web.later'));
+    // No spoken answers are offered unless the chat says the harness has a voice.
+    expect(container.querySelector('[data-slot="speak-toggle"]')).toBeNull();
   });
 });

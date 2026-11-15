@@ -316,7 +316,7 @@ suite. `T<n>` refers to a row of the testing plan's matrix.
   - _Requirements:_ R20.1–20.5, R19.4
   - _Test:_ T4 — `test/e2e/web.spec.ts` (Playwright): send, stream, form, input
     request, complete, cancel, command highlight
-- [ ] 39. Visual and accessibility pass
+- [x] 39. Visual and accessibility pass
   - Screenshots per state and theme against the prototypes; axe; keyboard-only flow.
   - _Depends on:_ 37, 38
   - _Requirements:_ R20.6, R21.2
@@ -343,14 +343,14 @@ suite. `T<n>` refers to a row of the testing plan's matrix.
   - _Requirements:_ R18.2
   - _Test:_ T2 — `Scenario: One trace spans the A2A call, the model call and the tool
     call`
-- [ ] 43. Fail-closed start-up and security sweep
+- [x] 43. Fail-closed start-up and security sweep
   - Missing credential, invalid composition, plugin validation; path containment
     helpers; run the whole T8 suite.
   - _Depends on:_ 40
   - _Requirements:_ Security considerations — fail closed; abuse case 11
   - _Test:_ T8 — `bun run test:security` (all twelve abuse cases and the fail-closed
     list)
-- [ ] 44. Live suite, demo and documentation
+- [x] 44. Live suite, demo and documentation
   - `test:live`, `demo:up`, `demo:record`, `demo:down`; the chaos test against
     Temporal Cloud; README, `docs/architecture/`, `docs/capabilities/`,
     `docs/decisions/` for the ten design decisions.
@@ -360,28 +360,28 @@ suite. `T<n>` refers to a row of the testing plan's matrix.
 
 ### Slice 8 — extensibility (P1)
 
-- [ ] 45. Skills
+- [x] 45. Skills
   - Parser and validator for the Agent Skills specification; `load_skill`,
     `read_skill_file`; path containment.
   - _Depends on:_ 14
   - _Requirements:_ R9.1, R9.4; abuse case 11
   - _Test:_ T2, T8 — `Scenario: A skill body is loaded only when used`; negative test:
     path escape
-- [ ] 46. Agent plugins and hooks
+- [x] 46. Agent plugins and hooks
   - `plugin.json` and `mcp.json` with the vendored schemas; the hooks service;
     MCP-tool hooks and prompt commands from the client-extension directory.
   - _Depends on:_ 45, 25, 27
   - _Requirements:_ R9.2–9.4
   - _Test:_ T2 — `Scenario: An agent plugin registers its skills and MCP servers` ·
     `Scenario: A hook denies a tool call`; the conformance fixtures of the specification
-- [ ] 47. Participants and channels
+- [x] 47. Participants and channels
   - `Channel` entity, `ChannelManager`, the channels extension,
     `message_participant`, `create_task_for_participant`, the roles prompt.
   - _Depends on:_ 26
   - _Requirements:_ R12.1–12.5
   - _Test:_ T2 — `Scenario: A message from a non-participant is rejected`; a small-input
     round trip; a task created for a participant
-- [ ] 48. Heartbeat
+- [x] 48. Heartbeat
   - Timer plugin, pending-item re-delivery, `task.stalled`.
   - _Depends on:_ 22
   - _Requirements:_ R16.1–16.3
@@ -389,14 +389,14 @@ suite. `T<n>` refers to a row of the testing plan's matrix.
 
 ### Slice 9 — modalities and builds (P1)
 
-- [ ] 49. Multi-modal input and image output
+- [x] 49. Multi-modal input and image output
   - Image and audio parts through to the model or a clear refusal; `generate_image`;
     image artifacts in both renderers.
   - _Depends on:_ 23, 38
   - _Requirements:_ R24.1, R24.2
   - _Test:_ T2, T4 — an image turn; an unsupported-modality reply; an image artifact
     rendered
-- [ ] 50. Speech and voice
+- [x] 50. Speech and voice
   - `SpeechToText`, `TextToSpeech` and OpenAI implementations; the voice extension;
     microphone button in the web UI; hold-to-talk with a toggle fallback in the TUI;
     streamed audio playback.
@@ -404,13 +404,13 @@ suite. `T<n>` refers to a row of the testing plan's matrix.
   - _Requirements:_ R24.3–24.6
   - _Test:_ T2, T4 — `Scenario: An audio turn is transcribed for a text-only model`;
     audio chunks arrive before the final event; microphone-denied path
-- [ ] 51. System One and Langfuse
+- [x] 51. System One and Langfuse
   - `SystemOne` interface, contract suite, the OpenAI Decisions implementation, the
     opt-in inbox triage; the Langfuse exporter preset.
   - _Depends on:_ 18, 42
   - _Requirements:_ R7.5, R7.6, R18.5
   - _Test:_ T3, T2 — `systemOne.contract.ts`; triage on and off; exporter headers
-- [ ] 52. Browser build
+- [x] 52. Browser build
   - `browser.yml`, `build:browser`, the in-memory SDK transport, the node-only plugin
     check; update the P1 documentation.
   - _Depends on:_ 38, 26

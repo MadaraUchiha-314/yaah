@@ -166,6 +166,37 @@ describe('A2A API server', () => {
 
   /**
    * Feature: A2A API server
+   * Scenario: The agent card lists what plugins add after the listener started
+   *   Given a running harness whose card has been read once
+   *   When a plugin adds an extension
+   *   Then the card read next lists it, over HTTP and through the request handler
+   *   And when the plugin removes it again, the card no longer lists it
+   * Requirement: docs/specs/issue-3/requirements.md R13.3
+   */
+  test('The agent card lists what plugins add after the listener started', async () => {
+    running = await startHarness({});
+    const uri = 'https://example.test/extensions/late/v1';
+    const listed = async (): Promise<boolean> => {
+      const response = await fetch(`${running?.url ?? ''}/.well-known/agent-card.json`);
+      const card: unknown = await response.json();
+      return JSON.stringify(card).includes(uri);
+    };
+    expect(await listed()).toBe(false);
+    const remove = running.harness.ctx.a2a.addExtension({
+      uri,
+      description: 'added late',
+      required: false,
+      params: {},
+    });
+    expect(await listed()).toBe(true);
+    const handler = running.harness.ctx.a2a.handlerFor(running.url);
+    expect(JSON.stringify(await handler.getAgentCard())).toContain(uri);
+    remove();
+    expect(await listed()).toBe(false);
+  });
+
+  /**
+   * Feature: A2A API server
    * Scenario: A required unsupported extension is rejected
    *   Given a harness whose card marks an extension as required
    *   When a client sends a message without declaring that extension

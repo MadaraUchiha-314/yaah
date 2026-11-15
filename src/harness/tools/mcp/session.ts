@@ -10,6 +10,7 @@ import type { McpServerConfig } from '../../../kernel/config-types.ts';
 import type { JsonObject } from '../../../kernel/json.ts';
 import { currentTraceparent } from '../../../kernel/trace-context.ts';
 import type { McpCallResult } from './result.ts';
+import type { McpLaunch } from './transport.ts';
 import { createTransport } from './transport.ts';
 
 /** A tool as a server lists it. Everything but the name is optional: servers vary. */
@@ -46,6 +47,8 @@ export interface McpSession {
 export interface SessionOptions {
   /** How long one request may take before it fails as timed out, in milliseconds. */
   readonly requestTimeoutMs: number;
+  /** Process and header settings of a server added at run time. */
+  readonly launch?: McpLaunch | undefined;
 }
 
 /** How this harness names itself to servers. */
@@ -65,7 +68,7 @@ export async function openSession(
   server: McpServerConfig,
   options: SessionOptions,
 ): Promise<McpSession> {
-  const transport = await createTransport(server);
+  const transport = await createTransport(server, options.launch);
   const client = new Client(CLIENT_INFO, {
     jsonSchemaValidator: new CfWorkerJsonSchemaValidator(),
   });

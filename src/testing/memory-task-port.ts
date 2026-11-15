@@ -1,4 +1,10 @@
-import type { TaskPort, TaskSnapshot, TaskStatusUpdate } from '../harness/core/task-port.ts';
+import type {
+  ModelChange,
+  TaskPort,
+  TaskSnapshot,
+  TaskStatusUpdate,
+} from '../harness/core/task-port.ts';
+import { applyModelChange } from '../harness/core/task-port.ts';
 import type { ContentPart, StepKey, TaskId, TaskModel } from '../harness/core/types.ts';
 import type { JsonObject } from '../kernel/json.ts';
 
@@ -34,6 +40,8 @@ export class MemoryTaskPort implements TaskPort {
   readonly history: (TaskStatusUpdate & { readonly taskId: TaskId })[] = [];
   /** Model output stored per step, by `<taskId>/<stepKey>`. */
   readonly replies: Map<string, readonly ContentPart[]> = new Map();
+  /** Artifacts stored per step, by `<taskId>/<stepKey>`. */
+  readonly artifacts: Map<string, readonly ContentPart[]> = new Map();
   readonly #tasks = new Map<TaskId, TaskSnapshot>();
   readonly #applied = new Set<StepKey>();
 
@@ -76,12 +84,22 @@ export class MemoryTaskPort implements TaskPort {
     return Promise.resolve();
   }
 
-  async setModel(taskId: TaskId, key: StepKey, model: TaskModel): Promise<void> {
-    if (this.#applied.has(key)) {
-      return;
+  addArtifact(taskId: TaskId, key: StepKey, parts: readonly ContentPart[]): Promise<void> {
+    this.artifacts.set(`${taskId}/${key}`, parts);
+    return Promise.resolve();
+  }
+
+  setModel(taskId: TaskId, key: StepKey, model: ModelChange): Promise<void> {
+    const task = this.#tasks.get(taskId);
+    if (task === undefined) {
+      return Promise.reject(new Error(`no task ${taskId}`));
     }
-    this.#applied.add(key);
-    this.#tasks.set(taskId, { ...(await this.load(taskId)), model });
+    if (!this.#applied.has(key)) {
+      // Read and written in one go, so that a concurrent change is not lost.
+      this.#applied.add(key);
+      this.#tasks.set(taskId, { ...task, model: applyModelChange(task.model, model) });
+    }
+    return Promise.resolve();
   }
 
   /** Changes the model or effort chosen for a task, as `/model` and `/effort` do. */

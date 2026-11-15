@@ -9,17 +9,25 @@ import type { Json } from '../../kernel/json.ts';
 import type { Redactor } from '../../kernel/redactor.ts';
 import type { EntityRegistry } from '../../kernel/registry.ts';
 import type { LLM, LlmEvent } from '../models/llm/types.ts';
+import { NO_USAGE } from '../models/llm/types.ts';
 import { t } from '../../kernel/strings.ts';
+import type { ToolGuard } from '../tools/execute.ts';
 import { executeToolCall } from '../tools/execute.ts';
 import { errorResult } from '../tools/types.ts';
 import type { SkillsSection } from './context/builder.ts';
 import { PLAN_SNAPSHOT, buildContext, estimateTokens } from './context/builder.ts';
+import { assertCurrent } from './current-step.ts';
 import type { StepContext, StepHandlers } from './direct-runner.ts';
+import type { FilePart } from './modalities.ts';
+import { prepareMedia } from './modalities.ts';
 import type { Persistence } from './persistence.ts';
 import { formatPlan } from './plan.ts';
 import type { StepInput, StepOutput, TransitionRequest } from './step-runner.ts';
 import type { StreamSink, TaskPort, TaskSnapshot } from './task-port.ts';
+import { ReplyParts, readThrough } from './reply.ts';
 import { nextStatus } from './transitions.ts';
+import type { SpeechDeps } from './voice.ts';
+import { openSpokenReply } from './voice.ts';
 import type {
   ContentPart,
   ConversationEvent,
@@ -73,9 +81,13 @@ export interface StepDeps {
   /** How long one tool call may take. */
   readonly toolTimeoutMs: number;
   readonly skills?: SkillsSection | undefined;
+  /** Asked before every tool call; it may refuse the call. */
+  readonly toolGuard?: ToolGuard | undefined;
   /** What plugins add to a turn: a prompt section and a transformation of the reply. */
   readonly turnExtensions?: ((task: TaskSnapshot) => readonly TurnExtension[]) | undefined;
   readonly compact?: Compactor | undefined;
+  /** The speech models in use: one to transcribe audio turns, one to speak answers. */
+  readonly speech?: SpeechDeps | undefined;
 }
 
 function toEvent(item: InboxItem, asResultOf: string | undefined): ConversationEventBody | null {
@@ -97,20 +109,28 @@ function resolveLlm(deps: StepDeps, task: TaskSnapshot): LLM {
   return deps.registry.resolve({ kind: 'llm', id: task.llm ?? deps.defaultLlm, version: null });
 }
 
-async function request(
-  deps: StepDeps,
-  taskId: string,
-): Promise<{
-  task: TaskSnapshot;
-  llm: LLM;
-  request: ReturnType<typeof buildContext>;
-  extensions: readonly TurnExtension[];
-}> {
-  const [task, events, snapshot] = await Promise.all([
+/** The next model call of a task, or what to answer in its place. */
+interface Built {
+  readonly task: TaskSnapshot;
+  readonly llm: LLM;
+  readonly request: ReturnType<typeof buildContext>;
+  readonly extensions: readonly TurnExtension[];
+  /** Set when the turn carries content the model cannot take: the answer to give instead. */
+  readonly refusal: string | null;
+}
+
+async function request(deps: StepDeps, ctx: StepContext): Promise<Built> {
+  const { taskId } = ctx;
+  const [task, stored, snapshot] = await Promise.all([
     deps.tasks.load(taskId),
     deps.persistence.conversation.read(taskId),
     deps.persistence.state.get(taskId, PLAN_SNAPSHOT),
   ]);
+  const llm = resolveLlm(deps, task);
+  const { state } = deps.persistence;
+  const stt = (): ReturnType<SpeechDeps['stt']> => deps.speech?.stt() ?? null;
+  const media = { registry: deps.registry, state, stt };
+  const { events, refusal } = await prepareMedia(media, ctx, llm, stored);
   const extensions = deps.turnExtensions?.(task) ?? [];
   const built = buildContext({
     registry: deps.registry,
@@ -120,54 +140,11 @@ async function request(
     skills: deps.skills,
     extraSections: extensions.map((extension: TurnExtension) => extension.promptSection),
   });
-  const llm = resolveLlm(deps, task);
   const fallback = deps.defaultEffort;
   const effort =
     built.effort ??
     (fallback !== undefined && llm.capabilities.efforts.includes(fallback) ? fallback : undefined);
-  return { task, llm, request: { ...built, effort }, extensions };
-}
-
-/** Gathers a reply's pieces into message parts, merging text that belongs together. */
-class ReplyParts {
-  readonly parts: ContentPart[] = [];
-  readonly #emit: (text: string) => void;
-
-  constructor(emit: (text: string) => void) {
-    this.#emit = emit;
-  }
-
-  add(pieces: readonly ReplyPiece[]): void {
-    for (const piece of pieces) {
-      const last = this.parts.at(-1);
-      if (piece.type === 'data') {
-        this.parts.push({ type: 'data', mediaType: piece.mediaType, data: piece.data });
-      } else if (piece.text !== '') {
-        this.#emit(piece.text);
-        if (last?.type === 'text') {
-          this.parts[this.parts.length - 1] = { type: 'text', text: last.text + piece.text };
-        } else {
-          this.parts.push({ type: 'text', text: piece.text });
-        }
-      }
-    }
-  }
-}
-
-/** Passes text through each turn extension's reader in turn. */
-function readThrough(streams: readonly ReplyStream[], text: string | null): readonly ReplyPiece[] {
-  let pieces: readonly ReplyPiece[] = text === null ? [] : [{ type: 'text', text }];
-  for (const stream of streams) {
-    const next: ReplyPiece[] = [];
-    for (const piece of pieces) {
-      next.push(...(piece.type === 'text' ? stream.feed(piece.text) : [piece]));
-    }
-    if (text === null) {
-      next.push(...stream.close());
-    }
-    pieces = next;
-  }
-  return pieces;
+  return { task, llm, request: { ...built, effort }, extensions, refusal };
 }
 
 /** Collects what one model call produced, forwarding text to the stream as it arrives. */
@@ -175,28 +152,37 @@ async function consume(
   deps: StepDeps,
   ctx: StepContext,
   stream: AsyncIterable<LlmEvent>,
-  extensions: readonly TurnExtension[],
+  built: Built,
 ): Promise<{ events: ConversationEventBody[]; output: StepOutput<'llm.invoke'> }> {
   const events: ConversationEventBody[] = [];
   const toolCalls: ToolCall[] = [];
-  const readers = extensions.map((extension: TurnExtension) => extension.openReply());
+  const readers = built.extensions.map((extension: TurnExtension) => extension.openReply());
+  const spoken = openSpokenReply(deps.speech, deps.sink, ctx, built.task);
   const reply = new ReplyParts((text: string) => {
     deps.sink.delta(ctx.taskId, ctx.key, text);
+    spoken?.say(text);
   });
   let usage = { inputTokens: 0, outputTokens: 0, cachedInputTokens: 0 };
-  for await (const event of stream) {
-    if (event.type === 'text.delta') {
-      reply.add(readThrough(readers, event.text));
-    } else if (event.type === 'tool-call') {
-      toolCalls.push(event.call);
-      events.push({ type: 'tool-call', call: event.call, opaque: event.opaque });
-    } else if (event.type === 'reasoning') {
-      events.push({ type: 'reasoning', opaque: event.opaque });
-    } else {
-      ({ usage } = event);
+  try {
+    for await (const event of stream) {
+      if (event.type === 'text.delta') {
+        reply.add(readThrough(readers, event.text));
+      } else if (event.type === 'tool-call') {
+        toolCalls.push(event.call);
+        events.push({ type: 'tool-call', call: event.call, opaque: event.opaque });
+      } else if (event.type === 'reasoning') {
+        events.push({ type: 'reasoning', opaque: event.opaque });
+      } else {
+        ({ usage } = event);
+      }
     }
+  } catch (error) {
+    // The answer is lost; what was being said of it must not go on.
+    spoken?.abandon();
+    throw error;
   }
   reply.add(readThrough(readers, null));
+  await spoken?.finish();
   if (reply.parts.length > 0) {
     events.unshift({ type: 'message', role: 'agent', parts: reply.parts, sourceId: ctx.key });
   }
@@ -227,27 +213,51 @@ async function statusMessage(
   return [];
 }
 
+/**
+ * A part with every registered secret replaced in its text, data, or a file's name, media
+ * type and URL. File bytes are kept.
+ */
+function redactPart(deps: StepDeps, part: ContentPart): ContentPart {
+  const clean = (value: string): string => deps.redactor.redactString(value);
+  if (part.type === 'text') {
+    return { type: 'text', text: clean(part.text) };
+  }
+  if (part.type === 'data') {
+    return {
+      type: 'data',
+      mediaType: clean(part.mediaType),
+      data: deps.redactor.redact(part.data),
+    };
+  }
+  const source: FilePart['source'] =
+    part.source.kind === 'url' ? { kind: 'url', url: clean(part.source.url) } : part.source;
+  const file: FilePart = { type: 'file', mediaType: clean(part.mediaType), source };
+  return part.name === undefined ? file : { ...file, name: clean(part.name) };
+}
+
 function redactResult(deps: StepDeps, result: ToolResult): ToolResult {
   if (!result.ok) {
     const message = deps.redactor.redactString(result.error.message);
     return { ok: false, error: { code: result.error.code, message } };
   }
-  const content = result.content.map((part: ContentPart): ContentPart =>
-    part.type === 'text' ? { type: 'text', text: deps.redactor.redactString(part.text) } : part,
-  );
+  // Artifacts are left out: they are not shown to the model nor kept in the conversation.
+  const content = result.content.map((part: ContentPart) => redactPart(deps, part));
   return result.structured === undefined
     ? { ok: true, content }
     : { ok: true, content, structured: deps.redactor.redact(result.structured) };
 }
 
-/**
- * Stops a step that was abandoned — its turn interrupted or its task cancelled — before
- * it writes. What an abandoned step produced must not appear in the conversation.
- */
-function assertCurrent(ctx: StepContext): void {
-  if (ctx.signal.aborted) {
-    throw ctx.signal.reason instanceof Error ? ctx.signal.reason : new Error('step abandoned');
-  }
+/** Answers the turn with `text` instead of calling the model. */
+async function refuse(
+  deps: StepDeps,
+  ctx: StepContext,
+  text: string,
+): Promise<StepOutput<'llm.invoke'>> {
+  const parts: ContentPart[] = [{ type: 'text', text }];
+  const message = { type: 'message', role: 'agent', parts, sourceId: ctx.key } as const;
+  await deps.persistence.conversation.put(ctx.taskId, ctx.key, [message]);
+  await deps.tasks.setReply(ctx.taskId, ctx.key, parts);
+  return { toolCalls: [], usage: NO_USAGE };
 }
 
 /** Moves inbox items into the conversation, then marks them processed — in that order. */
@@ -283,9 +293,17 @@ async function invokeTool(
   deps.sink.activity(ctx.taskId, { ...about, phase: 'started' });
   const raw = ctx.outcomeUnknown
     ? errorResult('unknown-outcome', t('tool.error.unknown-outcome', { name: call.name }))
-    : await executeToolCall(deps.registry, call, ctx, { timeoutMs: deps.toolTimeoutMs });
+    : await executeToolCall(deps.registry, call, ctx, {
+        timeoutMs: deps.toolTimeoutMs,
+        guard: deps.toolGuard,
+      });
   const result = redactResult(deps, raw);
-  assertCurrent(ctx);
+  await assertCurrent(deps.tasks, deps.persistence.conversation, ctx);
+  if (raw.ok && raw.artifacts !== undefined && raw.artifacts.length > 0) {
+    // What a tool made for the person is an artifact of the task, not conversation.
+    const artifacts = raw.artifacts.map((part: ContentPart) => redactPart(deps, part));
+    await deps.tasks.addArtifact(ctx.taskId, ctx.key, artifacts);
+  }
   await deps.persistence.conversation.put(ctx.taskId, ctx.key, [
     { type: 'tool-result', callId: call.id, result },
   ]);
@@ -300,19 +318,22 @@ export function createStepHandlers(deps: StepDeps): StepHandlers {
   return {
     'conversation.accept': (ctx, input) => acceptItems(deps, ctx, input),
     'context.build': async (ctx) => {
-      const built = await request(deps, ctx.taskId);
-      const estimatedTokens = estimateTokens(built.request);
+      const built = await request(deps, ctx);
+      const estimatedTokens = built.refusal === null ? estimateTokens(built.request) : 0;
       const budget = deps.compactionThreshold * built.llm.capabilities.contextWindow;
       return { estimatedTokens, compact: estimatedTokens > budget };
     },
     'context.compact': (ctx) =>
       deps.compact === undefined ? Promise.resolve({ before: 0, after: 0 }) : deps.compact(ctx),
     'llm.invoke': async (ctx) => {
-      const built = await request(deps, ctx.taskId);
+      const built = await request(deps, ctx);
       deps.sink.reset(ctx.taskId, ctx.key);
+      if (built.refusal !== null) {
+        return refuse(deps, ctx, built.refusal);
+      }
       const stream = built.llm.stream(built.request, ctx.signal);
-      const result = await consume(deps, ctx, stream, built.extensions);
-      assertCurrent(ctx);
+      const result = await consume(deps, ctx, stream, built);
+      await assertCurrent(deps.tasks, deps.persistence.conversation, ctx);
       await conversation.put(ctx.taskId, ctx.key, result.events);
       const [first] = result.events;
       if (first?.type === 'message') {

@@ -30,3 +30,12 @@ export function mcpToolId(serverId: string, toolName: string): string | null {
   const id = [PREFIX, sanitise(serverId), sanitise(toolName)].join(SEPARATOR);
   return id.length > MAX_TOOL_ID_LENGTH ? null : id;
 }
+
+/**
+ * Whether two server ids would name each other's tools: they are equal once sanitised, or
+ * one is the other followed by the separator, so that `a` + `b__c` and `a__b` + `c` meet.
+ */
+export function serverIdsClash(one: string, other: string): boolean {
+  const [a, b] = [sanitise(one), sanitise(other)];
+  return a === b || a.startsWith(`${b}${SEPARATOR}`) || b.startsWith(`${a}${SEPARATOR}`);
+}

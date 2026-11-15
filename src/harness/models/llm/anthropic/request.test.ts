@@ -272,6 +272,25 @@ describe('anthropic request mapping', () => {
     });
   });
 
+  test('an image media type is sent in its canonical form', async () => {
+    const image = (mediaType: string) =>
+      ({ type: 'file', mediaType, source: { kind: 'base64', data: 'AAAA' } }) as const;
+    const body = await bodyOf({
+      messages: [{ role: 'user', content: [image('image/jpg'), image('IMAGE/PNG')] }],
+    });
+    expect(body).toMatchObject({
+      messages: [
+        {
+          role: 'user',
+          content: [
+            { type: 'image', source: { type: 'base64', media_type: 'image/jpeg', data: 'AAAA' } },
+            { type: 'image', source: { type: 'base64', media_type: 'image/png', data: 'AAAA' } },
+          ],
+        },
+      ],
+    });
+  });
+
   test('a file the API cannot take fails before any request, not retryable', async () => {
     const fake = replay(sse(answer('end_turn')));
     const sources = [

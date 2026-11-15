@@ -3,13 +3,14 @@
  * scripted model, reached only through the official A2A SDK client — the way a surface
  * or another agent reaches it.
  */
-import type { Message, StreamResponse, Task } from '@a2a-js/sdk';
+import type { Message, Part, StreamResponse, Task } from '@a2a-js/sdk';
 import { Role } from '@a2a-js/sdk';
 import type { Client } from '@a2a-js/sdk/client';
 import { ClientFactory, ServiceParameters, withA2AExtensions } from '@a2a-js/sdk/client';
 import type { Context } from 'cordis';
 
 import { EXT, SCHEMAS, readExtension } from '../../src/app/api-server/extensions/index.ts';
+import type { LlmCapabilities } from '../../src/harness/models/llm/types.ts';
 import type { Tool } from '../../src/harness/tools/types.ts';
 import type { Harness } from '../../src/kernel/bootstrap.ts';
 import { parseConfig } from '../../src/kernel/config.ts';
@@ -25,6 +26,8 @@ export interface HarnessOptions {
   /** Extra `config.toml` text, appended to the test defaults. */
   readonly config?: string;
   readonly llmDelayMs?: number;
+  /** What the scripted model says it accepts beyond text. */
+  readonly capabilities?: Partial<LlmCapabilities>;
   /** Use this data directory instead of the in-memory stores. */
   readonly dataDir?: string;
   readonly setup?: (ctx: Context) => void | Promise<void>;
@@ -39,6 +42,8 @@ export interface SendOptions {
   readonly metadata?: Record<string, unknown>;
   readonly extensions?: readonly string[];
   readonly messageId?: string;
+  /** Parts sent after the text; the text part is left out when the text is empty. */
+  readonly parts?: readonly Part[];
 }
 
 /** A running harness and the client talking to it. */
@@ -75,7 +80,17 @@ function userMessage(text: string, options: SendOptions = {}): Message {
     taskId: options.taskId ?? '',
     role: Role.ROLE_USER,
     parts: [
-      { content: { $case: 'text', value: text }, metadata: undefined, filename: '', mediaType: '' },
+      ...(text === '' && options.parts !== undefined
+        ? []
+        : [
+            {
+              content: { $case: 'text', value: text } as const,
+              metadata: undefined,
+              filename: '',
+              mediaType: '',
+            },
+          ]),
+      ...(options.parts ?? []),
     ],
     metadata: options.metadata,
     extensions: [...(options.extensions ?? [])],
@@ -110,10 +125,10 @@ function fold(events: readonly StreamResponse[]): Turn {
 export async function startHarness(options: HarnessOptions = {}): Promise<TestHarness> {
   const llm =
     options.llm ??
-    new ScriptedLlm(
-      options.turns ?? [],
-      options.llmDelayMs === undefined ? {} : { delayMs: options.llmDelayMs },
-    );
+    new ScriptedLlm(options.turns ?? [], {
+      ...(options.llmDelayMs === undefined ? {} : { delayMs: options.llmDelayMs }),
+      ...(options.capabilities === undefined ? {} : { capabilities: options.capabilities }),
+    });
   const config = parseConfig(
     [
       'composition = "server"',

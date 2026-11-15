@@ -1,7 +1,7 @@
 import { describe, expect, test } from 'bun:test';
 
 import { EntityRegistry } from '../../kernel/registry.ts';
-import { executeToolCall, validateToolArgs } from './execute.ts';
+import { executeToolCall, isUsableSchema, validateToolArgs } from './execute.ts';
 import { defineTool, textResult } from './types.ts';
 
 const context = { taskId: 't1', key: 't1/0/tool.invoke/c1', signal: new AbortController().signal };
@@ -109,6 +109,29 @@ describe('executeToolCall', () => {
     expect(ran).toBe(false);
   });
 
+  test('refuses a call whose schema cannot be used, without throwing', async () => {
+    let ran = false;
+    const dangling = defineTool({
+      id: 'dangling',
+      description: 'x',
+      inputSchema: { type: 'object', properties: { a: { $ref: '#/$defs/missing' } } },
+      invoke: () => {
+        ran = true;
+        return Promise.resolve(textResult('ran'));
+      },
+    });
+    const result = await executeToolCall(
+      registryWith(dangling),
+      { id: 'c1', name: 'dangling', args: { a: 1 } },
+      context,
+    );
+    expect(result.ok ? '' : result.error.code).toBe('invalid-arguments');
+    expect(result.ok ? '' : result.error.message).toContain('cannot be checked');
+    expect(ran).toBe(false);
+    expect(isUsableSchema(dangling.inputSchema)).toBe(true);
+    expect(isUsableSchema({ $ref: '#/$defs/missing' })).toBe(false);
+  });
+
   test('turns a thrown error into a failed result', async () => {
     const broken = defineTool({
       id: 'broken',
@@ -145,5 +168,93 @@ describe('executeToolCall', () => {
     );
     expect(result.ok ? '' : result.error.code).toBe('timeout');
     expect(aborted).toBe(true);
+  });
+
+  test('a call cancelled while its guard is answering never starts the tool', async () => {
+    let ran = false;
+    const refund = defineTool({
+      id: 'refund',
+      description: 'x',
+      inputSchema: { type: 'object' },
+      invoke: () => {
+        ran = true;
+        return Promise.resolve(textResult('refunded'));
+      },
+    });
+    const task = new AbortController();
+    let allow = (): void => undefined;
+    const answered = new Promise<null>((resolve) => {
+      allow = (): void => {
+        resolve(null);
+      };
+    });
+    const pending = executeToolCall(
+      registryWith(refund),
+      { id: 'c1', name: 'refund', args: {} },
+      { ...context, signal: task.signal },
+      { guard: () => answered },
+    );
+    task.abort();
+    allow();
+    const result = await pending;
+    expect(result.ok ? '' : result.error.code).toBe('cancelled');
+    expect(ran).toBe(false);
+  });
+
+  test('a call already cancelled asks no guard and starts no tool', async () => {
+    let asked = false;
+    let ran = false;
+    const refund = defineTool({
+      id: 'refund',
+      description: 'x',
+      inputSchema: { type: 'object' },
+      invoke: () => {
+        ran = true;
+        return Promise.resolve(textResult('refunded'));
+      },
+    });
+    const task = new AbortController();
+    task.abort();
+    const result = await executeToolCall(
+      registryWith(refund),
+      { id: 'c1', name: 'refund', args: {} },
+      { ...context, signal: task.signal },
+      {
+        guard: () => {
+          asked = true;
+          return Promise.resolve(null);
+        },
+      },
+    );
+    expect(result.ok ? '' : result.error.code).toBe('cancelled');
+    expect(asked).toBe(false);
+    expect(ran).toBe(false);
+  });
+
+  test('a call cancelled after its guard answered never starts the tool', async () => {
+    let ran = false;
+    const refund = defineTool({
+      id: 'refund',
+      description: 'x',
+      inputSchema: { type: 'object' },
+      invoke: () => {
+        ran = true;
+        return Promise.resolve(textResult('refunded'));
+      },
+    });
+    const task = new AbortController();
+    const result = await executeToolCall(
+      registryWith(refund),
+      { id: 'c1', name: 'refund', args: {} },
+      { ...context, signal: task.signal },
+      {
+        guard: () => {
+          task.abort();
+          return Promise.resolve(null);
+        },
+      },
+    );
+    expect(result.ok ? '' : result.error.code).toBe('cancelled');
+    expect(ran).toBe(false);
   });
 });

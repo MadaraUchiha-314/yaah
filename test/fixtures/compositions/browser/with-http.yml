@@ -1,0 +1,7 @@
+# A browser composition that names a plugin which needs Node: the HTTP listener.
+- id: prompts
+  name: ../../../../src/browser/plugins/prompts.ts
+- id: listener-layer
+  name: '@cordisjs/include'
+  config:
+    path: ../../../../src/compositions/shared/http.yml

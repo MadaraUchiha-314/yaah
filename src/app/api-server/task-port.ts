@@ -5,7 +5,13 @@
  */
 import type { Task } from '@a2a-js/sdk';
 
-import type { TaskPort, TaskSnapshot, TaskStatusUpdate } from '../../harness/core/task-port.ts';
+import type {
+  ModelChange,
+  TaskPort,
+  TaskSnapshot,
+  TaskStatusUpdate,
+} from '../../harness/core/task-port.ts';
+import { applyModelChange } from '../../harness/core/task-port.ts';
 import type { ContentPart, StepKey, TaskId, TaskModel } from '../../harness/core/types.ts';
 import { YaahError } from '../../kernel/errors.ts';
 import type { StreamHub } from '../stream-hub.ts';
@@ -19,6 +25,22 @@ export const SETTINGS_KEY = 'yaah.settings';
 
 /** Task metadata key for the step that last set the status, which makes a repeat a no-op. */
 export const STATUS_KEY = 'yaah.status-step';
+
+const INTERNAL: ReadonlySet<string> = new Set([SETTINGS_KEY, STATUS_KEY]);
+
+/**
+ * `task` as a caller may see it: without yaah's own settings (among them the caller key
+ * of whoever created it) and the step that last set its status.
+ */
+export function publicTask(task: Task): Task {
+  if (task.metadata === undefined) {
+    return task;
+  }
+  const metadata = Object.fromEntries(
+    Object.entries(task.metadata).filter(([key]: [string, unknown]) => !INTERNAL.has(key)),
+  );
+  return { ...task, metadata };
+}
 
 /** Settings yaah keeps on a task. */
 export interface TaskSettings {
@@ -97,6 +119,19 @@ export class UnknownTaskError extends YaahError {
 export function replyArtifactId(key: StepKey): string {
   return `response-${key}`;
 }
+
+/** The id of the artifact holding what a tool made for the person in step `key`. */
+export function toolArtifactId(key: StepKey): string {
+  return `artifact-${key}`;
+}
+
+/** The id of the artifact that carries the spoken form of the answer of step `key`. */
+export function speechArtifactId(key: StepKey): string {
+  return `speech-${key}`;
+}
+
+/** The name of an artifact a tool made, as opposed to `response`, the model's own words. */
+export const TOOL_ARTIFACT_NAME = 'attachment';
 
 /** A {@link TaskPort} backed by an A2A task store and a stream hub. */
 export class A2aTaskPort implements TaskPort {
@@ -179,10 +214,26 @@ export class A2aTaskPort implements TaskPort {
     return Promise.resolve();
   }
 
-  setModel(taskId: TaskId, _key: StepKey, model: TaskModel): Promise<void> {
+  addArtifact(taskId: TaskId, key: StepKey, parts: readonly ContentPart[]): Promise<void> {
+    const artifactId = toolArtifactId(key);
     this.#change(taskId, (task: Task): Task => ({
       ...task,
-      metadata: { ...task.metadata, [EXT.taskModel]: model },
+      artifacts: [
+        ...task.artifacts.filter((artifact) => artifact.artifactId !== artifactId),
+        resultArtifact(artifactId, parts, TOOL_ARTIFACT_NAME),
+      ],
+    }));
+    this.#hub.publish(taskId, { type: 'artifact', artifactId, parts, name: TOOL_ARTIFACT_NAME });
+    return Promise.resolve();
+  }
+
+  setModel(taskId: TaskId, _key: StepKey, model: ModelChange): Promise<void> {
+    this.#change(taskId, (task: Task): Task => ({
+      ...task,
+      metadata: {
+        ...task.metadata,
+        [EXT.taskModel]: applyModelChange(readTaskModel(task), model),
+      },
     }));
     return Promise.resolve();
   }

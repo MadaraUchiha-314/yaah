@@ -9,3 +9,7 @@ export * from './memory-task-port.ts';
 export * from './persistence-contract.ts';
 export * from './renderer-contract.ts';
 export * from './scripted-llm.ts';
+export * from './scripted-system-one.ts';
+export * from './system-one-contract.ts';
+export * from './scripted-speech.ts';
+export * from './speech-contract.ts';

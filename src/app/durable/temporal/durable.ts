@@ -17,6 +17,7 @@ import type {
 } from '../../../harness/core/step-runner.ts';
 import type { TaskId } from '../../../harness/core/types.ts';
 import type { DurableMode } from '../../../kernel/config-types.ts';
+import type { Redactor } from '../../../kernel/redactor.ts';
 import type { DurableExecution } from '../types.ts';
 import { createActivities } from './activities.ts';
 import type { TemporalLink } from './connection.ts';
@@ -32,6 +33,8 @@ export interface TemporalDeps {
   readonly limits: RunLimits;
   readonly retry: RetryPolicy;
   readonly isRetrySafe: (name: StepName, input: unknown) => boolean;
+  /** Removes credentials from a step's failure before Temporal records or logs it. */
+  readonly redactor: Redactor;
   /** Whether closing this mode also closes the link. False when the link is shared. */
   readonly ownsLink?: boolean | undefined;
 }
@@ -62,7 +65,7 @@ export class TemporalDurable implements DurableExecution {
       namespace: deps.link.namespace,
       taskQueue: deps.taskQueue,
       workflowsPath: WORKFLOWS_PATH,
-      activities: { ...createActivities(deps.handlers, deps.isRetrySafe) },
+      activities: { ...createActivities(deps.handlers, deps.isRetrySafe, deps.redactor) },
     });
     return new TemporalDurable(deps, worker);
   }

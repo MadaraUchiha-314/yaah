@@ -8,6 +8,12 @@
     "declaration": false
   },
   "files": [],
-  "include": ["src/surface/renderer/web", "test/web", "test/**/*.tsx", "test/e2e/web*.ts"],
+  "include": [
+    "src/surface/renderer/web",
+    "src/browser/page",
+    "test/web",
+    "test/**/*.tsx",
+    "test/e2e/web*.ts"
+  ],
   "exclude": ["dist", "node_modules", "src/surface/renderer/web/server.ts"]
 }

@@ -147,6 +147,18 @@ describe('A2UI model', () => {
     expect(titleOf(rootOf(model))).toBe('Safe');
   });
 
+  test('a batch list that does not extend the one fed starts the surfaces over', () => {
+    const model = new A2uiModel();
+    model.apply(refundForm());
+    const form = rootOf(model);
+    // The step was retried: the answer keeps its id and carries a new, shorter list.
+    model.apply([sampleSurface()]);
+    expect(rootOf(model)).not.toEqual(form);
+    expect(rootOf(model)).toEqual(rootOf(modelOf(sampleSurface())));
+    expect(model.surfaces()).toHaveLength(1);
+    model.dispose();
+  });
+
   test('a reference cycle and a missing child draw nothing', () => {
     const root = rootOf(
       modelOf([

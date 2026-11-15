@@ -1,0 +1,2 @@
+{"type":"session.created","event_id":"event_001","session":{"type":"realtime","object":"realtime.session","id":"sess_003","model":"gpt-realtime-2.1-mini"}}
+{"type":"error","event_id":"event_002","error":{"type":"invalid_request_error","code":"invalid_value","message":"Invalid value: 'nobody'. Supported voices are listed in the API reference.","param":"session.audio.output.voice","event_id":null}}

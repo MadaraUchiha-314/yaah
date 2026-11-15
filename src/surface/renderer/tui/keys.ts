@@ -23,6 +23,12 @@ export interface KeyPress {
   readonly downArrow: boolean;
   readonly leftArrow: boolean;
   readonly rightArrow: boolean;
+  readonly escape?: boolean | undefined;
+  /**
+   * Set by a terminal that speaks the kitty keyboard protocol: whether the key went
+   * down, is repeating, or came up. Absent on every other terminal.
+   */
+  readonly eventType?: 'press' | 'repeat' | 'release' | undefined;
 }
 
 /** Where the keyboard is: 0 is the input line, `n` the n-th control of the form. */
@@ -185,13 +191,49 @@ function taskKey(controller: TuiController, input: string): boolean {
 }
 
 /**
+ * The voice key: Space on an empty input line. Where the terminal reports key release
+ * (the kitty keyboard protocol), holding Space records and releasing it sends. Anywhere
+ * else, Space starts the recording and Space again sends it. Escape discards it.
+ *
+ * @returns true when the key was the voice key's and needs no further handling.
+ */
+function voiceKey(context: KeyContext, input: string, key: KeyPress): boolean {
+  const { controller } = context;
+  const { recording } = controller.getState();
+  if (recording !== 'off' && key.escape === true) {
+    void controller.stopVoice(false);
+    return true;
+  }
+  const isSpace = input === ' ' && !key.ctrl && !key.meta;
+  if (!isSpace || (recording === 'off' && (context.text !== '' || context.focus.index !== 0))) {
+    // While recording every other key is swallowed: nothing is typed into a recording.
+    return recording !== 'off';
+  }
+  if (key.eventType === 'release') {
+    if (recording === 'hold') {
+      void controller.stopVoice();
+    }
+  } else if (key.eventType === 'press') {
+    void (recording === 'off' ? controller.startVoice(true) : controller.stopVoice());
+  } else if (key.eventType === undefined) {
+    void (recording === 'off' ? controller.startVoice(false) : controller.stopVoice());
+  }
+  return true;
+}
+
+/**
  * Carries out one key press.
  *
  * Ctrl+C leaves, Ctrl+D completes the task, Ctrl+X cancels it, Ctrl+O shows its
  * Temporal address. Tab and Shift+Tab move between the input line and the controls of
- * the active form. Every other key goes to whatever has the focus.
+ * the active form. Space on an empty input line is the voice key. Every other key goes
+ * to whatever has the focus. The release of a key, where a terminal reports it, does
+ * nothing except end a held voice recording.
  */
 export function handleKey(context: KeyContext, input: string, key: KeyPress): void {
+  if (voiceKey(context, input, key) || key.eventType === 'release') {
+    return;
+  }
   if (key.ctrl && taskKey(context.controller, input)) {
     return;
   }

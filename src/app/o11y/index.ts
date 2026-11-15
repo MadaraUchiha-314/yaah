@@ -6,13 +6,16 @@
  * it from a composition changes nothing but what is recorded.
  */
 import { SpanKind } from '@opentelemetry/api';
-import { OTLPTraceExporter } from '@opentelemetry/exporter-trace-otlp-http';
 import type { Context } from 'cordis';
 import type { Request, Response } from 'express';
 
 import type { StepCall } from '../../harness/core/step-middleware.ts';
 import type { InboxItem } from '../../harness/core/types.ts';
+// For the heartbeat's events, which this plugin logs.
+import type { Heartbeat } from '../heartbeat/index.ts';
 import { addTraceparentSource } from '../../kernel/trace-context.ts';
+import type { TriageOutcome } from '../inbox/triage.ts';
+import { spanExporter } from './exporter.ts';
 import { Logger, fileWriter, stderrWriter } from './logger.ts';
 import { endFacts, logFacts, recordTypeOf, spanNameOf, startFacts } from './steps.ts';
 import { Tracing } from './tracing.ts';
@@ -21,12 +24,16 @@ declare module 'cordis' {
   interface Context {
     /** Writes structured log records. */
     log: Logger;
+    /** The heartbeat, when the composition has one; its events are logged here. */
+    heartbeat: Heartbeat;
     /** Starts spans and knows the trace of the running work. */
     tracing: Tracing;
   }
 }
 
 export const name = 'o11y';
+/** The runtimes this plugin runs on: it writes a log file and tracks requests with `node:async_hooks`, so a browser build refuses it. */
+export const runtime: readonly string[] = ['node'];
 export const inject: readonly string[] = ['config', 'redactor', 'taskRuntime'];
 
 const TERMINAL: ReadonlySet<string> = new Set(['completed', 'canceled', 'failed']);
@@ -126,6 +133,13 @@ function listen(ctx: Context): void {
   ctx.on('inbox/discarded', (taskId: string, reason: string) => {
     ctx.log.record('inbox.discarded', { taskId, reason }, 'warn');
   });
+  ctx.on('inbox/triaged', (taskId: string, itemId: string, outcome: TriageOutcome) => {
+    const level = outcome.error === null ? 'info' : 'warn';
+    ctx.log.record('harness.event', { event: 'inbox/triaged', taskId, itemId, ...outcome }, level);
+  });
+  ctx.on('system-one/unavailable', (id: string, variable: string) => {
+    ctx.log.record('harness.event', { event: 'system-one/unavailable', id, variable }, 'debug');
+  });
   ctx.on('command/invoked', (command: string) => {
     ctx.log.record('command.invoked', { command, traceId: ctx.tracing.traceId() });
   });
@@ -139,6 +153,16 @@ function listen(ctx: Context): void {
       { command, error: reason, traceId: ctx.tracing.traceId() },
       'error',
     );
+  });
+  ctx.on('task/stalled', (taskId: string, idleMs: number) => {
+    ctx.log.record('task.stalled', { taskId, idleMs }, 'warn');
+  });
+  ctx.on('heartbeat/tick', (_at: Date, redelivered: number) => {
+    ctx.log.record('heartbeat.tick', { redelivered }, 'debug');
+  });
+  ctx.on('heartbeat/failed', (error: unknown) => {
+    const reason = error instanceof Error ? error.message : String(error);
+    ctx.log.record('harness.event', { event: 'heartbeat/failed', error: reason }, 'error');
   });
   ctx.on('durable/run-error', (taskId: string, error: unknown) => {
     const reason = error instanceof Error ? error.message : String(error);
@@ -156,10 +180,7 @@ export function apply(ctx: Context): void {
   });
   const tracing = new Tracing({
     redactor: ctx.redactor,
-    exporter:
-      o11y.otlpEndpoint === undefined
-        ? undefined
-        : new OTLPTraceExporter({ url: `${o11y.otlpEndpoint.replace(/\/$/u, '')}/v1/traces` }),
+    exporter: spanExporter(o11y, ctx.redactor),
   });
   ctx.effect(() => {
     const releaseLogger = ctx.provide('log', logger);

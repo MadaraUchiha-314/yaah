@@ -6,3 +6,14 @@
   name: ../../harness/models/llm/anthropic/index.ts
 - id: llm-openai-compatible
   name: ../../harness/models/llm/openai-compatible/index.ts
+# System One: fast typed decisions. Registers one system-one entity, or nothing without a key.
+- id: system-one-openai
+  name: ../../harness/models/system-one/openai/index.ts
+# Speech: one speech-to-text and one text-to-speech entity, or nothing without a key.
+- id: speech-openai-stt
+  name: ../../harness/models/speech/openai-stt/index.ts
+- id: speech-openai-tts
+  name: ../../harness/models/speech/openai-tts/index.ts
+# The generate_image tool, on OpenAI's image API. Registers nothing without a key.
+- id: tool-image-openai
+  name: ../../harness/tools/image-openai/index.ts

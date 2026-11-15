@@ -1,0 +1,7 @@
+- id: layer
+  name: '@cordisjs/include'
+  config:
+    path: ./nested-layer.yml
+    patches:
+      - id: second
+        disabled: true

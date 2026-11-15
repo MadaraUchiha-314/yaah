@@ -1,5 +1,7 @@
 import { mkdtempSync, readFileSync, statSync, writeFileSync } from 'node:fs';
+import { createServer as createHttpServer } from 'node:http';
 import { createServer } from 'node:net';
+import { PassThrough } from 'node:stream';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
@@ -7,9 +9,11 @@ import { describe, expect, test } from 'bun:test';
 
 import type { CliIo } from '../../src/cli/main.ts';
 import { freePort, runCli } from '../../src/cli/main.ts';
+import { interrupted } from '../../src/cli/signals.ts';
 import type { CreateHarnessOptions } from '../../src/kernel/harness.ts';
 import { createHarness } from '../../src/kernel/harness.ts';
 import { registerEntity } from '../../src/kernel/registry.ts';
+import { runTui } from '../../src/surface/renderer/tui/index.ts';
 import { HarnessSession } from '../../src/surface/session.ts';
 import type { TaskView } from '../../src/surface/view.ts';
 import { ScriptedLlm, say } from '../../src/testing/scripted-llm.ts';
@@ -22,7 +26,11 @@ interface Run {
 }
 
 /** A process stand-in: captured output, a scripted model, and a `tui` the test supplies. */
-function fakeProcess(home: string, tui: (url: string) => Promise<void>, stop?: Promise<void>): Run {
+function fakeProcess(
+  home: string,
+  tui: (url: string, signal?: AbortSignal) => Promise<void>,
+  stop?: Promise<void>,
+): Run {
   const out: string[] = [];
   const err: string[] = [];
   const urls: string[] = [];
@@ -35,9 +43,9 @@ function fakeProcess(home: string, tui: (url: string) => Promise<void>, stop?: P
       stdout: { write: (text: string) => out.push(text) },
       stderr: { write: (text: string) => err.push(text) },
       interrupted: () => stop ?? Promise.resolve(),
-      tui: async (url: string) => {
+      tui: async (url: string, _about?: unknown, signal?: AbortSignal) => {
         urls.push(url);
-        await tui(url);
+        await tui(url, signal);
       },
       start: (options: CreateHarnessOptions) =>
         createHarness({
@@ -197,6 +205,115 @@ describe('the yaah command', () => {
     expect(run.out.join('')).toMatch(/\d+\.\d+\.\d+\n/u);
     expect(await runCli(['frobnicate'], run.io)).toBe(2);
     expect(run.err.join('')).toContain('"frobnicate" is not a command');
+  });
+
+  /**
+   * Feature: CLI
+   * Scenario: A harness that cannot be reached is reported in one line
+   *   Given no harness listening at a URL, and a harness that fails to give its card
+   *   When `yaah tui --url` is run against each, or `yaah` cannot reach the one it started
+   *   Then the command writes one filtered line naming the URL and exits 1
+   * Requirement: docs/specs/issue-3/requirements.md R21.3, R22.5
+   */
+  test('A harness that cannot be reached is reported in one line', async () => {
+    const failing = createHttpServer((_request, response) => {
+      response.writeHead(500, { 'content-type': 'text/plain' });
+      response.end('\u001B]0;owned\u0007down\nfor good');
+    });
+    await new Promise<void>((resolve) => {
+      failing.listen(0, '127.0.0.1', resolve);
+    });
+    const address = failing.address();
+    const port = typeof address === 'object' && address !== null ? address.port : 0;
+    const terminal = (url: string): Promise<void> =>
+      runTui({ url, stdin: new PassThrough(), stdout: new PassThrough(), env: {} });
+    try {
+      for (const url of ['http://127.0.0.1:9', `http://127.0.0.1:${String(port)}`]) {
+        const run = fakeProcess(tempHome(), terminal);
+        // oxlint-disable-next-line no-await-in-loop -- one run at a time
+        expect(await runCli(['tui', '--url', url], run.io)).toBe(1);
+        const said = run.err.join('');
+        expect(said.startsWith(`yaah: could not reach the harness at ${url}`)).toBe(true);
+        expect(said.trimEnd().includes('\n')).toBe(false);
+        expect(said.includes('\u001B')).toBe(false);
+      }
+      const dir = tempHome();
+      const run = fakeProcess(dir, () => terminal('http://127.0.0.1:9'));
+      expect(await runCli(['--config', configFile(dir)], run.io)).toBe(1);
+      expect(run.err.join('')).toContain('could not reach the harness at http://127.0.0.1:9');
+    } finally {
+      failing.close();
+    }
+  });
+
+  /**
+   * Feature: CLI
+   * Scenario: Asked to stop, `yaah` leaves the terminal UI and stops its harness
+   *   Given `yaah` running a harness with the terminal UI open, or `yaah tui --url`
+   *   When the process is asked to stop (SIGTERM, SIGHUP) while the UI is open
+   *   Then the terminal UI is told to leave, the harness is stopped, and the command exits 0
+   * Requirement: docs/specs/issue-3/requirements.md R22.1, R21.3
+   */
+  test('Asked to stop, `yaah` leaves the terminal UI and stops its harness', async () => {
+    const dir = tempHome();
+    let interrupt: () => void = () => undefined;
+    const stop = new Promise<void>((resolve) => {
+      interrupt = resolve;
+    });
+    let left = false;
+    const untilLeft = (_url: string, signal?: AbortSignal): Promise<void> =>
+      new Promise<void>((resolve) => {
+        signal?.addEventListener('abort', () => {
+          left = true;
+          resolve();
+        });
+        interrupt();
+      });
+    const run = fakeProcess(dir, untilLeft, stop);
+    const outcome = await Promise.race([
+      runCli(['--config', configFile(dir)], run.io),
+      new Promise<string>((resolve) => {
+        setTimeout(resolve, 2000, 'still running');
+      }),
+    ]);
+    expect(outcome).toBe(0);
+    expect(left).toBe(true);
+    const gone = await fetch(`${String(run.urls[0])}/.well-known/agent-card.json`).catch(
+      () => null,
+    );
+    expect(gone).toBeNull();
+
+    left = false;
+    const tui = fakeProcess(dir, untilLeft, Promise.resolve());
+    expect(await runCli(['tui', '--url', 'http://127.0.0.1:9'], tui.io)).toBe(0);
+    expect(left).toBe(true);
+  });
+
+  /**
+   * Feature: CLI
+   * Scenario: Once the terminal UI is left, stop requests go back to the process
+   *   Given `yaah` listening for SIGINT, SIGTERM and SIGHUP while the terminal UI is open
+   *   When the user leaves the UI, and the command goes on to shut down
+   *   Then it no longer listens for them, so a Ctrl+C during a slow shutdown ends the process
+   * Requirement: docs/specs/issue-3/requirements.md R22.1, R21.3
+   */
+  test('Once the terminal UI is left, stop requests go back to the process', async () => {
+    const before = ['SIGINT', 'SIGTERM', 'SIGHUP'].map((name) => process.listenerCount(name));
+    const run = fakeProcess(tempHome(), () => Promise.resolve());
+    const counts: number[][] = [];
+    const io: CliIo = {
+      ...run.io,
+      interrupted: (signal?: AbortSignal) => {
+        const waiting = interrupted(signal);
+        counts.push(['SIGINT', 'SIGTERM', 'SIGHUP'].map((name) => process.listenerCount(name)));
+        return waiting;
+      },
+    };
+    expect(await runCli(['tui', '--url', 'http://127.0.0.1:9'], io)).toBe(0);
+    expect(counts).toEqual([before.map((count) => count + 1)]);
+    expect(['SIGINT', 'SIGTERM', 'SIGHUP'].map((name) => process.listenerCount(name))).toEqual(
+      before,
+    );
   });
 
   test('a busy port is skipped, and running out of ports is an error', async () => {

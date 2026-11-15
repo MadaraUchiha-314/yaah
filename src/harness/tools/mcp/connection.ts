@@ -7,6 +7,7 @@ import type { McpServerConfig } from '../../../kernel/config-types.ts';
 import { isJsonObject } from '../../../kernel/json.ts';
 import type { Disposer, EntityRegistry } from '../../../kernel/registry.ts';
 import { t } from '../../../kernel/strings.ts';
+import { isUsableSchema } from '../execute.ts';
 import type { Tool } from '../types.ts';
 import { errorResult } from '../types.ts';
 import type { BackoffConfig } from './backoff.ts';
@@ -172,7 +173,7 @@ export class ServerConnection {
       return 'invalid-id';
     }
     const inputSchema = toJson(remote.inputSchema);
-    if (inputSchema === undefined || !isJsonObject(inputSchema)) {
+    if (inputSchema === undefined || !isJsonObject(inputSchema) || !isUsableSchema(inputSchema)) {
       return 'no-input-schema';
     }
     const { annotations } = remote;

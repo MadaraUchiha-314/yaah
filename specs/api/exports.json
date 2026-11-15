@@ -33,7 +33,9 @@
     "formatRef",
     "isJsonObject",
     "isOpen",
+    "isUsableSchema",
     "loadConfig",
+    "mergeView",
     "parseConfig",
     "registerEntity",
     "renderPrompt",
@@ -59,6 +61,12 @@
     "extensionJsonSchemas",
     "readExtension"
   ],
+  "./app/channels-api": [
+    "apply",
+    "createChannelAdmission",
+    "inject",
+    "name"
+  ],
   "./app/durable": [
     "apply",
     "inject",
@@ -68,10 +76,26 @@
   "./app/durable/temporal": [
     "startTemporal"
   ],
-  "./app/o11y": [
+  "./app/heartbeat": [
     "apply",
     "inject",
     "name"
+  ],
+  "./app/o11y": [
+    "apply",
+    "inject",
+    "name",
+    "runtime"
+  ],
+  "./browser": [
+    "CONFIG_FILE",
+    "IN_MEMORY_PROTOCOL",
+    "IN_MEMORY_URL",
+    "InMemoryTransport",
+    "connectInMemory",
+    "createBrowserHarness",
+    "pageOptions",
+    "startPageHarness"
   ],
   "./harness/a2a": [
     "INVOKE_AGENT",
@@ -87,6 +111,23 @@
     "BASIC_CATALOG_ID",
     "apply",
     "inject",
+    "name",
+    "runtime"
+  ],
+  "./harness/channels": [
+    "CREATE_TASK_FOR_PARTICIPANT",
+    "ChannelManager",
+    "ChannelNotFoundError",
+    "MESSAGE_PARTICIPANT",
+    "NotAParticipantError",
+    "ParticipantConflictError",
+    "apply",
+    "createAskRoute",
+    "createDefaultChannel",
+    "createMessageParticipantTool",
+    "createTaskForParticipantTool",
+    "defaultSender",
+    "inject",
     "name"
   ],
   "./harness/commands": [
@@ -99,6 +140,16 @@
   "./harness/core": [
     "MEMORY",
     "apply",
+    "inject",
+    "name",
+    "runtime"
+  ],
+  "./harness/hooks": [
+    "BLOCKING_HOOKS",
+    "HOOK_NAMES",
+    "Hooks",
+    "apply",
+    "globToRegExp",
     "inject",
     "name"
   ],
@@ -130,24 +181,106 @@
     "inject",
     "name"
   ],
+  "./harness/models/speech": [
+    "SpeechError",
+    "transcriptOf"
+  ],
+  "./harness/models/speech/openai-stt": [
+    "OPENAI_STT_MODEL",
+    "apply",
+    "createOpenAiSpeechToText",
+    "inject",
+    "name"
+  ],
+  "./harness/models/speech/openai-tts": [
+    "OPENAI_TTS_MODEL",
+    "OPENAI_TTS_VOICE",
+    "apply",
+    "createOpenAiTextToSpeech",
+    "inject",
+    "name"
+  ],
+  "./harness/models/system-one": [
+    "SystemOneError"
+  ],
+  "./harness/models/system-one/openai": [
+    "OPENAI_SYSTEM_ONE_MODEL",
+    "apply",
+    "createOpenAiSystemOne",
+    "inject",
+    "name"
+  ],
+  "./harness/plugins": [
+    "AGENT_PLUGINS_VERSION",
+    "AgentPluginError",
+    "EXTENSION_NAMESPACE",
+    "HOOKS_SCHEMA_PATH",
+    "MCP_SCHEMA_ID",
+    "PLUGIN_SCHEMA_ID",
+    "apply",
+    "expandPlaceholders",
+    "hooksFile",
+    "hooksJsonSchemas",
+    "inject",
+    "loadAgentPlugin",
+    "loadPlugin",
+    "mcpToolHook",
+    "name",
+    "readMcpConfig",
+    "readPluginSchemas",
+    "runtime",
+    "validateManifest"
+  ],
+  "./harness/skills": [
+    "LOAD_SKILL",
+    "MAX_SKILL_FILE_BYTES",
+    "READ_SKILL_FILE",
+    "SKILL_LIMITS",
+    "SkillRoot",
+    "SkillValidationError",
+    "apply",
+    "createSkillTools",
+    "inject",
+    "name",
+    "runtime",
+    "scanSkills",
+    "splitSkillMd",
+    "validateFrontMatter"
+  ],
   "./harness/system-prompt": [
     "apply",
     "definePrompt",
     "inject",
     "name",
-    "renderPrompt"
+    "renderPrompt",
+    "runtime"
   ],
   "./harness/tools": [
     "defineTool",
     "errorResult",
     "executeToolCall",
+    "isUsableSchema",
     "textResult",
     "validateToolArgs"
+  ],
+  "./harness/tools/image-openai": [
+    "GENERATE_IMAGE",
+    "OPENAI_IMAGE_MODEL",
+    "apply",
+    "createGenerateImageTool",
+    "inject",
+    "name"
   ],
   "./harness/tools/mcp": [
     "apply",
     "inject",
     "name"
+  ],
+  "./harness/voice": [
+    "apply",
+    "inject",
+    "name",
+    "wantsSpeech"
   ],
   "./kernel": [
     "ConfigError",
@@ -184,6 +317,7 @@
     "HarnessSession",
     "foldEvent",
     "isOpen",
+    "mergeView",
     "viewOfTask",
     "withUserMessage"
   ],
@@ -202,7 +336,16 @@
   ],
   "./testing": [
     "MemoryTaskPort",
+    "SAMPLE_IMAGE",
+    "SPEECH_CONTRACT_AUDIO",
+    "SPEECH_CONTRACT_TEXT",
+    "SYSTEM_ONE_CONTRACT_INPUT",
+    "SYSTEM_ONE_CONTRACT_QUESTIONS",
     "ScriptedLlm",
+    "ScriptedSpeechToText",
+    "ScriptedSystemOne",
+    "ScriptedTextToSpeech",
+    "answerAll",
     "blankTaskModel",
     "call",
     "callTools",
@@ -211,6 +354,10 @@
     "persistenceContract",
     "rendererContract",
     "sampleSurface",
-    "say"
+    "say",
+    "silencePerWord",
+    "speechToTextContract",
+    "systemOneContract",
+    "textToSpeechContract"
   ]
 }

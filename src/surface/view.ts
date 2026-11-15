@@ -7,6 +7,10 @@ import type { Message, Part, StreamResponse, Task } from '@a2a-js/sdk';
 import { Role, TaskState } from '@a2a-js/sdk';
 
 import { EXT, SCHEMAS, readExtension } from '../app/api-server/extensions/index.ts';
+import type { FileItem } from './view-files.ts';
+import { fileItems, isSpeech } from './view-files.ts';
+
+export type { FileItem, SpeechChunk } from './view-files.ts';
 
 /** The media type of a part that carries A2UI messages. */
 export const A2UI_MEDIA_TYPE = 'application/a2ui+json';
@@ -35,7 +39,9 @@ export type TranscriptItem =
       readonly durationMs: number | null;
     }
   /** Something said about the conversation rather than in it: a command's reply. */
-  | { readonly kind: 'note'; readonly id: string; readonly text: string };
+  | { readonly kind: 'note'; readonly id: string; readonly text: string }
+  /** A file: an image the user attached or the agent made, a voice message. */
+  | FileItem;
 
 /** What state the task is in, in the interface's terms. */
 export type ViewState =
@@ -118,6 +124,10 @@ function upsert(items: readonly TranscriptItem[], item: TranscriptItem): Transcr
     : items.map((existing, at) => (at === index ? item : existing));
 }
 
+function withFiles(items: readonly TranscriptItem[], files: readonly FileItem[]): TranscriptItem[] {
+  return files.reduce<TranscriptItem[]>((all, file) => upsert(all, file), [...items]);
+}
+
 /** The transcript item a stored agent message stands for, or null when it adds nothing. */
 function fromAgentMessage(message: Message, state: ViewState): TranscriptItem | null {
   const text = textOf(message.parts);
@@ -139,12 +149,17 @@ export function viewOfTask(task: Task): TaskView {
       if (text !== '') {
         items = upsert(items, { kind: 'user', id: message.messageId, text });
       }
+      items = withFiles(items, fileItems(message.parts, message.messageId, 'user'));
     } else {
       const item = fromAgentMessage(message, stateOf(TaskState.TASK_STATE_INPUT_REQUIRED, message));
       if (item !== null) {
         items = upsert(items, item);
       }
     }
+  }
+  for (const artifact of task.artifacts) {
+    // What the agent attached is kept on the task; a snapshot lists it after the conversation.
+    items = withFiles(items, fileItems(artifact.parts, artifact.artifactId, 'agent'));
   }
   const link = readExtension(task.metadata, EXT.durableExecution, SCHEMAS.durableExecutionTask);
   return {
@@ -156,9 +171,18 @@ export function viewOfTask(task: Task): TaskView {
   };
 }
 
-/** Records what the user just sent, before the harness has answered. */
-export function withUserMessage(view: TaskView, id: string, text: string): TaskView {
-  return { ...view, state: 'working', items: upsert(view.items, { kind: 'user', id, text }) };
+/**
+ * Records what the user just sent, before the harness has answered: the text, when there
+ * is any, and the files that go with it.
+ */
+export function withUserMessage(
+  view: TaskView,
+  id: string,
+  text: string,
+  files: readonly FileItem[] = [],
+): TaskView {
+  const said = text === '' ? view.items : upsert(view.items, { kind: 'user', id, text });
+  return { ...view, state: 'working', items: withFiles(said, files) };
 }
 
 function withStatus(
@@ -193,27 +217,76 @@ function withStatus(
   };
 }
 
+/**
+ * What a surface shows once it reads the stored task: what it already shows, then what the
+ * snapshot holds that it did not see. An item is the same when its id is, or a file's
+ * address is. An answer this surface streamed has the stream's id, not the stored one, so
+ * it stands for the first stored answer with its text — once, and only when that answer
+ * is not itself already shown.
+ */
+function mergedItems(
+  mine: readonly TranscriptItem[],
+  stored: readonly TranscriptItem[],
+): TranscriptItem[] {
+  const key = (item: TranscriptItem): string => `${item.kind}:${item.id}`;
+  const storedKeys = new Set(stored.map((item) => key(item)));
+  const streamed = mine.filter((item) => item.kind === 'agent' && !storedKeys.has(key(item)));
+  const shown = (item: TranscriptItem): boolean => {
+    const same = mine.some(
+      (existing) =>
+        existing.kind === item.kind &&
+        (existing.id === item.id ||
+          ('url' in existing &&
+            'url' in item &&
+            existing.url !== null &&
+            existing.url === item.url)),
+    );
+    if (same || item.kind !== 'agent') {
+      return same;
+    }
+    const at = streamed.findIndex((existing) => 'text' in existing && existing.text === item.text);
+    if (at !== -1) {
+      streamed.splice(at, 1);
+    }
+    return at !== -1;
+  };
+  return [...mine, ...stored.filter((item) => !shown(item))];
+}
+
+/**
+ * Adds what a follower learned about the task to what a surface shows. The follower's
+ * state and task win; items stay where the surface has them, an item the follower also
+ * holds takes the follower's newer form, and an item it alone holds is added after. An
+ * answer keeps the id it was first shown under, so a form drawn in it is not remounted.
+ */
+export function mergeView(shown: TaskView, learned: TaskView): TaskView {
+  const key = (item: TranscriptItem): string => `${item.kind}:${item.id}`;
+  const newer = new Map(learned.items.map((item) => [key(item), item]));
+  const kept = shown.items.map((item) => newer.get(key(item)) ?? item);
+  return { ...learned, items: mergedItems(kept, learned.items) };
+}
+
 /** Applies one A2A stream event to the view. */
 export function foldEvent(view: TaskView, event: StreamResponse): TaskView {
   const { payload } = event;
   if (payload?.$case === 'task') {
     const snapshot = viewOfTask(payload.value);
-    // Keep what this surface already shows; the snapshot adds what it did not see.
-    const shown = (item: TranscriptItem): boolean =>
-      view.items.some(
-        (mine) =>
-          mine.kind === item.kind &&
-          (mine.id === item.id || ('text' in mine && 'text' in item && mine.text === item.text)),
-      );
-    const items = [...view.items, ...snapshot.items.filter((item) => !shown(item))];
-    return { ...snapshot, items };
+    return { ...snapshot, items: mergedItems(view.items, snapshot.items) };
   }
   if (payload?.$case === 'statusUpdate') {
     return withStatus(view, payload.value.status?.state, payload.value.status?.message);
   }
   if (payload?.$case === 'artifactUpdate') {
     const artifact = payload.value.artifact;
+    if (isSpeech(artifact)) {
+      // Speech is played, not shown: the session hands it to the surface as it arrives.
+      return view;
+    }
     const id = artifact?.artifactId ?? '';
+    const files = fileItems(artifact?.parts ?? [], id, 'agent');
+    if (files.length > 0) {
+      return { ...view, items: withFiles(view.items, files) };
+    }
     const before = view.items.find((item) => item.kind === 'agent' && item.id === id);
     const text = textOf(artifact?.parts ?? []);
     const a2ui = a2uiOf(artifact?.parts ?? []);

@@ -44,6 +44,25 @@ max_task_tokens = 2000000
 threshold = 0.8
 keep_recent_fraction = 0.2
 
+[inbox]
+# "off" | "system-one": let a fast decisions model judge whether a message that arrives
+# while the agent is working, and does not say so itself, should interrupt it.
+triage = "off"
+
+[speech]
+# The speech-to-text model that transcribes a voice message for a model that does not
+# accept audio, and the text-to-speech model that speaks answers when a client asks for
+# it. Empty means none. With an OpenAI key: "openai/gpt-transcribe" and
+# "openai/gpt-realtime-2.1-mini".
+stt = ""
+tts = ""
+
+# Send traces to Langfuse. The two variables hold the project's public and secret key.
+# [o11y.langfuse]
+# host = "https://cloud.langfuse.com"
+# public_key_env = "LANGFUSE_PUBLIC_KEY"
+# secret_key_env = "LANGFUSE_SECRET_KEY"
+
 # [[mcp.servers]]
 # id = "orders"
 # transport = "stdio"

@@ -12,8 +12,9 @@ import type { ListTasksRequest, ListTasksResponse, Message, Task } from '@a2a-js
 import { Task as TaskCodec, TaskState } from '@a2a-js/sdk';
 import type { ServerCallContext, TaskStore } from '@a2a-js/sdk/server';
 
-import type { SqlDatabase } from '../../harness/core/sqlite-driver.ts';
-import { transaction } from '../../harness/core/sqlite-driver.ts';
+import type { SqlDatabase } from '../../harness/core/sql.ts';
+import { transaction } from '../../harness/core/sql.ts';
+import { publicTask } from './task-port.ts';
 
 /** A `TaskStore` with the atomic operations yaah needs. */
 export interface YaahTaskStore extends TaskStore {
@@ -190,12 +191,19 @@ function mergeHistory(ours: readonly Message[], theirs: readonly Message[]): Mes
  * The store handed to the SDK's request handler. A task the handler saves is created if
  * it is new; for an existing task only messages it adds to the history are kept. Status,
  * artifacts and metadata stay as the core last wrote them, so a save computed from a
- * stale read cannot undo a newer status.
+ * stale read cannot undo a newer status. What the handler loads goes to callers, so it
+ * comes without yaah's internal metadata.
  */
 export function handlerFacing(store: YaahTaskStore): TaskStore {
   return {
-    load: (taskId: string, context: ServerCallContext) => store.load(taskId, context),
-    list: (params: ListTasksRequest, context: ServerCallContext) => store.list(params, context),
+    load: async (taskId: string, context: ServerCallContext): Promise<Task | undefined> => {
+      const task = await store.load(taskId, context);
+      return task === undefined ? undefined : publicTask(task);
+    },
+    list: async (params: ListTasksRequest, context: ServerCallContext) => {
+      const listed = await store.list(params, context);
+      return { ...listed, tasks: listed.tasks.map((task: Task) => publicTask(task)) };
+    },
     save: (task: Task): Promise<void> => {
       store.update(task.id, (current: Task | undefined) =>
         current === undefined

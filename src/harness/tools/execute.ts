@@ -4,7 +4,7 @@
  */
 import { Validator } from '@cfworker/json-schema';
 
-import type { Json } from '../../kernel/json.ts';
+import type { Json, JsonObject } from '../../kernel/json.ts';
 import type { EntityRegistry } from '../../kernel/registry.ts';
 import { t } from '../../kernel/strings.ts';
 import type { ToolCall, ToolError, ToolResult } from '../core/types.ts';
@@ -17,7 +17,19 @@ export interface ExecuteOptions {
   readonly allowed?: ReadonlySet<string>;
   /** How long the tool may take. Absent means no limit beyond the caller's signal. */
   readonly timeoutMs?: number;
+  /** Asked after the arguments passed their schema; an error it returns is the result. */
+  readonly guard?: ToolGuard | undefined;
 }
+
+/**
+ * A check made before a tool runs — how a hook refuses a call. Returns null to let the
+ * call through, or the error the model is shown instead of a result. One that throws
+ * refuses the call.
+ */
+export type ToolGuard = (
+  call: ToolCall,
+  ctx: Omit<ToolCallContext, 'callId'>,
+) => Promise<ToolError | null>;
 
 /**
  * Checks arguments against the tool's JSON Schema.
@@ -36,7 +48,17 @@ export function validateToolArgs(tool: Tool, args: Json): ToolError | null {
       message: t('tool.error.uncallable', { name: tool.ref.id }),
     };
   }
-  const outcome = new Validator(tool.inputSchema, '2020-12', true).validate(args);
+  let outcome: ReturnType<Validator['validate']>;
+  try {
+    outcome = new Validator(tool.inputSchema, '2020-12', true).validate(args);
+  } catch (error) {
+    // A schema the validator cannot follow (an unresolvable `$ref`) checks nothing: fail closed.
+    const reason = error instanceof Error ? error.message : String(error);
+    return {
+      code: 'invalid-arguments',
+      message: t('tool.error.unusable-schema', { name: tool.ref.id, reason }),
+    };
+  }
   if (outcome.valid) {
     return null;
   }
@@ -45,6 +67,20 @@ export function validateToolArgs(tool: Tool, args: Json): ToolError | null {
     code: 'invalid-arguments',
     message: t('tool.error.invalid-arguments', { name: tool.ref.id, reason }),
   };
+}
+
+/**
+ * Whether `schema` can check arguments at all: a dry run against an empty object. A schema
+ * whose root the validator cannot follow fails it; one that fails only for some arguments
+ * is caught when a call is checked.
+ */
+export function isUsableSchema(schema: JsonObject): boolean {
+  try {
+    new Validator(schema, '2020-12', true).validate({});
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 function findTool(
@@ -71,11 +107,44 @@ function deadline(ms: number | undefined, onExpire: () => void): Promise<'timeou
   });
 }
 
+/** The result of a call whose task was cancelled before the tool started. */
+function cancelled(name: string): ToolResult {
+  return errorResult('cancelled', t('tool.error.cancelled', { name }));
+}
+
+/**
+ * Asks the guard, but stops waiting when `signal` aborts: resolves `'cancelled'` then.
+ * The abort listener is removed either way.
+ */
+async function askGuard(
+  guard: ToolGuard | undefined,
+  call: ToolCall,
+  ctx: Omit<ToolCallContext, 'callId'>,
+): Promise<ToolError | null | 'cancelled'> {
+  if (guard === undefined) {
+    return null;
+  }
+  let onAbort = (): void => undefined;
+  const aborted = new Promise<'cancelled'>((resolve) => {
+    onAbort = (): void => {
+      resolve('cancelled');
+    };
+    ctx.signal.addEventListener('abort', onAbort, { once: true });
+  });
+  try {
+    return await Promise.race([guard(call, ctx), aborted]);
+  } finally {
+    ctx.signal.removeEventListener('abort', onAbort);
+  }
+}
+
 /**
  * Runs one tool call.
  *
- * The tool runs only if it is registered, allowed for the task, and its arguments pass
- * its schema. A thrown error, a timeout or a refusal becomes `{ ok: false, error }`.
+ * The tool runs only if it is registered, allowed for the task, its arguments pass its
+ * schema and `options.guard` lets it through. A thrown error, a timeout or a refusal
+ * becomes `{ ok: false, error }`. A call whose signal aborts before the tool starts —
+ * while the guard is still answering, too — never starts it and comes back `cancelled`.
  */
 export async function executeToolCall(
   registry: EntityRegistry,
@@ -91,12 +160,22 @@ export async function executeToolCall(
   if (invalid !== null) {
     return { ok: false, error: invalid };
   }
+  if (ctx.signal.aborted) {
+    return cancelled(call.name);
+  }
   const controller = new AbortController();
   const abort = (): void => {
     controller.abort();
   };
   ctx.signal.addEventListener('abort', abort, { once: true });
   try {
+    const refused = await askGuard(options.guard, call, ctx);
+    if (refused === 'cancelled' || ctx.signal.aborted) {
+      return cancelled(call.name);
+    }
+    if (refused !== null) {
+      return { ok: false, error: refused };
+    }
     const outcome = await Promise.race([
       tool.invoke(call.args, { ...ctx, callId: call.id, signal: controller.signal }),
       deadline(options.timeoutMs, abort),

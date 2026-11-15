@@ -14,17 +14,20 @@ import { AgentEvent } from '@a2a-js/sdk/server';
 
 import type { TaskState as CoreState } from '../../harness/core/step-runner.ts';
 import type { InboxItem, InboxPayload, TaskModel } from '../../harness/core/types.ts';
-import type { JsonObject } from '../../kernel/json.ts';
-import { isJsonObject } from '../../kernel/json.ts';
 import type { DurableExecution } from '../durable/types.ts';
 import type { Inbox } from '../inbox/inbox.ts';
+import type { Triage } from '../inbox/triage.ts';
 import type { StreamHub } from '../stream-hub.ts';
-import { messageText, metadataObject, partsFromA2a } from './convert.ts';
+import { callerClosed } from './caller.ts';
+import { messageText, metadataObject } from './convert.ts';
+import { isOwnBus } from './request-buses.ts';
+import { recordFailure } from './request-failure.ts';
 import { activityEvent, artifactEvent } from './executor-events.ts';
 import type { DurableExecutionTask } from './extensions/index.ts';
-import { A2A_EVENT_MEDIA_TYPE, EXT, SCHEMAS, readExtension } from './extensions/index.ts';
+import { EXT, SCHEMAS, readExtension } from './extensions/index.ts';
+import { isFromDelegate, payloadOf } from './message-payload.ts';
 import type { A2aTaskPort, TaskSettings } from './task-port.ts';
-import { SETTINGS_KEY, STATUS_KEY, readTaskModel } from './task-port.ts';
+import { SETTINGS_KEY, STATUS_KEY, publicTask } from './task-port.ts';
 import type { YaahTaskStore } from './task-store.ts';
 
 /** Answers a `/command` without involving the task's run. Provided by the commands plugin. */
@@ -44,10 +47,16 @@ export interface ExecutorDeps {
   readonly commands?: CommandDispatcher | undefined;
   /** Reads the caller key the HTTP layer attached to the request. */
   readonly callerOf?: ((request: RequestContext) => string) | undefined;
+  /** Told when the task a request creates exists, so the slot it held can go. */
+  readonly onCreated?: ((request: RequestContext) => void) | undefined;
   /** Told when something a caller sent is dropped rather than accepted. */
   readonly onDiscard?: ((taskId: string, reason: string) => void) | undefined;
   /** Told, inside the request that brought it, when an item is about to enter the inbox. */
   readonly onAccept?: ((item: InboxItem, contextId: string) => void) | undefined;
+  /** Removes registered credentials from text a caller is told. */
+  readonly redact?: ((text: string) => string) | undefined;
+  /** Decides whether a message the client did not mark interrupts a working task. */
+  readonly triage?: Triage | undefined;
   /** How long the stream may be silent before the task store is consulted. */
   readonly backstopMs?: number | undefined;
 }
@@ -65,26 +74,6 @@ const SUPPORTED: ReadonlySet<string> = new Set(Object.values(EXT));
 function statusKey(task: Task | undefined): unknown {
   const metadata: Readonly<Record<string, unknown>> = { ...task?.metadata };
   return metadata[STATUS_KEY];
-}
-
-/** The inbox payload a message carries: a lifecycle action, a sub-task event, or content. */
-function payloadOf(message: Message): InboxPayload {
-  const lifecycle = readExtension(
-    message.metadata,
-    EXT.taskLifecycle,
-    SCHEMAS.taskLifecycleRequest,
-  );
-  if (lifecycle?.action === 'complete') {
-    return { kind: 'action', action: 'complete' };
-  }
-  const parts = partsFromA2a(message.parts);
-  const event = parts.find(
-    (part) => part.type === 'data' && part.mediaType === A2A_EVENT_MEDIA_TYPE,
-  );
-  if (event?.type === 'data' && isJsonObject(event.data)) {
-    return { kind: 'event', event: event.data };
-  }
-  return { kind: 'message', parts };
 }
 
 /** yaah's implementation of the SDK's `AgentExecutor`. */
@@ -136,16 +125,18 @@ export class HarnessExecutor implements AgentExecutor {
         : (this.#deps.store.get(taskId) ?? request.task);
     // What the client offers for this turn (for example UI catalogs) travels with the task.
     this.#deps.tasks.updateSettings(taskId, { turnMetadata: metadataObject(message.metadata) });
-    bus.publish(AgentEvent.task(task));
+    bus.publish(AgentEvent.task(publicTask(task)));
     const inbox = readExtension(message.metadata, EXT.inboxEvents, SCHEMAS.inboxEventsRequest);
+    const id = `${taskId}:${message.messageId}`;
+    const payload = payloadOf(message);
     const item: InboxItem = {
-      id: `${taskId}:${message.messageId}`,
+      id,
       taskId,
       receivedAt: new Date().toISOString(),
-      interrupt: inbox?.interrupt === true,
-      payload: payloadOf(message),
+      interrupt: inbox?.interrupt ?? (await this.#triaged(task, id, payload, message)),
+      payload,
     };
-    if (item.payload.kind === 'event' && !this.#isFromDelegate(task, item.payload.event)) {
+    if (item.payload.kind === 'event' && !isFromDelegate(task, item.payload.event)) {
       // An event is taken only for a sub-task this task delegated. Anything else is dropped.
       this.#deps.onDiscard?.(taskId, 'event for a task that was not delegated');
       return;
@@ -153,19 +144,26 @@ export class HarnessExecutor implements AgentExecutor {
     const cursor = this.#deps.hub.head(taskId);
     const before = statusKey(this.#deps.store.get(taskId));
     this.#deps.onAccept?.(item, task.contextId);
-    await this.#deps.inbox.accept(item);
-    await this.#forward(task, cursor, before, bus);
+    const outcome = await this.#deps.inbox.accept(item);
+    const current = this.#deps.store.get(taskId);
+    if (outcome === 'consumed' && current !== undefined && this.#rests(current)) {
+      // A message the run has answered already: nothing will happen, so say where it stands.
+      this.#publishStatus(current, bus);
+      return;
+    }
+    // Only a bus of the request's own has nobody else to serve once its client is gone.
+    const closed = isOwnBus(bus) ? callerClosed(request) : undefined;
+    await this.#forward(task, cursor, before, bus, closed);
   }
 
-  /** Whether `event` is about a sub-task of `task`, matched on task id and context id. */
-  #isFromDelegate(task: Task, event: JsonObject): boolean {
-    const subject = Object.values(event).find((value) => isJsonObject(value));
-    const fields = subject !== undefined && isJsonObject(subject) ? subject : {};
-    const taskId = fields['taskId'] ?? fields['id'];
-    const contextId = fields['contextId'];
-    return readTaskModel(task).subTasks.some(
-      (ref) => ref.taskId === taskId && ref.contextId === contextId,
-    );
+  /** What triage, when there is one, says about a message for a task that is working. */
+  #triaged(task: Task, id: string, payload: InboxPayload, message: Message): Promise<boolean> {
+    const { triage } = this.#deps;
+    const working = task.status?.state === TaskState.TASK_STATE_WORKING;
+    if (triage === undefined || !working || payload.kind !== 'message') {
+      return Promise.resolve(false);
+    }
+    return triage(task.id, id, messageText(message));
   }
 
   /** Marks as activated the yaah extensions the client asked for. */
@@ -188,6 +186,8 @@ export class HarnessExecutor implements AgentExecutor {
     const wanted = readExtension(message.metadata, EXT.taskModel, SCHEMAS.taskModelRequest);
     const text = messageText(message);
     const caller = this.#deps.callerOf?.(request) ?? '';
+    // Whoever creates a task is its reporter, under the id they declare for themselves.
+    const sender = readExtension(message.metadata, EXT.channels, SCHEMAS.channelsMessage)?.from;
     const parentTasks = wanted?.parentTasks ?? [];
     const model: TaskModel = {
       name: wanted?.name ?? text.slice(0, NAME_LENGTH),
@@ -198,7 +198,7 @@ export class HarnessExecutor implements AgentExecutor {
       subTasks: [],
       parentTasks,
       participants: wanted?.participants ?? [
-        { id: caller === '' ? 'user' : caller, role: 'reporter', kind: 'user' },
+        { id: sender ?? (caller === '' ? 'user' : caller), role: 'reporter', kind: 'user' },
         { id: this.#deps.agentId, role: 'assignee', kind: 'agent' },
       ],
       depth: wanted?.depth ?? 0,
@@ -230,6 +230,7 @@ export class HarnessExecutor implements AgentExecutor {
       },
     };
     this.#deps.store.update(task.id, (existing: Task | undefined) => existing ?? task);
+    this.#deps.onCreated?.(request);
     return task;
   }
 
@@ -241,23 +242,10 @@ export class HarnessExecutor implements AgentExecutor {
       : { [EXT.durableExecution]: { workflowId: `yaah-${taskId}`, runId: '', url } };
   }
 
-  /**
-   * Forwards what the task's run publishes, from `cursor` on, until the task rests —
-   * finished or waiting for input.
-   */
-  async #forward(
-    task: Task,
-    cursor: number,
-    before: unknown,
-    bus: ExecutionEventBus,
-  ): Promise<void> {
-    const { hub, store } = this.#deps;
-    const stop = new AbortController();
-    const publishStatus = (): boolean => {
-      const current = store.get(task.id);
-      if (current?.status === undefined) {
-        return false;
-      }
+  /** Publishes the status `task` has in the store. */
+  #publishStatus(task: Task, bus: ExecutionEventBus): void {
+    const current = this.#deps.store.get(task.id);
+    if (current?.status !== undefined) {
       bus.publish(
         AgentEvent.statusUpdate({
           taskId: task.id,
@@ -266,8 +254,33 @@ export class HarnessExecutor implements AgentExecutor {
           metadata: undefined,
         }),
       );
-      return true;
+    }
+  }
+
+  /**
+   * Forwards what the task's run publishes, from `cursor` on, until the task rests —
+   * finished or waiting for input — or `closed` aborts: the caller of a request with a
+   * bus of its own went away.
+   */
+  async #forward(
+    task: Task,
+    cursor: number,
+    before: unknown,
+    bus: ExecutionEventBus,
+    closed?: AbortSignal,
+  ): Promise<void> {
+    const { hub, store } = this.#deps;
+    const stop = new AbortController();
+    const publishStatus = (): void => {
+      this.#publishStatus(task, bus);
     };
+    const onClosed = (): void => {
+      stop.abort();
+    };
+    if (closed?.aborted === true) {
+      stop.abort();
+    }
+    closed?.addEventListener('abort', onClosed, { once: true });
     // The store is the record. If the stream is silent, ask the store whether the turn
     // ended without our seeing it.
     const backstop = setInterval(() => {
@@ -292,6 +305,7 @@ export class HarnessExecutor implements AgentExecutor {
       }
     } finally {
       clearInterval(backstop);
+      closed?.removeEventListener('abort', onClosed);
       stop.abort();
     }
   }
@@ -306,28 +320,28 @@ export class HarnessExecutor implements AgentExecutor {
     );
   }
 
-  /** Records a failure of the executor itself as the task's status. */
+  /**
+   * Reports a failure of the executor itself. For a task that existed before this
+   * request, the request fails and the task is left alone: its run is still going. A
+   * task this request created never got the message, so it is marked failed.
+   */
   #fail(request: RequestContext, bus: ExecutionEventBus, error: unknown): void {
-    const cause = error instanceof Error ? error.message : String(error);
-    const key = `${request.taskId}/-/executor/${request.userMessage.messageId}`;
-    if (this.#deps.store.get(request.taskId) === undefined) {
-      throw error;
+    const raw = error instanceof Error ? error.message : String(error);
+    const cause = this.#deps.redact?.(raw) ?? raw;
+    if (request.task !== undefined) {
+      recordFailure(request.context, cause);
+      return;
     }
+    const created = this.#deps.store.get(request.taskId);
+    if (created === undefined) {
+      throw new Error(cause);
+    }
+    const key = `${request.taskId}/-/executor/${request.userMessage.messageId}`;
     void this.#deps.tasks.setStatus(request.taskId, key, {
       state: 'failed',
       subState: null,
       message: [{ type: 'text', text: cause }],
     });
-    const failed = this.#deps.store.get(request.taskId);
-    if (failed?.status !== undefined) {
-      bus.publish(
-        AgentEvent.statusUpdate({
-          taskId: failed.id,
-          contextId: failed.contextId,
-          status: failed.status,
-          metadata: undefined,
-        }),
-      );
-    }
+    this.#publishStatus(created, bus);
   }
 }

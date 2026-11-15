@@ -6,6 +6,8 @@
  */
 import { describe, expect, test } from 'bun:test';
 
+import type { ContentPart } from '../../src/harness/core/types.ts';
+
 import { createCompatibleLlm } from '../../src/harness/models/llm/openai-compatible/provider.ts';
 import type { LLM, LlmRequest } from '../../src/harness/models/llm/types.ts';
 import { LlmError } from '../../src/harness/models/llm/types.ts';
@@ -171,6 +173,43 @@ describe('openai-compatible provider: request mapping', () => {
     ]);
   });
 
+  test('sends inline WAV and MP3 audio as input_audio parts, and no other audio', async () => {
+    const http = replay(TEXT);
+    const audio = (mediaType: string): ContentPart => ({
+      type: 'file',
+      mediaType,
+      source: { kind: 'base64', data: 'UklGRg==' },
+    });
+    const linked: ContentPart = {
+      type: 'file',
+      mediaType: 'audio/wav',
+      source: { kind: 'url', url: 'https://audio.example/a.wav' },
+    };
+    await collect(llm(http), {
+      messages: [
+        {
+          role: 'user',
+          content: [
+            audio('audio/wav'),
+            audio('audio/mpeg; rate=44100'),
+            audio('audio/webm'),
+            linked,
+          ],
+        },
+      ],
+      tools: [],
+    });
+    expect(http.requests[0]?.body['messages']).toEqual([
+      {
+        role: 'user',
+        content: [
+          { type: 'input_audio', input_audio: { data: 'UklGRg==', format: 'wav' } },
+          { type: 'input_audio', input_audio: { data: 'UklGRg==', format: 'mp3' } },
+        ],
+      },
+    ]);
+  });
+
   test('sends an assistant turn with its tool calls, then the results in call order', async () => {
     const http = replay(TEXT);
     await collect(llm(http), {
@@ -245,7 +284,7 @@ describe('openai-compatible provider: response mapping', () => {
     expect(events.at(-1)).toEqual({
       type: 'done',
       stopReason: 'end',
-      usage: { inputTokens: 88, outputTokens: 5, cachedInputTokens: 32 },
+      usage: { inputTokens: 67, outputTokens: 5, cachedInputTokens: 0 },
     });
   });
 
@@ -257,13 +296,13 @@ describe('openai-compatible provider: response mapping', () => {
     expect(events).toEqual([
       {
         type: 'tool-call',
-        call: { id: 'call_fixture_lookup', name: 'lookup', args: { id: 'A-1' } },
+        call: { id: 'call_xrGBQm9z0PLvVb6J8JK9OKYQ', name: 'lookup', args: { id: 'A-1' } },
       },
-      { type: 'tool-call', call: { id: 'call_fixture_rules', name: 'rules', args: {} } },
+      { type: 'tool-call', call: { id: 'call_0VzIaycZ3LtxeNOZv1YxtxDN', name: 'rules', args: {} } },
       {
         type: 'done',
         stopReason: 'tool-calls',
-        usage: { inputTokens: 104, outputTokens: 34, cachedInputTokens: 0 },
+        usage: { inputTokens: 86, outputTokens: 42, cachedInputTokens: 0 },
       },
     ]);
   });
@@ -275,15 +314,35 @@ describe('openai-compatible provider: response mapping', () => {
       chunk({}, 'stop'),
     ]);
     const events = await collect(replaying(sse(body)), HI);
+    const ids = events.map((event) => (event.type === 'tool-call' ? event.call.id : ''));
+    expect(ids[0]).toMatch(/^call_[0-9a-f]{8}_0$/u);
+    expect(ids[1]).toBe(ids[0]?.replace(/_0$/u, '_1'));
     expect(events).toEqual([
-      { type: 'tool-call', call: { id: 'call_0', name: 'rules', args: {} } },
-      { type: 'tool-call', call: { id: 'call_1', name: 'rules', args: {} } },
+      { type: 'tool-call', call: { id: ids[0] ?? '', name: 'rules', args: {} } },
+      { type: 'tool-call', call: { id: ids[1] ?? '', name: 'rules', args: {} } },
       {
         type: 'done',
         stopReason: 'tool-calls',
         usage: { inputTokens: 0, outputTokens: 0, cachedInputTokens: 0 },
       },
     ]);
+  });
+
+  test('gives id-less calls of two responses ids that differ', async () => {
+    const body = (): string =>
+      chatSse([
+        chunk({ tool_calls: [{ index: 0, function: { name: 'get_balance', arguments: '{}' } }] }),
+        chunk({}, 'tool_calls'),
+      ]);
+    const model = replaying(sse(body()), sse(body()));
+    const idOf = async (): Promise<string> => {
+      const [first] = await collect(model, HI);
+      return first?.type === 'tool-call' ? first.call.id : '';
+    };
+    const turn1 = await idOf();
+    const turn2 = await idOf();
+    expect(turn1).not.toBe('');
+    expect(turn2).not.toBe(turn1);
   });
 
   test('maps length, a content filter and a refusal to their stop reasons', async () => {

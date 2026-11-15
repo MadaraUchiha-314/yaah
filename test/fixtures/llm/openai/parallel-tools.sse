@@ -1,42 +1,33 @@
-: Hand-written from the documented Responses API streaming event shapes. Not a recording.
-: Replace by running scripts/record-llm-fixtures.ts with a valid key.
-
 event: response.created
-data: {"type":"response.created","sequence_number":0,"response":{"id":"resp_fixture_tools","object":"response","created_at":1794700000,"status":"in_progress","model":"gpt-6.1-sol","output":[],"store":false,"error":null,"incomplete_details":null,"usage":null}}
+data: {"type":"response.created","response":{"id":"resp_0f3cdc7e74a587b1016af9237f87d487d0a399db75129d258a","object":"response","created_at":1794712447,"status":"in_progress","access_programs":{"cyber":"standard"},"background":false,"completed_at":null,"error":null,"frequency_penalty":0.0,"image":{"context_compression":"disabled"},"incomplete_details":null,"input_transformations":[],"instructions":null,"max_output_tokens":2000,"max_tool_calls":null,"model":"gpt-6.1-sol","moderation":null,"output":[],"parallel_tool_calls":true,"presence_penalty":0.0,"previous_response_id":null,"prompt_cache_key":null,"prompt_cache_retention":"24h","reasoning":{"context":"all_turns","effort":"low","mode":"standard","summary":null},"safety_identifier":null,"service_tier":"auto","store":false,"temperature":1.0,"text":{"format":{"type":"text"},"verbosity":"medium"},"tool_choice":"auto","tool_usage":{"image_gen":{"input_tokens":0,"input_tokens_details":{"image_tokens":0,"text_tokens":0},"output_tokens":0,"output_tokens_details":{"image_tokens":0,"text_tokens":0},"total_tokens":0},"web_search":{"num_requests":0}},"tools":[{"type":"function","description":"Look an order up.","name":"lookup","output_schema":null,"parameters":{"type":"object","properties":{"id":{"type":"string"}},"required":["id"]},"strict":false},{"type":"function","description":"Refund rules.","name":"rules","output_schema":null,"parameters":{"type":"object","properties":{}},"strict":false}],"top_logprobs":0,"top_p":0.98,"truncation":"disabled","usage":null,"user":null,"metadata":{}},"sequence_number":0}
+
+event: response.in_progress
+data: {"type":"response.in_progress","response":{"id":"resp_0f3cdc7e74a587b1016af9237f87d487d0a399db75129d258a","object":"response","created_at":1794712447,"status":"in_progress","access_programs":{"cyber":"standard"},"background":false,"completed_at":null,"error":null,"frequency_penalty":0.0,"image":{"context_compression":"disabled"},"incomplete_details":null,"input_transformations":[],"instructions":null,"max_output_tokens":2000,"max_tool_calls":null,"model":"gpt-6.1-sol","moderation":null,"output":[],"parallel_tool_calls":true,"presence_penalty":0.0,"previous_response_id":null,"prompt_cache_key":null,"prompt_cache_retention":"24h","reasoning":{"context":"all_turns","effort":"low","mode":"standard","summary":null},"safety_identifier":null,"service_tier":"auto","store":false,"temperature":1.0,"text":{"format":{"type":"text"},"verbosity":"medium"},"tool_choice":"auto","tool_usage":{"image_gen":{"input_tokens":0,"input_tokens_details":{"image_tokens":0,"text_tokens":0},"output_tokens":0,"output_tokens_details":{"image_tokens":0,"text_tokens":0},"total_tokens":0},"web_search":{"num_requests":0}},"tools":[{"type":"function","description":"Look an order up.","name":"lookup","output_schema":null,"parameters":{"type":"object","properties":{"id":{"type":"string"}},"required":["id"]},"strict":false},{"type":"function","description":"Refund rules.","name":"rules","output_schema":null,"parameters":{"type":"object","properties":{}},"strict":false}],"top_logprobs":0,"top_p":0.98,"truncation":"disabled","usage":null,"user":null,"metadata":{}},"sequence_number":1}
 
 event: response.output_item.added
-data: {"type":"response.output_item.added","sequence_number":1,"output_index":0,"item":{"id":"rs_fixture_tools","type":"reasoning","summary":[]}}
-
-event: response.output_item.done
-data: {"type":"response.output_item.done","sequence_number":2,"output_index":0,"item":{"id":"rs_fixture_tools","type":"reasoning","summary":[],"encrypted_content":"gAAAAABfixture-encrypted-reasoning-tools"}}
-
-event: response.output_item.added
-data: {"type":"response.output_item.added","sequence_number":3,"output_index":1,"item":{"id":"fc_fixture_lookup","type":"function_call","status":"in_progress","arguments":"","call_id":"call_fixture_lookup","name":"lookup"}}
+data: {"type":"response.output_item.added","item":{"id":"fc_0f3cdc7e74a587b1016af92380c01c87d0a75c85b0e0f80864","type":"function_call","status":"in_progress","arguments":"","call_id":"call_ehsjvZqgXU1GRxMCrRe5TnFi","name":"lookup"},"output_index":0,"sequence_number":2}
 
 event: response.function_call_arguments.delta
-data: {"type":"response.function_call_arguments.delta","sequence_number":4,"item_id":"fc_fixture_lookup","output_index":1,"delta":"{\"id\":"}
-
-event: response.function_call_arguments.delta
-data: {"type":"response.function_call_arguments.delta","sequence_number":5,"item_id":"fc_fixture_lookup","output_index":1,"delta":"\"A-1\"}"}
+data: {"type":"response.function_call_arguments.delta","delta":"{\"id\":\"A-1\"}","item_id":"fc_0f3cdc7e74a587b1016af92380c01c87d0a75c85b0e0f80864","obfuscation":"IwvT","output_index":0,"sequence_number":3}
 
 event: response.function_call_arguments.done
-data: {"type":"response.function_call_arguments.done","sequence_number":6,"item_id":"fc_fixture_lookup","output_index":1,"name":"lookup","arguments":"{\"id\":\"A-1\"}"}
+data: {"type":"response.function_call_arguments.done","arguments":"{\"id\":\"A-1\"}","item_id":"fc_0f3cdc7e74a587b1016af92380c01c87d0a75c85b0e0f80864","output_index":0,"sequence_number":4}
 
 event: response.output_item.done
-data: {"type":"response.output_item.done","sequence_number":7,"output_index":1,"item":{"id":"fc_fixture_lookup","type":"function_call","status":"completed","arguments":"{\"id\":\"A-1\"}","call_id":"call_fixture_lookup","name":"lookup"}}
+data: {"type":"response.output_item.done","item":{"id":"fc_0f3cdc7e74a587b1016af92380c01c87d0a75c85b0e0f80864","type":"function_call","status":"completed","arguments":"{\"id\":\"A-1\"}","call_id":"call_ehsjvZqgXU1GRxMCrRe5TnFi","name":"lookup"},"output_index":0,"sequence_number":5}
 
 event: response.output_item.added
-data: {"type":"response.output_item.added","sequence_number":8,"output_index":2,"item":{"id":"fc_fixture_rules","type":"function_call","status":"in_progress","arguments":"","call_id":"call_fixture_rules","name":"rules"}}
+data: {"type":"response.output_item.added","item":{"id":"fc_0f3cdc7e74a587b1016af92380c02c87d08c57335a772f1efe","type":"function_call","status":"in_progress","arguments":"","call_id":"call_O2tVtaC84SC0b6xQeK8yHJvh","name":"rules"},"output_index":1,"sequence_number":6}
 
 event: response.function_call_arguments.delta
-data: {"type":"response.function_call_arguments.delta","sequence_number":9,"item_id":"fc_fixture_rules","output_index":2,"delta":"{}"}
+data: {"type":"response.function_call_arguments.delta","delta":"{}","item_id":"fc_0f3cdc7e74a587b1016af92380c02c87d08c57335a772f1efe","obfuscation":"1tuCYRnPlC2S9S","output_index":1,"sequence_number":7}
 
 event: response.function_call_arguments.done
-data: {"type":"response.function_call_arguments.done","sequence_number":10,"item_id":"fc_fixture_rules","output_index":2,"name":"rules","arguments":"{}"}
+data: {"type":"response.function_call_arguments.done","arguments":"{}","item_id":"fc_0f3cdc7e74a587b1016af92380c02c87d08c57335a772f1efe","output_index":1,"sequence_number":8}
 
 event: response.output_item.done
-data: {"type":"response.output_item.done","sequence_number":11,"output_index":2,"item":{"id":"fc_fixture_rules","type":"function_call","status":"completed","arguments":"{}","call_id":"call_fixture_rules","name":"rules"}}
+data: {"type":"response.output_item.done","item":{"id":"fc_0f3cdc7e74a587b1016af92380c02c87d08c57335a772f1efe","type":"function_call","status":"completed","arguments":"{}","call_id":"call_O2tVtaC84SC0b6xQeK8yHJvh","name":"rules"},"output_index":1,"sequence_number":9}
 
 event: response.completed
-data: {"type":"response.completed","sequence_number":12,"response":{"id":"resp_fixture_tools","object":"response","created_at":1794700000,"status":"completed","model":"gpt-6.1-sol","output":[{"id":"rs_fixture_tools","type":"reasoning","summary":[],"encrypted_content":"gAAAAABfixture-encrypted-reasoning-tools"},{"id":"fc_fixture_lookup","type":"function_call","status":"completed","arguments":"{\"id\":\"A-1\"}","call_id":"call_fixture_lookup","name":"lookup"},{"id":"fc_fixture_rules","type":"function_call","status":"completed","arguments":"{}","call_id":"call_fixture_rules","name":"rules"}],"store":false,"error":null,"incomplete_details":null,"usage":{"input_tokens":120,"input_tokens_details":{"cached_tokens":0,"cache_write_tokens":0},"output_tokens":48,"output_tokens_details":{"reasoning_tokens":16},"total_tokens":168}}}
+data: {"type":"response.completed","response":{"id":"resp_0f3cdc7e74a587b1016af9237f87d487d0a399db75129d258a","object":"response","created_at":1794712447,"status":"completed","access_programs":{"cyber":"standard"},"background":false,"completed_at":1794712448,"error":null,"frequency_penalty":0.0,"image":{"context_compression":"disabled"},"incomplete_details":null,"input_transformations":[],"instructions":null,"max_output_tokens":2000,"max_tool_calls":null,"model":"gpt-6.1-sol","moderation":null,"output":[{"id":"fc_0f3cdc7e74a587b1016af92380c01c87d0a75c85b0e0f80864","type":"function_call","status":"completed","arguments":"{\"id\":\"A-1\"}","call_id":"call_ehsjvZqgXU1GRxMCrRe5TnFi","name":"lookup"},{"id":"fc_0f3cdc7e74a587b1016af92380c02c87d08c57335a772f1efe","type":"function_call","status":"completed","arguments":"{}","call_id":"call_O2tVtaC84SC0b6xQeK8yHJvh","name":"rules"}],"parallel_tool_calls":true,"presence_penalty":0.0,"previous_response_id":null,"prompt_cache_key":null,"prompt_cache_retention":"24h","reasoning":{"context":"all_turns","effort":"low","mode":"standard","summary":null},"safety_identifier":null,"service_tier":"default","store":false,"temperature":1.0,"text":{"format":{"type":"text"},"verbosity":"medium"},"tool_choice":"auto","tool_usage":{"image_gen":{"input_tokens":0,"input_tokens_details":{"image_tokens":0,"text_tokens":0},"output_tokens":0,"output_tokens_details":{"image_tokens":0,"text_tokens":0},"total_tokens":0},"web_search":{"num_requests":0}},"tools":[{"type":"function","description":"Look an order up.","name":"lookup","output_schema":null,"parameters":{"type":"object","properties":{"id":{"type":"string"}},"required":["id"]},"strict":false},{"type":"function","description":"Refund rules.","name":"rules","output_schema":null,"parameters":{"type":"object","properties":{}},"strict":false}],"top_logprobs":0,"top_p":0.98,"truncation":"disabled","usage":{"input_tokens":89,"input_tokens_details":{"cache_write_tokens":0,"cache_write_tokens_details":{"ttl_12h_tokens":0,"ttl_30m_tokens":0},"cached_tokens":0},"output_tokens":46,"output_tokens_details":{"reasoning_tokens":0},"total_tokens":135},"user":null,"metadata":{}},"sequence_number":10}
 

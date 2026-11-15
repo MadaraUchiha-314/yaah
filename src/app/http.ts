@@ -5,26 +5,17 @@
 import type { Server } from 'node:http';
 
 import { AGENT_CARD_PATH } from '@a2a-js/sdk';
-import {
-  UserBuilder,
-  agentCardHandler,
-  jsonRpcHandler,
-  restHandler,
-} from '@a2a-js/sdk/server/express';
+import { agentCardHandler, jsonRpcHandler, restHandler } from '@a2a-js/sdk/server/express';
 import type { Context } from 'cordis';
 import type { Express, Request, Response } from 'express';
 import express from 'express';
 
 import { JSONRPC_PATH, REST_PATH } from './api-server/agent-card.ts';
+import { connectedCaller } from './api-server/caller.ts';
+import type { ListenerAddress } from './api-server/guards.ts';
 import { limitGuard, originGuard } from './api-server/guards.ts';
 
-/**
- * How an A2A client reaches this harness: over HTTP at a URL, or — in a build with no
- * listener — through an in-memory transport onto the same request handler.
- */
-export type HarnessTarget =
-  | { readonly type: 'http'; readonly url: string }
-  | { readonly type: 'in-memory' };
+export type { HarnessTarget } from './harness-target.ts';
 
 /** The running listener. */
 export interface HttpService {
@@ -38,8 +29,6 @@ declare module 'cordis' {
   interface Context {
     /** The HTTP listener of this harness. */
     http: HttpService;
-    /** How surfaces and the `self` sub-agent reach this harness. */
-    harnessTarget: HarnessTarget;
   }
   interface Events {
     /** The listener is up. */
@@ -54,6 +43,8 @@ declare module 'cordis' {
 }
 
 export const name = 'http';
+/** The runtimes this plugin runs on: it opens a network listener, so a browser build refuses it. */
+export const runtime: readonly string[] = ['node'];
 export const inject: readonly string[] = ['config', 'a2a', 'strings'];
 
 const LOOPBACK: ReadonlySet<string> = new Set(['127.0.0.1', '::1', 'localhost']);
@@ -76,17 +67,31 @@ function close(server: Server): Promise<void> {
   });
 }
 
+/**
+ * Express's `trust proxy` value for `server.trust_proxy`. `true` means the nearest proxy
+ * only: Express's own `true` trusts every hop and takes the left-most entry, which the
+ * client writes.
+ */
+function trustSetting(trust: boolean | number | readonly string[]): boolean | number | string[] {
+  if (trust === true) {
+    return 1;
+  }
+  return typeof trust === 'object' ? [...trust] : trust;
+}
+
 /** Starts the listener. */
 export async function apply(ctx: Context): Promise<void> {
   const { server: settings, limits } = ctx.config;
   const app = express();
   app.disable('x-powered-by');
-  app.set('trust proxy', settings.trustProxy);
+  app.set('trust proxy', trustSetting(settings.trustProxy));
+  let bound: ListenerAddress | undefined = undefined;
   const guards = {
     limits,
     allowedOrigins: settings.allowedOrigins,
-    trustProxy: settings.trustProxy,
+    listener: (): ListenerAddress | undefined => bound,
     openTasks: (caller: string): number => ctx.a2a.openTasks(caller),
+    slots: ctx.a2a.slots,
   };
   app.use((request: Request, response: Response, next: () => void): void => {
     if (ctx.bail('http/request', request, response, next) !== true) {
@@ -97,17 +102,21 @@ export async function apply(ctx: Context): Promise<void> {
   const server = await listen(app, settings.host, settings.port);
   const address = server.address();
   const port = typeof address === 'object' && address !== null ? address.port : settings.port;
+  bound = { host: settings.host, port };
   const host = settings.host.includes(':') ? `[${settings.host}]` : settings.host;
   const url = `http://${host}:${String(port)}`;
   const requestHandler = ctx.a2a.handlerFor(url);
-  const userBuilder = UserBuilder.noAuthentication;
+  // Nobody is authenticated; the caller carries the closing of its connection.
+  const userBuilder = connectedCaller;
   const body = express.json({
     limit: limits.maxBodyBytes,
     type: ['application/json', 'application/a2a+json'],
   });
   app.use(`/${AGENT_CARD_PATH}`, agentCardHandler({ agentCardProvider: requestHandler }));
-  app.use(REST_PATH, body, limitGuard(guards), restHandler({ requestHandler, userBuilder }));
-  app.use(JSONRPC_PATH, body, limitGuard(guards), jsonRpcHandler({ requestHandler, userBuilder }));
+  // One guard, so one rate per caller, for both bindings: alternating gains nothing.
+  const limited = limitGuard(guards);
+  app.use(REST_PATH, body, limited, restHandler({ requestHandler, userBuilder }));
+  app.use(JSONRPC_PATH, body, limited, jsonRpcHandler({ requestHandler, userBuilder }));
   ctx.effect(() => {
     const release = ctx.provide('http', { url, app });
     const releaseTarget = ctx.provide('harnessTarget', { type: 'http', url });

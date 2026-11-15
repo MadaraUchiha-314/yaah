@@ -10,6 +10,7 @@ import { fileURLToPath } from 'node:url';
 
 import type { TemporalLink } from '../../src/app/durable/temporal/connection.ts';
 import { startEmbedded } from '../../src/app/durable/temporal/connection.ts';
+import { ensureKey } from '../live/keys.ts';
 import { freePort } from '../support/ports.ts';
 
 const ENTRY = fileURLToPath(new URL('./harness-process.ts', import.meta.url));
@@ -50,7 +51,29 @@ interface Setup {
   readonly hangFile: string;
 }
 
-async function setup(mode: 'none' | 'temporal'): Promise<Setup> {
+type Mode = 'none' | 'temporal' | 'temporal-cloud';
+
+/** The project's Temporal Cloud namespace; the cloud mode runs only when its key is found. */
+const CLOUD = {
+  address: process.env['YAAH_LIVE_TEMPORAL_ADDRESS'] ?? 'yaah.gtebu.tmprl.cloud:7233',
+  namespace: process.env['YAAH_LIVE_TEMPORAL_NAMESPACE'] ?? 'yaah.gtebu',
+};
+const MODES: readonly Mode[] = ensureKey('TEMPORAL_API_KEY', 'temporal')
+  ? ['none', 'temporal', 'temporal-cloud']
+  : ['none', 'temporal'];
+
+function temporalEnv(mode: Mode): Record<string, string> {
+  if (mode === 'temporal-cloud') {
+    return {
+      TEMPORAL_ADDRESS: CLOUD.address,
+      TEMPORAL_NAMESPACE: CLOUD.namespace,
+      TEMPORAL_KEY_ENV: 'TEMPORAL_API_KEY',
+    };
+  }
+  return { TEMPORAL_ADDRESS: mode === 'temporal' ? `127.0.0.1:${String(temporalPort)}` : '' };
+}
+
+async function setup(mode: Mode): Promise<Setup> {
   const dir = await mkdtemp(join(tmpdir(), 'yaah-chaos-'));
   dirs.push(dir);
   const logFile = join(dir, 'calls.log');
@@ -66,7 +89,7 @@ async function setup(mode: 'none' | 'temporal'): Promise<Setup> {
       LOG_FILE: logFile,
       HANG_FILE: hangFile,
       TASK_QUEUE: `chaos-${String(Date.now())}-${String(Math.random()).slice(2, 8)}`,
-      TEMPORAL_ADDRESS: mode === 'temporal' ? `127.0.0.1:${String(temporalPort)}` : '',
+      ...temporalEnv(mode),
     },
   };
 }
@@ -120,7 +143,7 @@ async function until<T>(
  * Starts a task whose tool hangs, kills the process with SIGKILL while the tool is
  * mid-flight, restarts it on the same data, and returns what happened.
  */
-async function crashMidTool(mode: 'none' | 'temporal', text: string) {
+async function crashMidTool(mode: Mode, text: string) {
   const prepared = await setup(mode);
   const first = await start(prepared.env);
   const client = await new ClientFactory().createFromUrl(first.url);
@@ -183,7 +206,7 @@ const count = (calls: readonly string[], what: string): number =>
   calls.filter((line) => line === what).length;
 
 describe('crash recovery', () => {
-  for (const mode of ['none', 'temporal'] as const) {
+  for (const mode of MODES) {
     /**
      * Feature: Durable execution
      * Scenario: A crashed run resumes without repeating a recorded step
