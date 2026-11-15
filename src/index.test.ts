@@ -1,13 +1,12 @@
 import { describe, expect, test } from 'bun:test';
 
-import { NAME, greet } from './index.ts';
+import * as yaah from './index.ts';
 
-describe('index', () => {
-  test('exports the package name', () => {
-    expect(NAME).toBe('yaah');
-  });
-
-  test('greet includes the name', () => {
-    expect(greet('world')).toBe('Hello from yaah, world!');
+describe('package entry point', () => {
+  test('exports what an embedding application needs to build a harness', () => {
+    expect(typeof yaah.createHarness).toBe('function');
+    expect(typeof yaah.loadConfig).toBe('function');
+    expect(typeof yaah.registerEntity).toBe('function');
+    expect(typeof yaah.definePrompt).toBe('function');
   });
 });

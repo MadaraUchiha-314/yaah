@@ -1,13 +1,9 @@
 /**
  * yaah — Yet Another Agent Harness.
  *
- * Public entry point. Real exports land here as the harness is built out.
+ * The package's public entry point. Everything the `yaah` command uses is exported, so a
+ * developer can build the same harness programmatically with {@link createHarness}.
  */
-
-/** The package name, exported so the entry point is non-empty and testable. */
-export const NAME = 'yaah';
-
-/** Returns a greeting for the given name. */
-export function greet(name: string): string {
-  return `Hello from ${NAME}, ${name}!`;
-}
+export * from './kernel/index.ts';
+export { definePrompt, renderPrompt } from './harness/system-prompt/prompt.ts';
+export type { Prompt, PromptDefinition } from './harness/system-prompt/prompt.ts';

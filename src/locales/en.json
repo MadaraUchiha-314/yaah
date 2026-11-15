@@ -1,0 +1,13 @@
+{
+  "error.entity.not-found": "No {kind} is registered as ({id}, {version}).",
+  "error.entity.conflict": "A {kind} is already registered as ({id}, {version}). Pass override to replace it.",
+  "error.plugin.load": "Plugin \"{name}\" (entry {entryId}) failed to load: {reason}",
+  "error.plugin.missing": "the module could not be found or imported",
+  "error.config.read": "Cannot read configuration file {file}: {reason}",
+  "error.config.parse": "Configuration file {file} is not valid TOML: {reason}",
+  "error.config.invalid": "Configuration file {file}: {key}: {reason}",
+  "error.config.credential": "Environment variable {variable} (named by {key} in {file}) is not set.",
+  "error.prompt.variable": "Prompt {id} needs a value for \"{variable}\".",
+  "error.composition.unknown": "Unknown composition \"{name}\". Use \"cli\", \"server\" or a path to a cordis.yaml.",
+  "error.config.missing": "the file does not exist"
+}

@@ -1,0 +1,4 @@
+- id: fixture
+  name: ../../plugins/tool-a.ts
+  config:
+    text: from shared file

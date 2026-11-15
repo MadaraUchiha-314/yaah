@@ -1,0 +1,91 @@
+/**
+ * The shape of yaah's configuration as code reads it: camelCase, every default applied.
+ * The file itself is TOML with snake_case keys — see `config.ts`.
+ */
+import type { EntryOverride } from './bootstrap.ts';
+
+/** How durable execution runs. */
+export type DurableMode = 'none' | 'temporal-embedded' | 'temporal-remote';
+
+/** One MCP server the harness connects to. */
+export interface McpServerConfig {
+  readonly id: string;
+  readonly transport: 'stdio' | 'http';
+  /** stdio: the executable to start. */
+  readonly command: string | undefined;
+  readonly args: readonly string[];
+  /** stdio: names of environment variables passed through to the server. */
+  readonly env: readonly string[];
+  /** http: the Streamable HTTP endpoint. */
+  readonly url: string | undefined;
+}
+
+/** One sub-agent, declared by the URL of its agent card. */
+export interface AgentConfig {
+  readonly id: string;
+  readonly cardUrl: string;
+}
+
+/** An OpenAI-compatible endpoint (OpenRouter, Ollama, …). */
+export interface CompatibleProviderConfig {
+  readonly id: string;
+  readonly baseUrl: string;
+  readonly apiKeyEnv: string | undefined;
+}
+
+/** The validated configuration, with every default applied. */
+export interface YaahConfig {
+  /** `"cli"`, `"server"`, or a path to a root `cordis.yaml`. */
+  readonly composition: string;
+  readonly locale: string;
+  /** Where the stores and the embedded Temporal database live. Empty means `~/.yaah/data`. */
+  readonly dataDir: string;
+  readonly model: { readonly llm: string; readonly effort: string };
+  readonly server: {
+    readonly host: string;
+    readonly port: number;
+    readonly allowedOrigins: readonly string[];
+    readonly trustProxy: boolean;
+  };
+  readonly providers: {
+    readonly openai: { readonly apiKeyEnv: string; readonly baseUrl: string | undefined };
+    readonly anthropic: { readonly apiKeyEnv: string };
+    readonly compatible: readonly CompatibleProviderConfig[];
+  };
+  readonly durable: {
+    readonly mode: DurableMode;
+    readonly temporal: {
+      readonly address: string;
+      readonly namespace: string;
+      readonly apiKeyEnv: string;
+      readonly taskQueue: string;
+      readonly port: number;
+      readonly uiPort: number;
+      readonly uiUrl: string | undefined;
+      readonly encryptionKeyEnv: string | undefined;
+    };
+  };
+  readonly limits: {
+    readonly maxIterations: number;
+    readonly maxAgentDepth: number;
+    readonly maxBodyBytes: number;
+    readonly maxParts: number;
+    readonly maxPartBytes: number;
+    readonly maxOpenTasksPerCaller: number;
+    readonly maxRequestsPerMinute: number;
+    readonly maxTaskTokens: number;
+  };
+  readonly compaction: { readonly threshold: number; readonly keepRecentFraction: number };
+  readonly heartbeat: { readonly intervalMs: number; readonly stalledAfterMs: number };
+  readonly o11y: {
+    readonly logLevel: 'debug' | 'info' | 'warn' | 'error';
+    readonly otlpEndpoint: string | undefined;
+    readonly captureContent: boolean;
+  };
+  readonly a2a: { readonly allowedHosts: readonly string[] };
+  readonly mcp: { readonly servers: readonly McpServerConfig[] };
+  readonly agents: readonly AgentConfig[];
+  readonly skills: { readonly paths: readonly string[] };
+  readonly plugins: readonly { readonly path: string }[];
+  readonly overrides: readonly EntryOverride[];
+}

@@ -1,0 +1,6 @@
+# Root composition of the server build. Entries are addressed by id: an operator replaces
+# any of them with an [[overrides]] table in config.toml.
+- id: core
+  name: '@cordisjs/include'
+  config:
+    path: ./shared/core.yml

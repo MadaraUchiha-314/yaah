@@ -1,0 +1,2 @@
+- id: ghost
+  name: ../plugins/does-not-exist.ts
