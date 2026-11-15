@@ -12,6 +12,8 @@
   name: '@cordisjs/include'
   config:
     path: ./shared/app.yml
+- id: o11y
+  name: ../app/o11y/index.ts
 - id: extensions-layer
   name: '@cordisjs/include'
   config:
@@ -20,3 +22,6 @@
   name: '@cordisjs/include'
   config:
     path: ./shared/http.yml
+# The web chat, served at / by the same listener.
+- id: web-ui
+  name: ../surface/renderer/web/server.ts

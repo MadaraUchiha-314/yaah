@@ -120,7 +120,13 @@ export async function startHarness(options: HarnessOptions = {}): Promise<TestHa
       `data_dir = ${JSON.stringify(options.dataDir ?? ':memory:')}`,
       `model = { llm = ${JSON.stringify(llm.ref.id)}, effort = "medium" }`,
       options.config?.includes('[server]') === true ? '' : '[server]\nport = 0',
+      // Quiet by default: a test of the log asks for it.
+      options.config?.includes('[o11y]') === true ? '' : '[o11y]\nlog_level = "error"',
       options.config ?? '',
+      // The web chat is served only when a test adds it: `dist/web` may or may not exist.
+      options.config?.includes('"web-ui"') === true
+        ? ''
+        : '[[overrides]]\nid = "web-ui"\ndisabled = true',
     ].join('\n'),
     'test-config.toml',
   );

@@ -9,7 +9,8 @@ import type { TaskPort, TaskSnapshot, TaskStatusUpdate } from '../../harness/cor
 import type { ContentPart, StepKey, TaskId, TaskModel } from '../../harness/core/types.ts';
 import { YaahError } from '../../kernel/errors.ts';
 import type { StreamHub } from '../stream-hub.ts';
-import { fromA2aState, resultArtifact, toA2aStatus } from './convert.ts';
+import type { JsonObject } from '../../kernel/json.ts';
+import { fromA2aState, metadataObject, resultArtifact, toA2aStatus } from './convert.ts';
 import type { YaahTaskStore } from './task-store.ts';
 import { EXT, SCHEMAS, readExtension } from './extensions/index.ts';
 
@@ -28,9 +29,17 @@ export interface TaskSettings {
   readonly llm: string | null;
   /** The effort chosen with `/effort`, or null. */
   readonly effort: string | null;
+  /** The metadata of the latest message from the client. */
+  readonly turnMetadata: JsonObject;
 }
 
-const NO_SETTINGS: TaskSettings = { longRunning: false, caller: '', llm: null, effort: null };
+const NO_SETTINGS: TaskSettings = {
+  longRunning: false,
+  caller: '',
+  llm: null,
+  effort: null,
+  turnMetadata: {},
+};
 
 /** A model for a task that carries none. */
 export function emptyTaskModel(): TaskModel {
@@ -68,6 +77,7 @@ export function readSettings(task: Task): TaskSettings {
     caller: text(settings['caller']) ?? '',
     llm: text(settings['llm']),
     effort: text(settings['effort']),
+    turnMetadata: metadataObject(settings['turnMetadata']),
   };
 }
 
@@ -119,6 +129,7 @@ export class A2aTaskPort implements TaskPort {
           : null,
       llm: settings.llm,
       effort: settings.effort,
+      turnMetadata: settings.turnMetadata,
     });
   }
 

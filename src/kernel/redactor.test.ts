@@ -51,3 +51,13 @@ describe('Redactor', () => {
     expect(redactor.contains('clean')).toBe(false);
   });
 });
+
+test('a count or a flag under a sensitive-looking name is kept', () => {
+  const redactor = new Redactor();
+  expect(redactor.redact({ inputTokens: 12, hasToken: true, token: null, tokens: ['a'] })).toEqual({
+    inputTokens: 12,
+    hasToken: true,
+    token: null,
+    tokens: REDACTED,
+  });
+});

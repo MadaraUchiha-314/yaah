@@ -7,7 +7,7 @@
  * task store before they are published here, so a subscriber that finds the log gone
  * reads the task instead.
  */
-import type { StreamSink } from '../harness/core/task-port.ts';
+import type { Activity, StreamSink } from '../harness/core/task-port.ts';
 import type { TaskState, TaskSubState } from '../harness/core/step-runner.ts';
 import type { ContentPart, StepKey, TaskId } from '../harness/core/types.ts';
 
@@ -30,7 +30,9 @@ export type HubEvent =
   /** A piece of the model's answer, as step `key` produces it. */
   | { readonly type: 'delta'; readonly key: StepKey; readonly text: string }
   /** Everything step `key` streamed so far is void: the step is being attempted again. */
-  | { readonly type: 'reset'; readonly key: StepKey };
+  | { readonly type: 'reset'; readonly key: StepKey }
+  /** The agent started or finished something worth showing. */
+  | { readonly type: 'activity'; readonly activity: Activity };
 
 /** A hub event with its position in the task's log. */
 export interface SequencedHubEvent {
@@ -120,6 +122,10 @@ export class StreamHub implements StreamSink {
 
   reset(taskId: TaskId, key: StepKey): void {
     this.publish(taskId, { type: 'reset', key });
+  }
+
+  activity(taskId: TaskId, activity: Activity): void {
+    this.publish(taskId, { type: 'activity', activity });
   }
 
   #log(taskId: TaskId): TaskLog {

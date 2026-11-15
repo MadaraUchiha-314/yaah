@@ -66,9 +66,19 @@
   },
   "overrides": [
     {
+      "files": ["src/surface/renderer/web/components/ui/**/*.tsx"],
+      "rules": {
+        "typescript/explicit-function-return-type": "off",
+        "typescript/explicit-module-boundary-types": "off",
+        "typescript/no-unsafe-type-assertion": "off"
+      }
+    },
+    {
       "files": [
         "**/*.test.ts",
+        "**/*.test.tsx",
         "test/**/*.ts",
+        "test/**/*.tsx",
         "scripts/**/*.ts",
         "src/testing/**/*.ts",
         "build.ts",

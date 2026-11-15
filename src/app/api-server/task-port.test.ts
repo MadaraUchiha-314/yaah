@@ -75,6 +75,7 @@ describe('A2aTaskPort', () => {
       caller: '',
       llm: 'openai/x',
       effort: 'high',
+      turnMetadata: {},
     });
     expect(await port.load('t1')).toMatchObject({
       longRunning: true,

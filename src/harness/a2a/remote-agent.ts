@@ -5,6 +5,7 @@ import { ClientFactory, ServiceParameters, withA2AExtensions } from '@a2a-js/sdk
 
 import { ConfigError } from '../../kernel/errors.ts';
 import { t } from '../../kernel/strings.ts';
+import { currentTraceparent } from '../../kernel/trace-context.ts';
 import type { Agent, AgentCallOptions } from './types.ts';
 
 /** What a remote agent is built from. */
@@ -25,11 +26,21 @@ function callOptions(options: AgentCallOptions = {}): {
   serviceParameters?: ServiceParameters;
 } {
   const extensions = options.extensions ?? [];
+  // The call continues the trace of the step making it, when there is one.
+  const traceparent = currentTraceparent();
+  const updates = [
+    ...(extensions.length === 0 ? [] : [withA2AExtensions(...extensions)]),
+    ...(traceparent === undefined
+      ? []
+      : [
+          (parameters: ServiceParameters): void => {
+            parameters['traceparent'] = traceparent;
+          },
+        ]),
+  ];
   return {
     ...(options.signal === undefined ? {} : { signal: options.signal }),
-    ...(extensions.length === 0
-      ? {}
-      : { serviceParameters: ServiceParameters.create(withA2AExtensions(...extensions)) }),
+    ...(updates.length === 0 ? {} : { serviceParameters: ServiceParameters.create(...updates) }),
   };
 }
 

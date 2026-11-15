@@ -4,19 +4,28 @@
   "private": true,
   "description": "Yet Another Agent Harness",
   "license": "Apache-2.0",
+  "bin": {
+    "yaah": "./dist/cli/bin.js"
+  },
   "files": [
-    "dist"
+    "dist",
+    "specs"
   ],
   "type": "module",
   "exports": {
     ".": {
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js"
+    },
+    "./package.json": "./package.json",
+    "./*": {
+      "types": "./dist/*/index.d.ts",
+      "import": "./dist/*/index.js"
     }
   },
   "scripts": {
-    "build": "bun run build.ts",
-    "typecheck": "tsc --noEmit",
+    "build": "bun run build.ts && bun run build:web",
+    "typecheck": "tsc --noEmit && tsc --noEmit -p tsconfig.web.json",
     "lint": "oxlint --type-aware --deny-warnings",
     "lint:fix": "oxlint --type-aware --fix",
     "format": "oxfmt",
@@ -26,15 +35,20 @@
     "test:integration": "bun test test/integration",
     "test:contract": "bun test test/contract",
     "test:security": "bun test test/security",
-    "test:chaos": "bun test test/chaos",
+    "test:chaos": "bun --config=bunfig.plain.toml test test/chaos",
     "test:node": "vitest run --config vitest.node.config.ts",
     "specs:update": "bun run scripts/update-specs.ts",
     "commitlint": "commitlint --edit",
-    "check": "bun run format:check && bun run lint && bun run typecheck && bun run test && bun run build",
-    "prepare": "lefthook install"
+    "check": "bun run format:check && bun run lint && bun run typecheck && bun run test && bun run build && bun --config=bunfig.plain.toml test test/package",
+    "prepare": "lefthook install",
+    "test:package": "bun run build && bun --config=bunfig.plain.toml test test/package",
+    "build:web": "vite build",
+    "test:e2e": "playwright test"
   },
   "dependencies": {
     "@a2a-js/sdk": "1.3.0",
+    "@a2ui/agent": "0.1.0",
+    "@a2ui/web_core": "0.15.0",
     "@anthropic-ai/sdk": "^1.8.0",
     "@cfworker/json-schema": "^4.1.6",
     "@cordisjs/fs": "2.0.0-rc.0",
@@ -43,6 +57,11 @@
     "@cordisjs/include": "2.0.0-rc.0",
     "@cordisjs/loader": "1.0.0-rc.10",
     "@modelcontextprotocol/client": "^2.4.0",
+    "@opentelemetry/api": "1.10.0",
+    "@opentelemetry/core": "3.1.1",
+    "@opentelemetry/exporter-trace-otlp-http": "0.301.2",
+    "@opentelemetry/resources": "^3.1.1",
+    "@opentelemetry/sdk-trace-base": "2.12.0",
     "@temporalio/activity": "1.25.0",
     "@temporalio/client": "1.25.0",
     "@temporalio/common": "1.25.0",
@@ -51,22 +70,44 @@
     "@temporalio/workflow": "1.25.0",
     "cordis": "4.0.0-rc.13",
     "express": "^5.1.0",
+    "ink": "^8.0.0",
     "openai": "^7.57.0",
+    "react": "^19.3.1",
     "smol-toml": "1.9.1",
     "yaml": "^2.9.1",
     "zod": "4.6.7"
   },
   "devDependencies": {
+    "@a2ui/react": "0.15.0",
+    "@axe-core/playwright": "^4.14.0",
+    "@base-ui/react": "^1.9.0",
     "@commitlint/cli": "^21.2.4",
     "@commitlint/config-conventional": "^21.2.4",
+    "@happy-dom/global-registrator": "^21.0.4",
     "@modelcontextprotocol/server": "^2.4.0",
+    "@playwright/test": "^1.65.1",
+    "@shadcn/react": "^0.3.1",
+    "@tailwindcss/vite": "^4.3.5",
+    "@testing-library/react": "^16.3.3",
     "@types/bun": "^1.4.4",
     "@types/express": "^5.0.6",
+    "@types/react": "^19.3.0",
+    "@types/react-dom": "^19.3.0",
+    "@vitejs/plugin-react": "^6.3.0",
+    "class-variance-authority": "^0.7.1",
+    "clsx": "^2.1.1",
+    "ink-testing-library": "^4.0.0",
     "lefthook": "^2.2.2",
+    "lucide-react": "^1.73.0",
     "oxfmt": "^0.78.0",
     "oxlint": "^1.93.0",
     "oxlint-tsgolint": "^7.0.2007",
+    "react": "^19.3.1",
+    "react-dom": "^19.3.1",
+    "tailwind-merge": "^3.7.0",
+    "tailwindcss": "^4.3.5",
     "typescript": "7.0.2",
+    "vite": "^8.3.8",
     "vitest": "5.1.0"
   },
   "engines": {

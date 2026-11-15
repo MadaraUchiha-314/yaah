@@ -148,3 +148,7 @@ vite.config.ts.timestamp-*
 # Turbo Repo
 .turbo
 .cordis/
+
+# Playwright
+test-results/
+playwright-report/

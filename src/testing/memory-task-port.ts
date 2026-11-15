@@ -1,5 +1,6 @@
 import type { TaskPort, TaskSnapshot, TaskStatusUpdate } from '../harness/core/task-port.ts';
 import type { ContentPart, StepKey, TaskId, TaskModel } from '../harness/core/types.ts';
+import type { JsonObject } from '../kernel/json.ts';
 
 /** What a test may set when creating a task. */
 export interface MemoryTaskInit {
@@ -8,6 +9,7 @@ export interface MemoryTaskInit {
   readonly model?: Partial<TaskModel>;
   readonly llm?: string;
   readonly effort?: string;
+  readonly turnMetadata?: JsonObject;
 }
 
 /** A blank task model. */
@@ -46,6 +48,7 @@ export class MemoryTaskPort implements TaskPort {
       subState: null,
       llm: init.llm ?? null,
       effort: init.effort ?? null,
+      turnMetadata: init.turnMetadata ?? {},
     };
     this.#tasks.set(init.taskId, snapshot);
     return snapshot;

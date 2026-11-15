@@ -281,26 +281,26 @@ suite. `T<n>` refers to a row of the testing plan's matrix.
 
 ### Slice 6 — surfaces
 
-- [ ] 34. `HarnessSession` and `TaskView`
+- [x] 34. `HarnessSession` and `TaskView`
   - SDK client wrapper; extension activation; `follow` as snapshot-then-subscribe.
   - _Depends on:_ 20
   - _Requirements:_ R19.1–19.3
   - _Test:_ T2 — `Scenario: Two surfaces follow one task`
-- [ ] 35. A2UI on the agent side
+- [x] 35. A2UI on the agent side
   - `@a2ui/agent` prompt snippet and parsing; A2UI data parts; user actions as
     conversation events; the official A2UI extension in the card.
   - _Depends on:_ 14, 19
   - _Requirements:_ R19.4, R19.6; abuse case 5
   - _Test:_ T2, T8 — `Scenario: A basic-catalog A2UI form round-trips an action`;
     negative test: unknown component and `javascript:` URL
-- [ ] 36. Renderer interface, contract suite and the headless A2UI model
+- [x] 36. Renderer interface, contract suite and the headless A2UI model
   - `Renderer`, `rendererContract`; `MessageProcessor` wiring shared by both UIs;
     textual fallback.
   - _Depends on:_ 34, 35
   - _Requirements:_ R19.1, R19.5
   - _Test:_ T3, T2 — `renderer.contract.ts`; `Scenario: An unknown A2UI component falls
     back to text`
-- [ ] 37. TUI
+- [x] 37. TUI
   - Ink app per `design/tui.html`: transcript, streaming, tool groups, input request,
     status line, complete and cancel keys, command highlight, the basic-catalog
     terminal renderer, the output filter, the non-TTY path.
@@ -308,7 +308,7 @@ suite. `T<n>` refers to a row of the testing plan's matrix.
   - _Requirements:_ R21.1–21.3, R19.4; abuse case 6
   - _Test:_ T4, T6, T8 — `test/e2e/tui.test.ts` over a pseudo-terminal; frame
     snapshots; negative test: terminal escapes
-- [ ] 38. Web UI
+- [x] 38. Web UI
   - Vite, React, Tailwind, shadcn AI Elements patterns per `design/web-chat.html`;
     `A2uiSurface` with the themed basic catalog; task controls; Temporal link; served
     by the HTTP listener.
@@ -324,19 +324,19 @@ suite. `T<n>` refers to a row of the testing plan's matrix.
 
 ### Slice 7 — CLI, observability, demo
 
-- [ ] 40. CLI and package exports
+- [x] 40. CLI and package exports
   - `yaah`, `yaah serve`, `yaah tui --url`, `--config`; `createHarness`; subpath
     exports; `specs/api/exports.json`; package name `@yaah/yaah`.
   - _Depends on:_ 37, 38, 32
   - _Requirements:_ R22.1, R22.2, R22.6
   - _Test:_ T3, T4 — export-list equality; e2e starts from the built package
-- [ ] 41. Logging
+- [x] 41. Logging
   - `Logger` service, the fixed record types, redaction at the four exits.
   - _Depends on:_ 19
   - _Requirements:_ R18.1, R18.3, R18.4; abuse case 12
   - _Test:_ T2, T8 — `Scenario: Every step of a task is logged with task and trace
     ids`; negative test: credential leak
-- [ ] 42. Tracing
+- [x] 42. Tracing
   - OpenTelemetry spans by the GenAI conventions; OTLP exporter; `traceparent` across
     A2A and MCP.
   - _Depends on:_ 41, 25, 26

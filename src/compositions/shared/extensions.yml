@@ -5,3 +5,5 @@
   name: ../../harness/a2a/index.ts
 - id: tools-mcp
   name: ../../harness/tools/mcp/index.ts
+- id: a2ui
+  name: ../../harness/a2ui/index.ts

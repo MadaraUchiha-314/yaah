@@ -57,9 +57,9 @@ export function defaultConfig(): YaahConfig {
 /** Where {@link loadConfig} looks. */
 export interface LoadConfigOptions {
   /** `--config <path>`: use this file and nothing else. */
-  readonly path?: string;
+  readonly path?: string | undefined;
   /** The user's home directory. Defaults to the real one; tests pass a temporary one. */
-  readonly home?: string;
+  readonly home?: string | undefined;
 }
 
 /** A loaded configuration and where it came from. */

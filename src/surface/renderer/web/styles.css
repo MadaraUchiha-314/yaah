@@ -1,0 +1,178 @@
+@import 'tailwindcss';
+
+/*
+ * Tokens: shadcn/ui "neutral", light and dark, following the system setting. Four tokens
+ * beyond shadcn's come from the design prototype (docs/specs/issue-3/design/web-chat.html):
+ * attention (a request for input), ok, command, and their soft backgrounds. Every text
+ * colour here meets WCAG 2.1 AA (4.5:1) on the backgrounds it is used on.
+ */
+:root {
+  color-scheme: light;
+  --radius: 0.625rem;
+  --background: #ffffff;
+  --foreground: #0a0a0a;
+  --card: #ffffff;
+  --card-foreground: #0a0a0a;
+  --popover: #ffffff;
+  --popover-foreground: #0a0a0a;
+  --primary: #171717;
+  --primary-foreground: #fafafa;
+  --secondary: #f5f5f5;
+  --secondary-foreground: #171717;
+  --muted: #f5f5f5;
+  --muted-foreground: #5f5f5f;
+  --accent: #f5f5f5;
+  --accent-foreground: #171717;
+  --destructive: #b91c1c;
+  --border: #e5e5e5;
+  --input: #d4d4d4;
+  --ring: #737373;
+  --attention: #9a4a06;
+  --attention-soft: #fef3e2;
+  --ok: #166534;
+  --ok-soft: #e7f6ec;
+  --command: #1d4ed8;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    color-scheme: dark;
+    --background: #0a0a0a;
+    --foreground: #fafafa;
+    --card: #111111;
+    --card-foreground: #fafafa;
+    --popover: #1c1c1c;
+    --popover-foreground: #fafafa;
+    --primary: #fafafa;
+    --primary-foreground: #171717;
+    --secondary: #1c1c1c;
+    --secondary-foreground: #fafafa;
+    --muted: #1c1c1c;
+    --muted-foreground: #a3a3a3;
+    --accent: #1c1c1c;
+    --accent-foreground: #fafafa;
+    --destructive: #fca5a5;
+    --border: #2a2a2a;
+    --input: #3a3a3a;
+    --ring: #8a8a8a;
+    --attention: #f5b455;
+    --attention-soft: #33240b;
+    --ok: #86efac;
+    --ok-soft: #10301c;
+    --command: #93c5fd;
+  }
+}
+
+@theme inline {
+  --font-sans: ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --font-mono: ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-attention: var(--attention);
+  --color-attention-soft: var(--attention-soft);
+  --color-ok: var(--ok);
+  --color-ok-soft: var(--ok-soft);
+  --color-command: var(--command);
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+}
+
+@layer base {
+  * {
+    border-color: var(--border);
+  }
+  html,
+  body,
+  #root {
+    height: 100%;
+  }
+  body {
+    margin: 0;
+    background: var(--background);
+    color: var(--foreground);
+    font-family: var(--font-sans);
+    font-size: 15px;
+    line-height: 1.55;
+  }
+  :focus-visible {
+    outline: 2px solid var(--ring);
+    outline-offset: 2px;
+  }
+}
+
+/* The caret after an answer that is still arriving. */
+@utility streaming-caret {
+  &::after {
+    content: '▍';
+    color: var(--muted-foreground);
+    animation: caret-blink 1s steps(2) infinite;
+  }
+  @media (prefers-reduced-motion: reduce) {
+    &::after {
+      animation: none;
+    }
+  }
+}
+
+@keyframes caret-blink {
+  50% {
+    opacity: 0;
+  }
+}
+
+/*
+ * A2UI: the basic catalog reads its look from `--a2ui-*` variables. Mapping them to the
+ * tokens above makes an agent's form look like the rest of the page, in both themes.
+ */
+:root {
+  --a2ui-color-background: var(--card);
+  --a2ui-color-on-background: var(--foreground);
+  --a2ui-color-surface: var(--card);
+  --a2ui-color-on-surface: var(--foreground);
+  --a2ui-color-primary: var(--primary);
+  --a2ui-color-primary-light: var(--primary);
+  --a2ui-color-primary-dark: var(--primary);
+  --a2ui-color-primary-hover: color-mix(in oklab, var(--primary) 85%, var(--background));
+  --a2ui-color-on-primary: var(--primary-foreground);
+  --a2ui-color-secondary: var(--secondary);
+  --a2ui-color-secondary-light: var(--secondary);
+  --a2ui-color-secondary-dark: var(--secondary);
+  --a2ui-color-secondary-hover: color-mix(in oklab, var(--secondary) 90%, var(--foreground));
+  --a2ui-color-on-secondary: var(--secondary-foreground);
+  --a2ui-color-border: var(--input);
+  --a2ui-border-radius: calc(var(--radius) - 2px);
+  --a2ui-color-input: var(--background);
+  --a2ui-color-on-input: var(--foreground);
+  --a2ui-font-family-title: var(--font-sans);
+  --a2ui-font-family-monospace: var(--font-mono);
+  --a2ui-font-size: 0.9375rem;
+  --a2ui-grid-base: 0.5rem;
+}
+
+/*
+ * The basic catalog marks focus on its controls with a border colour alone. Inside the
+ * chat every control gets the page's focus ring; `!important` because the catalog's own
+ * sheet is adopted after this one and removes the outline.
+ */
+.a2ui-card :is(input, textarea, select, button, [tabindex]):focus-visible {
+  outline: 2px solid var(--ring) !important;
+  outline-offset: 2px;
+}

@@ -44,6 +44,7 @@ const task: TaskSnapshot = {
   subState: null,
   llm: null,
   effort: 'high',
+  turnMetadata: {},
 };
 
 function events(...bodies: (ConversationEventBody & { key?: string })[]): ConversationEvent[] {

@@ -88,6 +88,27 @@ describe('executeToolCall', () => {
     expect(ran).toBe(false);
   });
 
+  test('a tool that declares no input schema is never called', async () => {
+    let ran = false;
+    const bare = defineTool({
+      ...lookup,
+      id: 'bare',
+      invoke: () => {
+        ran = true;
+        return Promise.resolve(textResult('ran'));
+      },
+    });
+    // What a plugin written without types could register.
+    Reflect.deleteProperty(bare, 'inputSchema');
+    const result = await executeToolCall(
+      registryWith(bare),
+      { id: 'c1', name: 'bare', args: {} },
+      context,
+    );
+    expect(result.ok ? '' : result.error.message).toContain('declares no input schema');
+    expect(ran).toBe(false);
+  });
+
   test('turns a thrown error into a failed result', async () => {
     const broken = defineTool({
       id: 'broken',
