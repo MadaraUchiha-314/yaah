@@ -410,7 +410,7 @@ suite. `T<n>` refers to a row of the testing plan's matrix.
   - _Depends on:_ 18, 42
   - _Requirements:_ R7.5, R7.6, R18.5
   - _Test:_ T3, T2 — `systemOne.contract.ts`; triage on and off; exporter headers
-- [ ] 52. Browser build
+- [x] 52. Browser build
   - `browser.yml`, `build:browser`, the in-memory SDK transport, the node-only plugin
     check; update the P1 documentation.
   - _Depends on:_ 38, 26
