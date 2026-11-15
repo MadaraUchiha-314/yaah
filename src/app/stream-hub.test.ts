@@ -112,9 +112,33 @@ describe('StreamHub', () => {
       setTimeout(resolve, 40);
     });
     expect(hub.replay('t1', 0)).toEqual([]);
-    // A task that is only waiting keeps its log.
-    expect(hub.replay('t2', 0)).toHaveLength(1);
     expect(hub.size).toBe(1);
+  });
+
+  test('clears a resting task log a while after it came to rest (self-review 2, #5)', async () => {
+    const hub = new StreamHub(2000, 20);
+    const rest = {
+      type: 'status',
+      state: 'input-required',
+      subState: null,
+      messageId: 'm',
+    } as const;
+    hub.publish('t2', delta('answer'));
+    hub.publish('t2', rest);
+    hub.publish('t3', rest);
+    // A request that came in meanwhile started a new turn on t3: its events are kept.
+    hub.publish('t3', delta('next'));
+    await new Promise((resolve) => {
+      setTimeout(resolve, 40);
+    });
+    // An abandoned conversation keeps no events, but its numbering goes on.
+    expect(hub.replay('t2', 0)).toEqual([]);
+    expect(hub.head('t2')).toBe(2);
+    expect(hub.replay('t3', 0)).toHaveLength(2);
+    // The next turn, followed from the head as the executor does, is seen in full.
+    const next = take(hub, 't2', hub.head('t2'), 1);
+    hub.publish('t2', delta('again'));
+    expect((await next).map((entry) => entry.seq)).toEqual([3]);
   });
 
   test('following a task nobody has published for leaves nothing behind', async () => {

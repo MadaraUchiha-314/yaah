@@ -53,9 +53,11 @@ interface TaskLog {
 
 /** How many events a task's log keeps before dropping the oldest. */
 const DEFAULT_CAPACITY = 2000;
-/** How long a finished task's log stays for a subscriber that comes late. */
+/** How long a finished or resting task's log stays for a subscriber that comes late. */
 const DEFAULT_RETAIN_MS = 30_000;
 const FINAL: ReadonlySet<TaskState> = new Set(['completed', 'canceled', 'failed']);
+/** A task waits here between turns; an abandoned conversation may never leave it. */
+const RESTING: ReadonlySet<TaskState> = new Set(['input-required']);
 
 /** Keeps a timer from holding the process open, where timers can do that. */
 function unref(timer: unknown): void {
@@ -74,8 +76,9 @@ export class StreamHub implements StreamSink {
   readonly #retainMs: number;
 
   /**
-   * @param retainMs How long a task's log is kept after its final status: long enough for
-   *   a request that started following just before the end to read it.
+   * @param retainMs How long a task's log is kept after its final status, and its events
+   *   after it comes to rest: long enough for a request that started following just
+   *   before the end to read it.
    */
   constructor(capacity: number = DEFAULT_CAPACITY, retainMs: number = DEFAULT_RETAIN_MS) {
     this.#capacity = capacity;
@@ -100,6 +103,8 @@ export class StreamHub implements StreamSink {
     }
     if (event.type === 'status' && FINAL.has(event.state)) {
       this.#dropLater(taskId, log);
+    } else if (event.type === 'status' && RESTING.has(event.state)) {
+      this.#clearLater(log);
     }
     return log.head;
   }
@@ -185,6 +190,21 @@ export class StreamHub implements StreamSink {
       setTimeout(() => {
         if (this.#logs.get(taskId) === log) {
           this.#logs.delete(taskId);
+        }
+      }, this.#retainMs),
+    );
+  }
+
+  /**
+   * Empties the log of a resting task `retainMs` later, unless a new turn published since.
+   * The numbering stays, so a cursor taken from the head before the next turn is valid.
+   */
+  #clearLater(log: TaskLog): void {
+    const rested = log.head;
+    unref(
+      setTimeout(() => {
+        if (log.head === rested) {
+          log.events = [];
         }
       }, this.#retainMs),
     );
