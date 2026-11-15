@@ -211,14 +211,24 @@ async function statusMessage(
   return [];
 }
 
+/** A part with every registered secret replaced in its text or data. File bytes are kept. */
+function redactPart(deps: StepDeps, part: ContentPart): ContentPart {
+  if (part.type === 'text') {
+    return { type: 'text', text: deps.redactor.redactString(part.text) };
+  }
+  if (part.type === 'data') {
+    return { type: 'data', mediaType: part.mediaType, data: deps.redactor.redact(part.data) };
+  }
+  return part;
+}
+
 function redactResult(deps: StepDeps, result: ToolResult): ToolResult {
   if (!result.ok) {
     const message = deps.redactor.redactString(result.error.message);
     return { ok: false, error: { code: result.error.code, message } };
   }
-  const content = result.content.map((part: ContentPart): ContentPart =>
-    part.type === 'text' ? { type: 'text', text: deps.redactor.redactString(part.text) } : part,
-  );
+  // Artifacts are left out: they are not shown to the model nor kept in the conversation.
+  const content = result.content.map((part: ContentPart) => redactPart(deps, part));
   return result.structured === undefined
     ? { ok: true, content }
     : { ok: true, content, structured: deps.redactor.redact(result.structured) };
@@ -288,7 +298,8 @@ async function invokeTool(
   assertCurrent(ctx);
   if (raw.ok && raw.artifacts !== undefined && raw.artifacts.length > 0) {
     // What a tool made for the person is an artifact of the task, not conversation.
-    await deps.tasks.addArtifact(ctx.taskId, ctx.key, raw.artifacts);
+    const artifacts = raw.artifacts.map((part: ContentPart) => redactPart(deps, part));
+    await deps.tasks.addArtifact(ctx.taskId, ctx.key, artifacts);
   }
   await deps.persistence.conversation.put(ctx.taskId, ctx.key, [
     { type: 'tool-result', callId: call.id, result },
