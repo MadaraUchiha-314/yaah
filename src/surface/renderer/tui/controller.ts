@@ -269,7 +269,12 @@ export class TuiController {
       const closed = await end(view);
       // From here on the views of a turn still streaming are dropped.
       this.#generation += 1;
-      this.#set({ view: busy ? { ...this.#state.view, state: closed.state } : closed });
+      const shown = busy ? { ...this.#state.view, state: closed.state } : closed;
+      // An answer cut off by the close will not be finished: it is no longer streaming.
+      const items = shown.items.map((item): TranscriptItem =>
+        item.kind === 'agent' && item.streaming ? { ...item, streaming: false } : item,
+      );
+      this.#set({ view: { ...shown, items } });
     } catch (error) {
       this.#fail(error);
     } finally {

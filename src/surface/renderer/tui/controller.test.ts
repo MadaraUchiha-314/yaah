@@ -165,6 +165,34 @@ describe('terminal UI controller', () => {
     expect(controller.getState().view.items.some((item) => item.id === 'late')).toBe(false);
   });
 
+  test('a cancellation in the middle of an answer leaves the part shown no longer streaming', async () => {
+    const started = gate();
+    const resume = gate();
+    const partial: TranscriptItem = {
+      kind: 'agent',
+      id: 'response-k1',
+      text: 'Half an',
+      streaming: true,
+      a2ui: [],
+    };
+    const controller = new TuiController(
+      fakeSession({
+        send: async function* send() {
+          yield { ...open([partial]), state: 'working' };
+          started.release();
+          await resume.promise;
+        },
+      }),
+    );
+    const turn = controller.submit('long answer');
+    await started.promise;
+    await controller.cancel();
+    resume.release();
+    await turn;
+    expect(controller.getState().view.state).toBe('canceled');
+    expect(controller.getState().view.items).toEqual([{ ...partial, streaming: false }]);
+  });
+
   test('a cancellation that fails leaves the turn running and busy', async () => {
     const started = gate();
     const resume = gate();
