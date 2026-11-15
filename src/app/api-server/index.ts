@@ -16,6 +16,7 @@ import type { Admission } from './admission.ts';
 import { AdmissionGate } from './admission.ts';
 import { buildAgentCard } from './agent-card.ts';
 import type { CommandDispatcher } from './executor.ts';
+import { emptyMessageAdmission } from './empty-message.ts';
 import { partSizeAdmission } from './part-limit.ts';
 import { HarnessExecutor } from './executor.ts';
 import type { CommandInfo } from './extensions/index.ts';
@@ -141,13 +142,22 @@ function adderTo<T>(set: Set<T>): (item: T) => () => void {
   };
 }
 
+/** The checks every message passes whatever the composition: not empty, no oversized part. */
+function standingAdmission(maxPartBytes: number): Admission {
+  const partSize = partSizeAdmission(maxPartBytes);
+  return async (message): Promise<void> => {
+    await emptyMessageAdmission(message);
+    await partSize(message);
+  };
+}
+
 /** Builds the A2A service and picks open tasks up again. */
 export function apply(ctx: Context): void {
   const { taskRuntime: runtime, durable, strings } = ctx;
   const inbox = new Inbox(ctx.persistence.inbox, durable);
   const extensions = new Set<AgentExtension>();
   const gate = new AdmissionGate();
-  gate.add(partSizeAdmission(ctx.config.limits.maxPartBytes));
+  gate.add(standingAdmission(ctx.config.limits.maxPartBytes));
   let commands: { dispatch: CommandDispatcher; list: () => readonly CommandInfo[] } | null = null;
   let contextSettings: ContextSettings | null = null;
   const interceptors = new Set<CommandDispatcher>();

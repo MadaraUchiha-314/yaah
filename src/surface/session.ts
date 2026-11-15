@@ -151,6 +151,11 @@ export class HarnessSession {
       this.#contextId = current.contextId ?? this.#contextId;
       yield current;
     }
+    if (current.state === 'working') {
+      // The stream ended without a status: the reply was a command's, which is not part
+      // of any task. The task is in the state it was in before.
+      yield { ...current, state: view.state === 'working' ? 'idle' : view.state };
+    }
   }
 
   /** Ends an open task without invoking the model, and returns its final view. */

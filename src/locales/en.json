@@ -293,5 +293,6 @@
   "tui.voice.recording.hold": "Recording. Release Space to send, Esc to discard.",
   "tui.voice.recording.toggle": "Recording. Press Space to send, Esc to discard.",
   "tui.hint.voice": "Space talk",
-  "tui.plain.file": "{who}: {file}"
+  "tui.plain.file": "{who}: {file}",
+  "server.message.empty": "The message is empty: send some text, a file, or an action."
 }

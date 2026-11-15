@@ -7,6 +7,7 @@ import { createHarness } from '../../src/kernel/harness.ts';
 import { registerEntity } from '../../src/kernel/registry.ts';
 import { HarnessSession } from '../../src/surface/session.ts';
 import type { TaskView } from '../../src/surface/view.ts';
+import { freePort } from '../support/ports.ts';
 import { ensureKey } from './keys.ts';
 
 const CLAUDE = `anthropic/${process.env['YAAH_LIVE_ANTHROPIC_MODEL'] ?? 'claude-haiku-5-5'}`;
@@ -152,14 +153,15 @@ describe('live providers', () => {
   live(
     'The same task runs as a workflow on embedded Temporal',
     async () => {
+      const uiPort = await freePort();
       const done = await scenario(CLAUDE, [
         '[durable]',
         'mode = "temporal-embedded"',
         '[durable.temporal]',
-        'port = 17233',
-        'ui_port = 18233',
+        `port = ${String(await freePort())}`,
+        `ui_port = ${String(uiPort)}`,
       ]);
-      expect(done.workflowUrl).toContain('http://127.0.0.1:18233/');
+      expect(done.workflowUrl).toContain(`http://127.0.0.1:${String(uiPort)}/`);
       expect((await fetch(done.workflowUrl ?? '')).status).toBe(200);
     },
     180_000,
