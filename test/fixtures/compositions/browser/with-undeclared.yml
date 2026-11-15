@@ -1,0 +1,5 @@
+# A plugin that says nothing about its runtime, and reads a file when loaded.
+- id: prompts
+  name: ../../../../src/browser/plugins/prompts.ts
+- id: reads-files
+  name: ../../plugins/reads-files.ts

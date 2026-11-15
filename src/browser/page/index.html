@@ -1,0 +1,20 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="color-scheme" content="light dark" />
+    <title>yaah</title>
+  </head>
+  <body>
+    <div id="root"></div>
+    <!--
+      The harness runs in this tab; there is no yaah server. It is configured by the
+      config.toml beside this file. A page that embeds this build may instead set
+      `globalThis.yaah = { config: "<toml>", credentials: { OPENAI_API_KEY: "…" } }` in a
+      script before the one below. A credential set that way is readable by whoever uses
+      the browser: use your own key, or point `base_url` at a proxy that holds the key.
+    -->
+    <script type="module" src="./main.tsx"></script>
+  </body>
+</html>

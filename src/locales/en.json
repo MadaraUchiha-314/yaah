@@ -248,5 +248,15 @@
   "plugin.notice.skills-invalid": "\"skills\" is not a directory inside the plugin and was not used (§6.2).",
   "plugin.notice.command-name": "The command \"{command}\" was skipped: a command name starts with a letter and holds letters, digits, _ and -.",
   "plugin.notice.command-skipped": "The command \"{command}\" was not registered: {reason}",
-  "plugin.command.description": "A prompt of the plugin {plugin}."
+  "plugin.command.description": "A prompt of the plugin {plugin}.",
+  "error.browser.composition": "Composition file {file} is not a list of entries with an id and a name: {reason}",
+  "error.browser.include": "Entry {entryId} of {file} is an include the browser build cannot resolve: it needs a path, and patches are not supported. List the entries in the browser composition instead.",
+  "error.browser.not-a-plugin": "Entry {entryId} names \"{module}\", which does not export a plugin (no apply function).",
+  "error.browser.node-only": "Entry {entryId} names \"{module}\", a plugin that runs on {runtime} only and cannot be part of the browser build. Remove the entry or replace it with a browser-compatible plugin.",
+  "error.browser.builtin": "Entry {entryId} names \"{module}\", which cannot be loaded in a browser: it imports {builtin} through {chain}. Remove the entry or replace it with a browser-compatible plugin.",
+  "error.browser.override-name": "The override for entry {entryId} names the module \"{name}\". A browser build cannot load a module by name: add the plugin to the composition and rebuild.",
+  "error.browser.waiting": "it is waiting for a service nothing in the composition provides: {services}",
+  "error.browser.node-import": "\"{module}\" is not part of the browser build: {importer} loads it only where Node is available.",
+  "browser.build.done": "Built {dir}/ with {count} plugin(s): {size} of JavaScript.",
+  "browser.error.config": "Cannot read {file}: {reason}"
 }

@@ -34,6 +34,8 @@ declare module 'cordis' {
 }
 
 export const name = 'a2ui';
+/** The runtimes this plugin runs on: the A2UI agent SDK reads its catalog from the file system, so a browser build refuses it. */
+export const runtime: readonly string[] = ['node'];
 export const inject: readonly string[] = ['a2a', 'taskRuntime'];
 
 /**

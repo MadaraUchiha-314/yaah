@@ -110,6 +110,45 @@ Every directory of the source tree is a subpath (`@yaah/yaah/kernel`,
 plugins, and any plugin can be replaced by id — see
 [the architecture](docs/architecture/architecture.md#extending-yaah).
 
+## Run it in a browser
+
+`bun run build:browser` builds the harness and the web chat into `dist/browser/`: a
+static site. Serve the directory with any file server and the whole harness — the loop,
+the stores, the A2A request handling, the model providers — runs in the tab. There is no
+yaah server; the chat reaches the harness through an in-memory A2A transport.
+
+The build is the composition [`src/compositions/browser.yml`](src/compositions/browser.yml),
+resolved at build time. It leaves out what needs Node — the listener, SQLite, Temporal,
+the log file and tracing, stdio MCP servers, skills and agent plugins read from disk, and
+A2UI — and keeps tasks in memory, so they last as long as the tab. A plugin that needs
+Node says so (`export const runtime = ['node']`), and a composition that includes one
+fails the build with the entry's name.
+
+The page reads `config.toml` from beside `index.html` — the same keys as above. A tab has
+no environment, so there is nowhere safe to keep a key:
+
+- **Point it at a backend of yours** (the default to aim for): an OpenAI-compatible
+  `base_url` that needs no key, where a server adds the real one.
+
+  ```toml
+  [model]
+  llm = "proxy/your-model"
+  
+  [[providers.compatible]]
+  id = "proxy"
+  base_url = "https://your-backend.example/v1"
+  models = ["your-model"]
+  ```
+
+- **Or hand the page your own key**, for your own use: set
+  `globalThis.yaah = { credentials: { OPENAI_API_KEY: "sk-…" } }` in a script before the
+  application's. **Anyone using that browser can read it** — in the page's memory and in
+  every request it makes. Never ship a page with a key in it.
+
+To embed the harness in a page of your own, `@yaah/yaah/browser` exports
+`createBrowserHarness({ composition, config, credentials, setup })` and the in-memory
+transport; `HarnessSession.connect(harness.ctx.harnessTarget)` connects a surface to it.
+
 ## Documentation
 
 | Where                                                     | What                                                          |
@@ -130,19 +169,20 @@ bun install        # installs deps and the git hooks (lefthook)
 bun run check      # everything CI runs: format, lint, typecheck, test, build, package test
 ```
 
-| Script                 | What it does                                                                                |
-| ---------------------- | ------------------------------------------------------------------------------------------- |
-| `bun run build`        | Compiles `src/` to `dist/` with `tsc`, copies compositions and prompts, builds the web chat |
-| `bun run test`         | Unit, contract, integration and security tests with coverage (90% per file)                 |
-| `bun run test:node`    | The same tests on Node, under Vitest                                                        |
-| `bun run test:e2e`     | The web chat in Chromium (Playwright), including accessibility checks                       |
-| `bun run test:package` | Builds, then starts the built command with `node` and talks to it over A2A                  |
-| `bun run test:chaos`   | Kills a harness mid-turn (SIGKILL) and checks the task resumes                              |
-| `bun run test:live`    | Real providers; needs keys in the environment or the keyring, skips without                 |
-| `bun run specs:update` | Regenerates `specs/` after an intended contract change                                      |
-| `bun run lint`         | `oxlint` with type-aware rules, warnings fail                                               |
-| `bun run format`       | `oxfmt` (use `format:check` to verify only)                                                 |
-| `bun run typecheck`    | `tsc --noEmit` under a strict `tsconfig.json`                                               |
+| Script                  | What it does                                                                                |
+| ----------------------- | ------------------------------------------------------------------------------------------- |
+| `bun run build`         | Compiles `src/` to `dist/` with `tsc`, copies compositions and prompts, builds the web chat |
+| `bun run test`          | Unit, contract, integration and security tests with coverage (90% per file)                 |
+| `bun run test:node`     | The same tests on Node, under Vitest                                                        |
+| `bun run build:browser` | Builds the browser build — harness and web chat as a static site — into `dist/browser/`     |
+| `bun run test:e2e`      | The web chat and the browser build in Chromium (Playwright), with accessibility checks      |
+| `bun run test:package`  | Builds, then starts the built command with `node` and talks to it over A2A                  |
+| `bun run test:chaos`    | Kills a harness mid-turn (SIGKILL) and checks the task resumes                              |
+| `bun run test:live`     | Real providers; needs keys in the environment or the keyring, skips without                 |
+| `bun run specs:update`  | Regenerates `specs/` after an intended contract change                                      |
+| `bun run lint`          | `oxlint` with type-aware rules, warnings fail                                               |
+| `bun run format`        | `oxfmt` (use `format:check` to verify only)                                                 |
+| `bun run typecheck`     | `tsc --noEmit` under a strict `tsconfig.json`                                               |
 
 Git hooks (`lefthook.yml`) mirror CI (`.github/workflows/ci.yml`):
 

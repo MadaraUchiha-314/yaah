@@ -43,6 +43,7 @@
     "prepare": "lefthook install",
     "test:package": "bun run build && bun --config=bunfig.plain.toml test test/package",
     "build:web": "vite build",
+    "build:browser": "bun run scripts/build-browser.ts",
     "test:e2e": "playwright test",
     "test:live": "bun --config=bunfig.plain.toml test test/live",
     "demo:up": "bun run scripts/demo/harness.ts"

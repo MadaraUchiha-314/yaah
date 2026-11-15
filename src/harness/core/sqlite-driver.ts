@@ -4,21 +4,10 @@
  * yaah needs no SQLite dependency of its own.
  */
 
-/** A prepared statement. */
-export interface SqlStatement {
-  run(...params: SqlValue[]): unknown;
-  all(...params: SqlValue[]): unknown[];
-}
+import type { SqlDatabase, SqlStatement, SqlValue } from './sql.ts';
 
-/** An open database. */
-export interface SqlDatabase {
-  exec(sql: string): void;
-  prepare(sql: string): SqlStatement;
-  close(): void;
-}
-
-/** A value that can be bound to a statement parameter. */
-export type SqlValue = string | number | null;
+export { transaction } from './sql.ts';
+export type { SqlDatabase, SqlStatement, SqlValue } from './sql.ts';
 
 type Open = (file: string) => SqlDatabase;
 
@@ -66,17 +55,4 @@ export function openDatabase(file: string): SqlDatabase {
   const database = open(file);
   database.exec('PRAGMA journal_mode = WAL; PRAGMA synchronous = NORMAL;');
   return database;
-}
-
-/** Runs `body` in a transaction: all of its writes are applied, or none. */
-export function transaction<T>(database: SqlDatabase, body: () => T): T {
-  database.exec('BEGIN IMMEDIATE');
-  try {
-    const result = body();
-    database.exec('COMMIT');
-    return result;
-  } catch (error) {
-    database.exec('ROLLBACK');
-    throw error;
-  }
 }

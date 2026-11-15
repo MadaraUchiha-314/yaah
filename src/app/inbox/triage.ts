@@ -10,7 +10,7 @@
 import type { Context } from 'cordis';
 
 import type { SystemOne } from '../../harness/models/system-one/types.ts';
-import { renderPrompt } from '../../harness/system-prompt/index.ts';
+import { renderPrompt } from '../../harness/system-prompt/prompt.ts';
 import { YaahError } from '../../kernel/errors.ts';
 import { t } from '../../kernel/strings.ts';
 

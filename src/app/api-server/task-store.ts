@@ -12,8 +12,8 @@ import type { ListTasksRequest, ListTasksResponse, Message, Task } from '@a2a-js
 import { Task as TaskCodec, TaskState } from '@a2a-js/sdk';
 import type { ServerCallContext, TaskStore } from '@a2a-js/sdk/server';
 
-import type { SqlDatabase } from '../../harness/core/sqlite-driver.ts';
-import { transaction } from '../../harness/core/sqlite-driver.ts';
+import type { SqlDatabase } from '../../harness/core/sql.ts';
+import { transaction } from '../../harness/core/sql.ts';
 
 /** A `TaskStore` with the atomic operations yaah needs. */
 export interface YaahTaskStore extends TaskStore {

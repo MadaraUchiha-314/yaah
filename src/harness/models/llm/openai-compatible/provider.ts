@@ -159,6 +159,9 @@ export function createCompatibleLlm(options: CompatibleLlmOptions): LLM {
     apiKey: keyed ? options.apiKey : 'unused',
     baseURL: options.baseUrl,
     maxRetries: 0,
+    // In a browser the SDK refuses to start without this. Whoever starts a harness in a tab
+    // has already decided whose key or proxy it calls; on Node the flag does nothing.
+    dangerouslyAllowBrowser: true,
     organization: null,
     project: null,
     fetch: options.fetch,

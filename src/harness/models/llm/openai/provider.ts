@@ -184,6 +184,9 @@ export function createOpenAiLlm(options: OpenAiLlmOptions): LLM {
     apiKey: options.apiKey,
     baseURL: baseUrl,
     maxRetries: 0,
+    // In a browser the SDK refuses to start without this. Whoever starts a harness in a tab
+    // has already decided whose key or proxy it calls; on Node the flag does nothing.
+    dangerouslyAllowBrowser: true,
     // Ambient OPENAI_ORG_ID / OPENAI_PROJECT_ID must not change what a configured model does.
     organization: null,
     project: null,

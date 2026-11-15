@@ -66,6 +66,8 @@ declare module 'cordis' {
 }
 
 export const name = 'skills';
+/** The runtimes this plugin runs on: it reads skills from the file system, so a browser build refuses it. */
+export const runtime: readonly string[] = ['node'];
 export const inject: readonly string[] = ['entities', 'config', 'taskRuntime'];
 
 /** Position 2 of the context: one line per skill, under the `skills` prompt when present. */

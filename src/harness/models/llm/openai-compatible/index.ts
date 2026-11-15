@@ -10,6 +10,7 @@
 import type { Context } from 'cordis';
 
 import type { CompatibleProviderConfig } from '../../../../kernel/config-types.ts';
+import { readCredential } from '../../../../kernel/credentials.ts';
 import { registerEntity } from '../../../../kernel/registry.ts';
 import type { FetchLike } from '../openai/content.ts';
 import { credentialError } from '../openai/index.ts';
@@ -52,7 +53,7 @@ function resolve(
   if (injected !== undefined || endpoint.apiKeyEnv === undefined) {
     return { endpoint, apiKey: injected };
   }
-  const apiKey = process.env[endpoint.apiKeyEnv] ?? '';
+  const apiKey = readCredential(ctx, endpoint.apiKeyEnv) ?? '';
   if (apiKey !== '') {
     return { endpoint, apiKey };
   }

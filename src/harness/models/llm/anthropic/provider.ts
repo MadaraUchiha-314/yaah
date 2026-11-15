@@ -79,6 +79,9 @@ export function createAnthropicLlm(options: AnthropicLlmOptions): LLM {
     authToken: null,
     baseURL: ANTHROPIC_URL,
     maxRetries: 0,
+    // In a browser the SDK refuses to start without this. Whoever starts a harness in a tab
+    // has already decided whose key or proxy it calls; on Node the flag does nothing.
+    dangerouslyAllowBrowser: true,
     // The SDK's debug log prints request headers; yaah reports failures itself.
     logLevel: 'off',
     ...(options.fetch === undefined ? {} : { fetch: options.fetch }),

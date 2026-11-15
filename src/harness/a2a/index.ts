@@ -6,9 +6,10 @@ import type { AgentCard, Message, StreamResponse, Task } from '@a2a-js/sdk';
 import type { Context } from 'cordis';
 
 import { ConfigError } from '../../kernel/errors.ts';
+import { LOCAL } from '../../kernel/entity.ts';
 import { registerEntity } from '../../kernel/registry.ts';
 import { createInvokeAgentTool } from './invoke-tool.ts';
-import { connectRemoteAgent } from './remote-agent.ts';
+import { agentOverClient, connectRemoteAgent } from './remote-agent.ts';
 import type { Agent, AgentCallOptions } from './types.ts';
 
 export { INVOKE_AGENT } from './invoke-tool.ts';
@@ -43,14 +44,21 @@ const DEFAULT_RETRY_MS = 30_000;
 
 /**
  * The harness itself as an agent: a copy with a fresh context, reached by an A2A call to
- * its own address. The connection is made on first use.
+ * its own address — or, in a build with no listener, through the in-memory transport onto
+ * its own request handler. The connection is made on first use.
  */
 function selfAgent(ctx: Context): Agent {
   const target = ctx.harnessTarget;
-  const url = target.type === 'http' ? target.url : '';
+  const open = async (): Promise<Agent> => {
+    if (target.type === 'http') {
+      return connectRemoteAgent({ id: 'self', url: target.url });
+    }
+    const client = await target.connect();
+    return agentOverClient({ id: 'self' }, client, await client.getAgentCard(), LOCAL);
+  };
   let connected: Promise<Agent> | null = null;
   const connect = (): Promise<Agent> => {
-    connected ??= connectRemoteAgent({ id: 'self', url });
+    connected ??= open();
     return connected;
   };
   return {

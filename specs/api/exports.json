@@ -82,7 +82,18 @@
   "./app/o11y": [
     "apply",
     "inject",
-    "name"
+    "name",
+    "runtime"
+  ],
+  "./browser": [
+    "CONFIG_FILE",
+    "IN_MEMORY_PROTOCOL",
+    "IN_MEMORY_URL",
+    "InMemoryTransport",
+    "connectInMemory",
+    "createBrowserHarness",
+    "pageOptions",
+    "startPageHarness"
   ],
   "./harness/a2a": [
     "INVOKE_AGENT",
@@ -98,7 +109,8 @@
     "BASIC_CATALOG_ID",
     "apply",
     "inject",
-    "name"
+    "name",
+    "runtime"
   ],
   "./harness/channels": [
     "CREATE_TASK_FOR_PARTICIPANT",
@@ -127,7 +139,8 @@
     "MEMORY",
     "apply",
     "inject",
-    "name"
+    "name",
+    "runtime"
   ],
   "./harness/hooks": [
     "BLOCKING_HOOKS",
@@ -194,6 +207,7 @@
     "name",
     "readMcpConfig",
     "readPluginSchemas",
+    "runtime",
     "validateManifest"
   ],
   "./harness/skills": [
@@ -207,6 +221,7 @@
     "createSkillTools",
     "inject",
     "name",
+    "runtime",
     "scanSkills",
     "splitSkillMd",
     "validateFrontMatter"
@@ -216,7 +231,8 @@
     "definePrompt",
     "inject",
     "name",
-    "renderPrompt"
+    "renderPrompt",
+    "runtime"
   ],
   "./harness/tools": [
     "defineTool",

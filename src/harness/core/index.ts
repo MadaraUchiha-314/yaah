@@ -8,35 +8,21 @@ import { join } from 'node:path';
 
 import type { Context } from 'cordis';
 
-import { registerEntity } from '../../kernel/registry.ts';
-import { createBuiltinTools } from './builtin-tools.ts';
-import { createMemoryPersistence } from './memory-persistence.ts';
-import type { Persistence } from './persistence.ts';
-import type { SqlDatabase } from './sqlite-driver.ts';
 import { openSqlitePersistence } from './sqlite-persistence.ts';
+import type { PersistenceBackend } from './start.ts';
+import { MEMORY, memoryBackend, startCore } from './start.ts';
 
-/** The persistence service: the five stores, and the database they share when there is one. */
-export interface PersistenceService extends Persistence {
-  /** The SQLite database, or null for the in-memory backend. */
-  readonly database: SqlDatabase | null;
-}
-
-declare module 'cordis' {
-  interface Context {
-    /** The core's stores. Replace by providing this service from another plugin. */
-    persistence: PersistenceService;
-  }
-}
-
-/** `data_dir` value that selects the in-memory backend. */
-export const MEMORY = ':memory:';
+export { MEMORY } from './start.ts';
+export type { PersistenceService } from './start.ts';
 
 export const name = 'core';
+/** The runtimes this plugin runs on: it opens SQLite in a directory. */
+export const runtime: readonly string[] = ['node'];
 export const inject: readonly string[] = ['entities', 'config'];
 
-function open(dataDir: string): { service: PersistenceService; close: () => void } {
+function open(dataDir: string): PersistenceBackend {
   if (dataDir === MEMORY) {
-    return { service: { ...createMemoryPersistence(), database: null }, close: () => undefined };
+    return memoryBackend();
   }
   const dir = dataDir === '' ? join(homedir(), '.yaah', 'data') : dataDir;
   mkdirSync(dir, { recursive: true });
@@ -49,17 +35,7 @@ function open(dataDir: string): { service: PersistenceService; close: () => void
   };
 }
 
-/** Starts the core. */
+/** Starts the core on the backend the configuration selects. */
 export function apply(ctx: Context): void {
-  const { service, close } = open(ctx.config.dataDir);
-  ctx.effect(() => {
-    const release = ctx.provide('persistence', service);
-    return (): void => {
-      release();
-      close();
-    };
-  });
-  for (const tool of createBuiltinTools(service)) {
-    registerEntity(ctx, tool);
-  }
+  startCore(ctx, open(ctx.config.dataDir));
 }

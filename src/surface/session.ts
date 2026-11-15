@@ -9,6 +9,7 @@ import type { Client } from '@a2a-js/sdk/client';
 import { ClientFactory, ServiceParameters, withA2AExtensions } from '@a2a-js/sdk/client';
 
 import type { CommandInfo } from '../app/api-server/extensions/index.ts';
+import type { HarnessTarget } from '../app/harness-target.ts';
 import { EXT, SCHEMAS } from '../app/api-server/extensions/index.ts';
 import type { TaskView } from './view.ts';
 import {
@@ -67,9 +68,18 @@ export class HarnessSession {
     this.dashboardUrl = durable.success ? durable.data.dashboardUrl : null;
   }
 
-  /** Connects to the harness at `url` and reads its card. */
-  static async connect(url: string, options: SessionOptions = {}): Promise<HarnessSession> {
-    const client = await new ClientFactory().createFromUrl(url);
+  /**
+   * Connects to a harness and reads its card. `target` is the harness's URL, or the
+   * `ctx.harnessTarget` of a harness in this process — which, in a build with no
+   * listener, is reached through the in-memory transport.
+   */
+  static async connect(
+    target: string | HarnessTarget,
+    options: SessionOptions = {},
+  ): Promise<HarnessSession> {
+    const at = typeof target === 'string' ? { type: 'http' as const, url: target } : target;
+    const client =
+      at.type === 'http' ? await new ClientFactory().createFromUrl(at.url) : await at.connect();
     return new HarnessSession(client, await client.getAgentCard(), options);
   }
 

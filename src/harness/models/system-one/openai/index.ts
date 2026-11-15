@@ -10,6 +10,7 @@
  */
 import type { Context } from 'cordis';
 
+import { readCredential } from '../../../../kernel/credentials.ts';
 import { registerEntity } from '../../../../kernel/registry.ts';
 import type { FetchLike } from '../../llm/openai/content.ts';
 import { credentialError } from '../../llm/openai/index.ts';
@@ -53,7 +54,7 @@ const KEY_SETTING = 'providers.openai.api_key_env';
 export function apply(ctx: Context, config: OpenAiSystemOnePluginConfig | undefined): void {
   const settings = ctx.config.providers.openai;
   const id = `${OPENAI}/${settings.systemOneModel}`;
-  const apiKey = config?.apiKey ?? process.env[settings.apiKeyEnv] ?? '';
+  const apiKey = config?.apiKey ?? readCredential(ctx, settings.apiKeyEnv) ?? '';
   if (apiKey === '') {
     const { triage, triageModel } = ctx.config.inbox;
     if (triage === 'system-one' && triageModel === id) {

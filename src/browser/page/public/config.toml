@@ -1,0 +1,19 @@
+# Configuration of the yaah browser build, read by the page beside it. The keys are those
+# of ~/.yaah/config.toml; what needs a file system, a listener or Temporal has no effect.
+#
+# This file is public: anyone who can open the page can read it. Never put a secret here.
+# The safe way to reach a model from a browser is an OpenAI-compatible endpoint of your
+# own that holds the key on a server:
+#
+# [model]
+# llm = "proxy/your-model"
+#
+# [[providers.compatible]]
+# id = "proxy"
+# base_url = "https://your-backend.example/v1"
+# models = ["your-model"]
+#
+# To use your own key in your own browser instead, give it to the page — it is then
+# visible to whoever uses that browser:
+#
+#   <script>globalThis.yaah = { credentials: { OPENAI_API_KEY: "sk-…" } }</script>

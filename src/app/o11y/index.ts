@@ -32,6 +32,8 @@ declare module 'cordis' {
 }
 
 export const name = 'o11y';
+/** The runtimes this plugin runs on: it writes a log file and tracks requests with `node:async_hooks`, so a browser build refuses it. */
+export const runtime: readonly string[] = ['node'];
 export const inject: readonly string[] = ['config', 'redactor', 'taskRuntime'];
 
 const TERMINAL: ReadonlySet<string> = new Set(['completed', 'canceled', 'failed']);

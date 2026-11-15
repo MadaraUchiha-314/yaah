@@ -7,6 +7,7 @@
  */
 import type { Context } from 'cordis';
 
+import { readCredential } from '../../../../kernel/credentials.ts';
 import { ConfigError } from '../../../../kernel/errors.ts';
 import { registerEntity } from '../../../../kernel/registry.ts';
 import { t } from '../../../../kernel/strings.ts';
@@ -40,7 +41,7 @@ const KEY_SETTING = 'providers.anthropic.api_key_env';
  */
 export function apply(ctx: Context, config: AnthropicPluginConfig | undefined): void {
   const { apiKeyEnv, models } = ctx.config.providers.anthropic;
-  const apiKey = config?.apiKey ?? process.env[apiKeyEnv] ?? '';
+  const apiKey = config?.apiKey ?? readCredential(ctx, apiKeyEnv) ?? '';
   if (apiKey === '') {
     if (ctx.config.model.llm.startsWith(`${PROVIDER}/`)) {
       throw new ConfigError(

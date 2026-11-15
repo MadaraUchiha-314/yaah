@@ -18,13 +18,7 @@ import express from 'express';
 import { JSONRPC_PATH, REST_PATH } from './api-server/agent-card.ts';
 import { limitGuard, originGuard } from './api-server/guards.ts';
 
-/**
- * How an A2A client reaches this harness: over HTTP at a URL, or — in a build with no
- * listener — through an in-memory transport onto the same request handler.
- */
-export type HarnessTarget =
-  | { readonly type: 'http'; readonly url: string }
-  | { readonly type: 'in-memory' };
+export type { HarnessTarget } from './harness-target.ts';
 
 /** The running listener. */
 export interface HttpService {
@@ -38,8 +32,6 @@ declare module 'cordis' {
   interface Context {
     /** The HTTP listener of this harness. */
     http: HttpService;
-    /** How surfaces and the `self` sub-agent reach this harness. */
-    harnessTarget: HarnessTarget;
   }
   interface Events {
     /** The listener is up. */
@@ -54,6 +46,8 @@ declare module 'cordis' {
 }
 
 export const name = 'http';
+/** The runtimes this plugin runs on: it opens a network listener, so a browser build refuses it. */
+export const runtime: readonly string[] = ['node'];
 export const inject: readonly string[] = ['config', 'a2a', 'strings'];
 
 const LOOPBACK: ReadonlySet<string> = new Set(['127.0.0.1', '::1', 'localhost']);

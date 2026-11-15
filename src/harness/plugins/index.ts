@@ -66,6 +66,8 @@ declare module 'cordis' {
 }
 
 export const name = 'agent-plugins';
+/** The runtimes this plugin runs on: it reads agent plugins from the file system, so a browser build refuses it. */
+export const runtime: readonly string[] = ['node'];
 export const inject: readonly string[] = ['entities', 'config', 'skills', 'hooks'];
 
 const DEFAULT_HOOK_TIMEOUT_MS = 10_000;

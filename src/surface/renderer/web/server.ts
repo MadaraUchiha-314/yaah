@@ -25,6 +25,8 @@ export interface WebUiConfig {
 }
 
 export const name = 'web-ui';
+/** The runtimes this plugin runs on: it serves files over the HTTP listener, so a browser build refuses it. */
+export const runtime: readonly string[] = ['node'];
 export const inject: readonly string[] = ['http'];
 
 /** Paths that belong to the A2A API and the agent card: never answered with the page. */

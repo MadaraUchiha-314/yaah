@@ -22,6 +22,8 @@ export interface SystemPromptConfig {
 }
 
 export const name = 'system-prompt';
+/** The runtimes this plugin runs on: it reads the prompts from a directory, so a browser build refuses it. */
+export const runtime: readonly string[] = ['node'];
 export const inject: readonly string[] = ['entities'];
 
 /** Loads and registers the prompts. */

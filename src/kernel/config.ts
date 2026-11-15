@@ -4,11 +4,10 @@
  * The file is TOML with snake_case keys; code reads the camelCase {@link YaahConfig}.
  * Every key has a default, an unknown key is an error, and no key ever holds a secret —
  * credentials are named by environment variable (`api_key_env`).
+ *
+ * Parsing needs no file system; the functions that read or write the file import Node's
+ * modules themselves, so a build without them (the browser) can load this module.
  */
-import { chmod, mkdir, readFile, writeFile } from 'node:fs/promises';
-import { homedir } from 'node:os';
-import { dirname, join } from 'node:path';
-
 import { parse as parseToml } from 'smol-toml';
 
 import { DEFAULT_CONFIG_TOML } from './config-default.ts';
@@ -75,6 +74,7 @@ function isMissingFile(error: unknown): boolean {
 }
 
 async function readConfigFile(file: string): Promise<string | null> {
+  const { readFile } = await import('node:fs/promises');
   try {
     return await readFile(file, 'utf8');
   } catch (error) {
@@ -108,6 +108,11 @@ export async function loadConfig(options: LoadConfigOptions = {}): Promise<Loade
     }
     return { config: parseConfig(source, options.path), file: options.path, created: false };
   }
+  const [{ chmod, mkdir, writeFile }, { homedir }, { dirname, join }] = await Promise.all([
+    import('node:fs/promises'),
+    import('node:os'),
+    import('node:path'),
+  ]);
   const file = join(options.home ?? homedir(), '.yaah', 'config.toml');
   const existing = await readConfigFile(file);
   if (existing !== null) {

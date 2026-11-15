@@ -30,6 +30,16 @@ export interface HeartbeatOptions {
   readonly now?: (() => Date) | undefined;
 }
 
+/**
+ * Lets the process end while `timer` is pending. In a browser a timer is a number and
+ * there is no process to keep alive.
+ */
+function detach(timer: ReturnType<typeof setInterval>): void {
+  if (typeof timer === 'object') {
+    timer.unref();
+  }
+}
+
 export const name = 'heartbeat';
 export const inject: readonly string[] = ['config', 'taskRuntime', 'a2a'];
 
@@ -108,7 +118,7 @@ export function apply(ctx: Context, options: HeartbeatOptions = {}): void {
       });
     }, intervalMs);
     // The heartbeat never keeps the process alive on its own.
-    timer.unref();
+    detach(timer);
     return (): void => {
       clearInterval(timer);
       release();

@@ -6,6 +6,7 @@ import { ClientFactory, ServiceParameters, withA2AExtensions } from '@a2a-js/sdk
 import { ConfigError } from '../../kernel/errors.ts';
 import { t } from '../../kernel/strings.ts';
 import { currentTraceparent } from '../../kernel/trace-context.ts';
+import type { Locality } from '../../kernel/entity.ts';
 import type { Agent, AgentCallOptions } from './types.ts';
 
 /** What a remote agent is built from. */
@@ -82,11 +83,25 @@ export async function connectRemoteAgent(init: RemoteAgentInit): Promise<Agent> 
   const client: Client = await new ClientFactory().createFromUrl(base, path);
   const card = await client.getAgentCard();
   assertInterfaceHosts(init, card);
+  return agentOverClient(init, client, card, { type: 'remote', protocol: 'a2a', url: init.url });
+}
+
+/**
+ * Wraps an SDK client that is already connected as an `agent` entity. The client may be
+ * on any transport: HTTP for a remote agent, in memory for the harness itself in a build
+ * with no listener.
+ */
+export function agentOverClient(
+  init: Pick<RemoteAgentInit, 'id' | 'name' | 'description'>,
+  client: Client,
+  card: AgentCard,
+  locality: Locality,
+): Agent {
   return {
     ref: { kind: 'agent', id: init.id, version: null },
     name: init.name ?? card.name,
     description: init.description ?? card.description,
-    locality: { type: 'remote', protocol: 'a2a', url: init.url },
+    locality,
     skills: card.skills.map((skill) => ({ name: skill.name, description: skill.description })),
     sendMessage: (request: Message, options?: AgentCallOptions): AsyncIterable<StreamResponse> =>
       client.sendMessageStream(

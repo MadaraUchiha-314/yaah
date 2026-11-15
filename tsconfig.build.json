@@ -12,5 +12,10 @@
     "rewriteRelativeImportExtensions": true
   },
   "include": ["src"],
-  "exclude": ["src/**/*.test.ts", "src/**/*.test.tsx", "src/surface/renderer/web"]
+  "exclude": [
+    "src/**/*.test.ts",
+    "src/**/*.test.tsx",
+    "src/surface/renderer/web",
+    "src/browser/page"
+  ]
 }
