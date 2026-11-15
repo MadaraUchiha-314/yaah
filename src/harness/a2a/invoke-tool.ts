@@ -3,7 +3,7 @@
  * call goes through the agent interface — A2A — whether the agent is remote or this
  * harness itself with a fresh context.
  */
-import type { Message, StreamResponse } from '@a2a-js/sdk';
+import type { Message, StreamResponse, Task } from '@a2a-js/sdk';
 import { Role, TaskState } from '@a2a-js/sdk';
 
 import { messageText } from '../../app/api-server/convert.ts';
@@ -75,12 +75,23 @@ function partsText(
     .join('');
 }
 
+/** Folds a whole task into the outcome: its state, its status message and its artifacts. */
+function foldTask(outcome: Outcome, task: Task): void {
+  outcome.subTask = { taskId: task.id, contextId: task.contextId };
+  outcome.state = task.status?.state ?? outcome.state;
+  if (task.status?.message !== undefined) {
+    outcome.statusText = messageText(task.status.message);
+  }
+  for (const artifact of task.artifacts) {
+    outcome.artifacts.set(artifact.artifactId, partsText(artifact.parts));
+  }
+}
+
 /** Folds one stream event into the outcome. */
 function fold(outcome: Outcome, event: StreamResponse): void {
   const { payload } = event;
   if (payload?.$case === 'task') {
-    outcome.subTask = { taskId: payload.value.id, contextId: payload.value.contextId };
-    outcome.state = payload.value.status?.state ?? outcome.state;
+    foldTask(outcome, payload.value);
   } else if (payload?.$case === 'statusUpdate') {
     outcome.state = payload.value.status?.state ?? outcome.state;
     outcome.statusText = messageText(payload.value.status?.message);
