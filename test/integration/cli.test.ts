@@ -1,5 +1,7 @@
 import { mkdtempSync, readFileSync, statSync, writeFileSync } from 'node:fs';
+import { createServer as createHttpServer } from 'node:http';
 import { createServer } from 'node:net';
+import { PassThrough } from 'node:stream';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
@@ -10,6 +12,7 @@ import { freePort, runCli } from '../../src/cli/main.ts';
 import type { CreateHarnessOptions } from '../../src/kernel/harness.ts';
 import { createHarness } from '../../src/kernel/harness.ts';
 import { registerEntity } from '../../src/kernel/registry.ts';
+import { runTui } from '../../src/surface/renderer/tui/index.ts';
 import { HarnessSession } from '../../src/surface/session.ts';
 import type { TaskView } from '../../src/surface/view.ts';
 import { ScriptedLlm, say } from '../../src/testing/scripted-llm.ts';
@@ -197,6 +200,45 @@ describe('the yaah command', () => {
     expect(run.out.join('')).toMatch(/\d+\.\d+\.\d+\n/u);
     expect(await runCli(['frobnicate'], run.io)).toBe(2);
     expect(run.err.join('')).toContain('"frobnicate" is not a command');
+  });
+
+  /**
+   * Feature: CLI
+   * Scenario: A harness that cannot be reached is reported in one line
+   *   Given no harness listening at a URL, and a harness that fails to give its card
+   *   When `yaah tui --url` is run against each, or `yaah` cannot reach the one it started
+   *   Then the command writes one filtered line naming the URL and exits 1
+   * Requirement: docs/specs/issue-3/requirements.md R21.3, R22.5
+   */
+  test('A harness that cannot be reached is reported in one line', async () => {
+    const failing = createHttpServer((_request, response) => {
+      response.writeHead(500, { 'content-type': 'text/plain' });
+      response.end('\u001B]0;owned\u0007down\nfor good');
+    });
+    await new Promise<void>((resolve) => {
+      failing.listen(0, '127.0.0.1', resolve);
+    });
+    const address = failing.address();
+    const port = typeof address === 'object' && address !== null ? address.port : 0;
+    const terminal = (url: string): Promise<void> =>
+      runTui({ url, stdin: new PassThrough(), stdout: new PassThrough(), env: {} });
+    try {
+      for (const url of ['http://127.0.0.1:9', `http://127.0.0.1:${String(port)}`]) {
+        const run = fakeProcess(tempHome(), terminal);
+        // oxlint-disable-next-line no-await-in-loop -- one run at a time
+        expect(await runCli(['tui', '--url', url], run.io)).toBe(1);
+        const said = run.err.join('');
+        expect(said.startsWith(`yaah: could not reach the harness at ${url}`)).toBe(true);
+        expect(said.trimEnd().includes('\n')).toBe(false);
+        expect(said.includes('\u001B')).toBe(false);
+      }
+      const dir = tempHome();
+      const run = fakeProcess(dir, () => terminal('http://127.0.0.1:9'));
+      expect(await runCli(['--config', configFile(dir)], run.io)).toBe(1);
+      expect(run.err.join('')).toContain('could not reach the harness at http://127.0.0.1:9');
+    } finally {
+      failing.close();
+    }
   });
 
   test('a busy port is skipped, and running out of ports is an error', async () => {

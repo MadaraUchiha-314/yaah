@@ -151,6 +151,7 @@
   "tui.duration.ms": "{value} ms",
   "tui.duration.s": "{value} s",
   "tui.error": "Something went wrong: {message}",
+  "tui.error.connect": "yaah: could not reach the harness at {url}: {reason}",
   "tui.a2ui.title": "A2UI",
   "tui.a2ui.hint": "Tab move · Space select · arrows change",
   "tui.a2ui.message": "a malformed A2UI message",
