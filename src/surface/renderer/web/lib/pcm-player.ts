@@ -87,6 +87,8 @@ export class PcmPlayer {
   /** A byte left over when a piece ended in the middle of a sample. */
   #carry: number | null = null;
   #artifactId = '';
+  /** Set by {@link PcmPlayer.stop}: pieces still arriving are dropped until enabled again. */
+  #muted = false;
 
   /** @param create Opens the audio output; tests pass their own. */
   constructor(create: () => AudioOutput = webAudioOutput) {
@@ -109,12 +111,17 @@ export class PcmPlayer {
    * on it, so this is called from the click that turns voice output on.
    */
   readonly enable = (): void => {
+    this.#muted = false;
     this.#output ??= this.#create();
     this.#output.resume();
   };
 
-  /** Stops what is playing and drops what was scheduled. */
+  /**
+   * Stops what is playing, drops what was scheduled, and stays silent — the rest of an
+   * answer still streaming in included — until {@link PcmPlayer.enable} is called again.
+   */
   readonly stop = (): void => {
+    this.#muted = true;
     for (const scheduled of this.#playing) {
       scheduled.stop();
     }
@@ -124,10 +131,10 @@ export class PcmPlayer {
     this.#set({ speaking: false });
   };
 
-  /** Schedules one piece. Ignored until {@link PcmPlayer.enable} was called. */
+  /** Schedules one piece. Ignored until {@link PcmPlayer.enable} was called, and after a stop. */
   readonly play = (chunk: SpeechChunk): void => {
     const output = this.#output;
-    if (output === null) {
+    if (output === null || this.#muted) {
       return;
     }
     if (chunk.artifactId !== this.#artifactId) {

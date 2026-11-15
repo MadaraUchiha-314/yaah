@@ -135,8 +135,22 @@ describe('PcmPlayer', () => {
     expect(player.getState().speaking).toBe(false);
     output.scheduled[0]?.end();
     output.currentTime = 20;
+    player.enable();
     player.play(chunk([0, 64]));
     expect(output.scheduled[1]?.startAt).toBeCloseTo(20.05, 5);
+  });
+
+  test('after a stop, the rest of an answer still arriving is not played until enabled', () => {
+    const { output, player } = enabled();
+    player.play(chunk([0, 64]));
+    player.stop();
+    player.play(chunk([0, 64]));
+    player.play(chunk([0, 64], { last: true }));
+    expect(output.scheduled.length).toBe(1);
+    expect(player.getState()).toEqual({ speaking: false, chunks: 1 });
+    player.enable();
+    player.play(chunk([0, 64], { artifactId: 'speech-2' }));
+    expect(output.scheduled.length).toBe(2);
   });
 });
 
