@@ -217,22 +217,48 @@ function withStatus(
   };
 }
 
+/**
+ * What a surface shows once it reads the stored task: what it already shows, then what the
+ * snapshot holds that it did not see. An item is the same when its id is, or a file's
+ * address is. An answer this surface streamed has the stream's id, not the stored one, so
+ * it stands for the first stored answer with its text — once, and only when that answer
+ * is not itself already shown.
+ */
+function mergedItems(
+  mine: readonly TranscriptItem[],
+  stored: readonly TranscriptItem[],
+): TranscriptItem[] {
+  const key = (item: TranscriptItem): string => `${item.kind}:${item.id}`;
+  const storedKeys = new Set(stored.map((item) => key(item)));
+  const streamed = mine.filter((item) => item.kind === 'agent' && !storedKeys.has(key(item)));
+  const shown = (item: TranscriptItem): boolean => {
+    const same = mine.some(
+      (existing) =>
+        existing.kind === item.kind &&
+        (existing.id === item.id ||
+          ('url' in existing &&
+            'url' in item &&
+            existing.url !== null &&
+            existing.url === item.url)),
+    );
+    if (same || item.kind !== 'agent') {
+      return same;
+    }
+    const at = streamed.findIndex((existing) => 'text' in existing && existing.text === item.text);
+    if (at !== -1) {
+      streamed.splice(at, 1);
+    }
+    return at !== -1;
+  };
+  return [...mine, ...stored.filter((item) => !shown(item))];
+}
+
 /** Applies one A2A stream event to the view. */
 export function foldEvent(view: TaskView, event: StreamResponse): TaskView {
   const { payload } = event;
   if (payload?.$case === 'task') {
     const snapshot = viewOfTask(payload.value);
-    // Keep what this surface already shows; the snapshot adds what it did not see.
-    const shown = (item: TranscriptItem): boolean =>
-      view.items.some(
-        (mine) =>
-          mine.kind === item.kind &&
-          (mine.id === item.id ||
-            ('text' in mine && 'text' in item && mine.text === item.text) ||
-            ('url' in mine && 'url' in item && mine.url !== null && mine.url === item.url)),
-      );
-    const items = [...view.items, ...snapshot.items.filter((item) => !shown(item))];
-    return { ...snapshot, items };
+    return { ...snapshot, items: mergedItems(view.items, snapshot.items) };
   }
   if (payload?.$case === 'statusUpdate') {
     return withStatus(view, payload.value.status?.state, payload.value.status?.message);
