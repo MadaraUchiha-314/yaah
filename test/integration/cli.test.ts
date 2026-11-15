@@ -25,7 +25,11 @@ interface Run {
 }
 
 /** A process stand-in: captured output, a scripted model, and a `tui` the test supplies. */
-function fakeProcess(home: string, tui: (url: string) => Promise<void>, stop?: Promise<void>): Run {
+function fakeProcess(
+  home: string,
+  tui: (url: string, signal?: AbortSignal) => Promise<void>,
+  stop?: Promise<void>,
+): Run {
   const out: string[] = [];
   const err: string[] = [];
   const urls: string[] = [];
@@ -38,9 +42,9 @@ function fakeProcess(home: string, tui: (url: string) => Promise<void>, stop?: P
       stdout: { write: (text: string) => out.push(text) },
       stderr: { write: (text: string) => err.push(text) },
       interrupted: () => stop ?? Promise.resolve(),
-      tui: async (url: string) => {
+      tui: async (url: string, _about?: unknown, signal?: AbortSignal) => {
         urls.push(url);
-        await tui(url);
+        await tui(url, signal);
       },
       start: (options: CreateHarnessOptions) =>
         createHarness({
@@ -239,6 +243,49 @@ describe('the yaah command', () => {
     } finally {
       failing.close();
     }
+  });
+
+  /**
+   * Feature: CLI
+   * Scenario: Asked to stop, `yaah` leaves the terminal UI and stops its harness
+   *   Given `yaah` running a harness with the terminal UI open, or `yaah tui --url`
+   *   When the process is asked to stop (SIGTERM, SIGHUP) while the UI is open
+   *   Then the terminal UI is told to leave, the harness is stopped, and the command exits 0
+   * Requirement: docs/specs/issue-3/requirements.md R22.1, R21.3
+   */
+  test('Asked to stop, `yaah` leaves the terminal UI and stops its harness', async () => {
+    const dir = tempHome();
+    let interrupt: () => void = () => undefined;
+    const stop = new Promise<void>((resolve) => {
+      interrupt = resolve;
+    });
+    let left = false;
+    const untilLeft = (_url: string, signal?: AbortSignal): Promise<void> =>
+      new Promise<void>((resolve) => {
+        signal?.addEventListener('abort', () => {
+          left = true;
+          resolve();
+        });
+        interrupt();
+      });
+    const run = fakeProcess(dir, untilLeft, stop);
+    const outcome = await Promise.race([
+      runCli(['--config', configFile(dir)], run.io),
+      new Promise<string>((resolve) => {
+        setTimeout(resolve, 2000, 'still running');
+      }),
+    ]);
+    expect(outcome).toBe(0);
+    expect(left).toBe(true);
+    const gone = await fetch(`${String(run.urls[0])}/.well-known/agent-card.json`).catch(
+      () => null,
+    );
+    expect(gone).toBeNull();
+
+    left = false;
+    const tui = fakeProcess(dir, untilLeft, Promise.resolve());
+    expect(await runCli(['tui', '--url', 'http://127.0.0.1:9'], tui.io)).toBe(0);
+    expect(left).toBe(true);
   });
 
   test('a busy port is skipped, and running out of ports is an error', async () => {

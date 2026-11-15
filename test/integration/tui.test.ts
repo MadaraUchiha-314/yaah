@@ -390,4 +390,46 @@ describe('terminal UI', () => {
     }
     expect(running.llm.requests.length).toBe(0);
   });
+
+  /**
+   * Feature: Terminal UI
+   * Scenario: The process asking to stop leaves the terminal UI
+   *   Given the terminal UI open on a terminal, or in plain-line mode
+   *   When the signal it was given aborts
+   *   Then it leaves as if the user had, and gives the terminal back
+   * Requirement: docs/specs/issue-3/requirements.md R21.3
+   */
+  test('The process asking to stop leaves the terminal UI', async () => {
+    running = await startHarness({ turns: [say('Hello there.')] });
+    for (const tty of [true, false]) {
+      const keyboard = new FakeKeyboard();
+      const display = new FakeDisplay(tty);
+      const stop = new AbortController();
+      const done = runTui({
+        url: running.url,
+        stdin: keyboard,
+        stdout: display,
+        env: {},
+        signal: stop.signal,
+      });
+      // oxlint-disable-next-line no-await-in-loop -- one run after the other
+      await waitFor(
+        () => display.text.length > 0,
+        () => display.text,
+      );
+      stop.abort();
+      // oxlint-disable-next-line no-await-in-loop -- as above
+      await done;
+      expect(keyboard.rawModes).toEqual(tty ? [true, false] : []);
+    }
+    const early = new AbortController();
+    early.abort();
+    await runTui({
+      url: running.url,
+      stdin: new FakeKeyboard(),
+      stdout: new FakeDisplay(false),
+      env: {},
+      signal: early.signal,
+    });
+  });
 });

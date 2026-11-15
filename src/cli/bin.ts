@@ -8,6 +8,7 @@ function interrupted(): Promise<void> {
   return new Promise((resolve: () => void) => {
     process.once('SIGINT', resolve);
     process.once('SIGTERM', resolve);
+    process.once('SIGHUP', resolve);
   });
 }
 
@@ -15,5 +16,6 @@ process.exitCode = await runCli(process.argv.slice(2), {
   stdout: process.stdout,
   stderr: process.stderr,
   interrupted,
-  tui: (url: string, about: TuiHints = {}) => runTui({ url, ...about }),
+  tui: (url: string, about: TuiHints = {}, signal?: AbortSignal) =>
+    runTui({ url, ...about, signal }),
 });

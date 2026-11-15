@@ -36,6 +36,8 @@ export interface TuiOptions {
   readonly model?: string;
   /** The reasoning effort in use, shown in the status line when given. */
   readonly effort?: string;
+  /** Leaves the interface, as `/exit` does, when it aborts. */
+  readonly signal?: AbortSignal | undefined;
 }
 
 /**
@@ -83,6 +85,13 @@ export async function runTui(options: TuiOptions): Promise<void> {
   const session = await connect(options.url);
   const controller = new TuiController(session);
   controller.attach(session, options.attach === true);
+  const leave = (): void => {
+    controller.exit();
+  };
+  options.signal?.addEventListener('abort', leave, { once: true });
+  if (options.signal?.aborted === true) {
+    leave();
+  }
   if (isPlain(stdout, options.env ?? process.env)) {
     await runPlain(controller, stdin, stdout);
     return;
