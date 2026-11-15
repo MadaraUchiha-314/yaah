@@ -5,10 +5,13 @@ import { join } from 'node:path';
 
 import { TaskState } from '@a2a-js/sdk';
 
+import { EXT } from '../../src/app/api-server/extensions/index.ts';
 import type { ToolResult } from '../../src/harness/core/types.ts';
 import type { LlmRequest } from '../../src/harness/models/llm/types.ts';
 import { defineTool, textResult } from '../../src/harness/tools/types.ts';
+import { registerEntity } from '../../src/kernel/registry.ts';
 import { call, callTools, say } from '../../src/testing/scripted-llm.ts';
+import { fakeAgent } from '../support/channels.ts';
 import type { TestHarness } from '../support/harness.ts';
 import { startHarness } from '../support/harness.ts';
 
@@ -275,5 +278,59 @@ describe('hooks', () => {
     });
     // Let through: the tool itself then reports that no such agent is registered.
     expect(shipping?.ok === false ? shipping.error.code : '').toBe('not-found');
+  });
+
+  /**
+   * Feature: Skills, agent plugins and hooks
+   * Scenario: A hook refuses a sub-agent reached as a participant
+   *   Given an agent.before hook that denies the agent "billing"
+   *   And a task on which "billing" is a participant
+   *   When the model calls message_participant and create_task_for_participant for "billing"
+   *   Then the hook was asked about each call, by agent id
+   *   And "billing" receives nothing and the model is told why
+   * Requirement: docs/specs/issue-3/requirements.md R9.3, R12.2 (self-review 1,
+   *   extensions #1)
+   */
+  test('A hook refuses a sub-agent reached as a participant', async () => {
+    const asked: string[] = [];
+    const billing = fakeAgent('billing', () => 'refunded');
+    running = await startHarness({
+      setup: (ctx) => {
+        registerEntity(ctx, billing.agent);
+        ctx.hooks.register('agent.before', {
+          match: 'billing',
+          run: (event) => {
+            asked.push(event.agent);
+            return { decision: 'deny', reason: 'billing is frozen' };
+          },
+        });
+      },
+      turns: [
+        callTools(
+          call('c1', 'message_participant', { to: 'billing', message: 'refund?' }),
+          call('c2', 'create_task_for_participant', { to: 'billing', message: 'refund' }),
+        ),
+        say('Billing is unavailable.'),
+      ],
+    });
+    const participants = [
+      { id: 'ada', role: 'reporter', kind: 'user' },
+      { id: 'self', role: 'assignee', kind: 'agent' },
+      { id: 'billing', role: 'watcher', kind: 'agent' },
+    ];
+    await running.send('Ask billing.', {
+      metadata: { [EXT.taskModel]: { participants } },
+      extensions: [EXT.taskModel],
+    });
+    expect(asked).toEqual(['billing', 'billing']);
+    expect(billing.received).toEqual([]);
+    const results = toolResults(running.llm.requests[1]);
+    expect(results.map((result) => (result.ok ? '' : result.error.code))).toEqual([
+      'denied',
+      'denied',
+    ]);
+    expect(results[0]?.ok === false ? results[0].error.message : '').toBe(
+      'The call to message_participant was denied by a hook and did not run: billing is frozen',
+    );
   });
 });

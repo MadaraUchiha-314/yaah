@@ -5,7 +5,8 @@
  * - `llm.before`, `llm.after`, `tool.after`, `task.transition`: a step middleware;
  * - `tool.before`, `agent.before`: a tool guard, asked before a call runs. A refused call
  *   is not executed; its tool result tells the model it was denied and why, and the task
- *   goes on;
+ *   goes on. `agent.before` is asked for every tool that reaches an agent: `invoke_agent`
+ *   and the two channel tools;
  * - `message.received`: an interceptor in front of the inbox. A refused message is
  *   answered with the reason and never reaches a model.
  */
@@ -17,6 +18,7 @@ import { z } from 'zod';
 import { agentMessage, messageText } from '../../app/api-server/convert.ts';
 import type { Json } from '../../kernel/json.ts';
 import { INVOKE_AGENT } from '../a2a/invoke-tool.ts';
+import { CREATE_TASK_FOR_PARTICIPANT, MESSAGE_PARTICIPANT } from '../channels/tools.ts';
 import type { StepCall, StepMiddleware } from '../core/step-middleware.ts';
 import type { ToolCall, ToolError } from '../core/types.ts';
 import type { ToolGuard } from '../tools/execute.ts';
@@ -58,6 +60,25 @@ const llmOutput = z.object({ toolCalls: z.array(z.object({ name: z.string() })) 
 const transitionInput = z.object({ reason: z.string() });
 const transitionOutput = z.object({ state: z.string(), subState: z.string().nullable() });
 const agentArgs = z.object({ agent: z.string() });
+const participantArgs = z.object({ to: z.string() });
+/** The tools that reach a participant, who may be an agent, named by `to`. */
+const PARTICIPANT_TOOLS: ReadonlySet<string> = new Set([
+  MESSAGE_PARTICIPANT,
+  CREATE_TASK_FOR_PARTICIPANT,
+]);
+
+/** The agent a call would reach, or null when the tool is not one that reaches an agent. */
+function agentOf(call: ToolCall): string | null {
+  if (call.name === INVOKE_AGENT) {
+    const args = agentArgs.safeParse(call.args);
+    return args.success ? args.data.agent : '';
+  }
+  if (PARTICIPANT_TOOLS.has(call.name)) {
+    const args = participantArgs.safeParse(call.args);
+    return args.success ? args.data.to : '';
+  }
+  return null;
+}
 
 /** Tells the hooks what a finished step did. */
 async function after(hooks: Hooks, call: StepCall, result: unknown): Promise<void> {
@@ -93,15 +114,14 @@ function middleware(hooks: Hooks): StepMiddleware {
   };
 }
 
-/** Asks `tool.before` — and `agent.before` for a sub-agent — whether a call may run. */
+/** Asks `tool.before`, and `agent.before` when the call reaches an agent, whether it may run. */
 function guard(ctx: Context, hooks: Hooks): ToolGuard {
   return async (call: ToolCall, about): Promise<ToolError | null> => {
     const facts = { taskId: about.taskId, key: about.key, callId: call.id, args: call.args };
     let verdict = await hooks.dispatch('tool.before', { ...facts, tool: call.name });
     let point: HookName = 'tool.before';
-    if (verdict.decision === 'allow' && call.name === INVOKE_AGENT) {
-      const args = agentArgs.safeParse(call.args);
-      const agent = args.success ? args.data.agent : '';
+    const agent = agentOf(call);
+    if (verdict.decision === 'allow' && agent !== null) {
       verdict = await hooks.dispatch('agent.before', { ...facts, agent });
       point = 'agent.before';
     }
