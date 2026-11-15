@@ -158,30 +158,61 @@ recorded as terminal frames, rendered to images in headless Chromium and assembl
 
 ## Verification activities
 
-- [ ] T1 — `bun run test:unit`
-- [ ] T2 — `bun run test:integration`
-- [ ] T3 — `bun run test:contract`
-- [ ] T4 — `bun run test:e2e`
-- [ ] T5 — `bun run test:e2e -- --update-evidence`, then compare with `design/`
-- [ ] T6 — `bun run test:unit` (snapshots unchanged)
-- [ ] T8 — `bun run test:security`
-- [ ] T9 — `bun run test:e2e -- --grep @a11y`
-- [ ] T11 — exploratory session, notes recorded
-- [ ] T12 — `bun run demo:up`, `bun run test:live`, `bun run demo:record`, `bun run demo:down`
-- [ ] T13 — `bun run test:chaos` (in-process, embedded, Temporal Cloud)
-- [ ] T14 — `bun run test` and `bun run test:node`; CI matrix green
-- [ ] T15 — `bun run test:unit`
-- [ ] All — `bun run check` green on the final commit
+- [x] T1 — `bun run test:unit`
+- [x] T2 — `bun run test:integration`
+- [x] T3 — `bun run test:contract`
+- [x] T4 — `bun run test:e2e`
+- [x] T5 — `bun run test:e2e -- --update-evidence`, then compare with `design/`
+- [x] T6 — `bun run test:unit` (snapshots unchanged)
+- [x] T8 — `bun run test:security`
+- [x] T9 — `bun run test:e2e -- --grep @a11y`
+- [x] T11 — exploratory session, notes recorded
+- [x] T12 — `bun run demo:up`, `bun run test:live`, `bun run demo:record`, `bun run demo:down`
+- [x] T13 — `bun run test:chaos` (in-process, embedded, Temporal Cloud)
+- [x] T14 — `bun run test` and `bun run test:node`; CI matrix green
+- [x] T15 — `bun run test:unit`
+- [x] All — `bun run check` green on the final commit
 
 ## Verification results
 
-_Not yet executed._
+Executed on 2026-11-14 at commit `abb9537` (branch `issue-3-8-extensibility`, pull request
+#13), Bun 1.4.0 and Node 26.7.0 on Linux x64. Evidence is under
+[`evidence/`](evidence/).
 
 | Activity | Command / procedure | Outcome | Evidence |
 | -------- | ------------------- | ------- | -------- |
-|          |                     |         |          |
+| T1 Unit | `bun run test:unit` | 643 pass, 0 fail; coverage 99.3% functions, 99.5% lines, every file ≥ 90% | [`unit.md`](evidence/unit.md) |
+| T2 Integration | `bun run test:integration` | 194 pass, 0 fail; 198 Gherkin scenarios listed | [`integration.md`](evidence/integration.md) |
+| T3 Contract | `bun run test:contract` | 237 pass, 0 fail | [`contract.md`](evidence/contract.md) |
+| T4 End-to-end | `bun run test:e2e`; `bun run test:package` | 47 pass (web, terminal on a pty, browser build); built package: 2 pass | [`e2e.md`](evidence/e2e.md) |
+| T5 UI / visual | `YAAH_UPDATE_EVIDENCE=1 bun run test:e2e` | 83 pass; pictures written and compared by eye with `design/` | [`e2e.md`](evidence/e2e.md), [`ui/`](evidence/ui/) |
+| T6 Snapshot | `bun run test:unit` | pass — as explicit expected text in the tests, not snapshot files | [`unit.md`](evidence/unit.md) |
+| T8 Security | `bun run test:security` and the tests named per abuse case | 11 pass; all twelve abuse cases and the fail-closed rules have a green negative test | [`security-tests.md`](evidence/security-tests.md) |
+| T9 Accessibility | `bunx playwright test --grep @a11y` | 27 pass; no serious or critical axe violation | [`e2e.md`](evidence/e2e.md) |
+| T11 Exploratory | two surfaces on one harness, and the live demo | 10 probes; 5 defects found, all fixed, each with a scenario | [`exploratory.md`](evidence/exploratory.md) |
+| T12 Live demo | `bun run test:live`; `bun run demo:record` | live: 5 pass (Claude and GPT 6.1; in process, embedded Temporal, Temporal Cloud; an image turn). Demo: passed on GPT 6.1 with Temporal Cloud and again with embedded Temporal | [`demo.md`](evidence/demo.md), [`demo/`](evidence/demo/) |
+| T13 Crash recovery | `bun run test:chaos` | 6 pass: in-process, embedded Temporal, Temporal Cloud | [`chaos.md`](evidence/chaos.md) |
+| T14 Cross-runtime | `bun run test`; `bun run test:node`; CI | Bun: 1085 pass. Node 26: 1015 pass. Node 22 and 24: green in CI | [`runtimes.md`](evidence/runtimes.md) |
+| T15 Strings | `bun run test:unit` | pass | [`unit.md`](evidence/unit.md) |
+| All | `bun run check` | green: format, lint, typecheck, 1085 tests, build, built-package test | pull request #13 checks |
 
-**Not executed:** —
+**Not executed, or executed differently from the plan:**
+
+- **R27.6 on Temporal Cloud.** The Cloud web UI needs a signed-in browser. The link is
+  shown by both chats and the workflow's history was read through the API; the UI
+  screenshot is from the embedded run.
+- **T6.** No snapshot files: the same content is asserted as explicit expected text.
+- **T3.** No `toolContract`. System One and the two speech providers ran against
+  hand-written fixtures; they have not been called live.
+- **T11.** Done by the agent, not by a second person.
+- **T12.** There is no `demo:down`: `demo:record` starts and stops the harness itself,
+  and `demo:up` stops on Ctrl+C.
+- **T13.** The kill point is mid-tool only; there is no `SIGKILL` in the middle of a
+  model call.
+- **T9.** No screen reader, and Chromium only.
+- **Not called live at all:** OpenAI transcription, Realtime speech, image generation,
+  the Decisions API (System One), Langfuse, a real microphone or speaker, and a real
+  provider from the browser build.
 
 ## Review comments
 
