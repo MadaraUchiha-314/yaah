@@ -83,6 +83,7 @@
   "mcp.config.no-command": "MCP server \"{server}\" uses the stdio transport but names no command.",
   "mcp.config.no-url": "MCP server \"{server}\" uses the http transport but has no http or https URL.",
   "mcp.error.disconnected": "The connection to MCP server \"{server}\" was lost.",
+  "mcp.error.server-id": "An MCP server is already connected under the id \"{server}\", or under one whose tools would bear the same names.",
   "mcp.error.no-detail": "The tool reported an error without saying what went wrong.",
   "error.llm.http": "{provider} answered HTTP {status} ({code}) to the request for model {model}.",
   "error.llm.failed": "{provider} could not complete the response of model {model} ({code}).",

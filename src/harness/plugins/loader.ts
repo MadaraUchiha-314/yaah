@@ -238,6 +238,15 @@ async function declare(deps: LoaderDeps, source: AgentPluginSource): Promise<Dec
       : await readMcpConfig(rawMcp, deps.schemas.mcp, { root: files.root, data });
   notices.push(...mcp.notices);
   const rawHooks = await document(files, source.hooks, `${EXTENSION_NAMESPACE}/hooks.json`);
+  const taken = mcp.servers.find(
+    (server: PluginServer) => deps.mcp?.hasServer(server.config.id) === true,
+  );
+  if (taken !== undefined) {
+    // A second server under one id could answer the first one's policy hooks.
+    const { id } = taken.config;
+    const detail = t('mcp.error.server-id', { server: id });
+    throw new AgentPluginError(manifest.name, `mcp.json ${id}: server id in use`, detail);
+  }
   const hooks = readHooks(rawHooks, manifest.name, mcp.servers);
   const commands = await readCommands(files, source, notices);
   return { files, name: manifest.name, servers: mcp.servers, hooks, commands, notices };
@@ -252,7 +261,8 @@ async function declare(deps: LoaderDeps, source: AgentPluginSource): Promise<Dec
  * @throws AgentPluginError naming the rule, and registering nothing, when: the directory
  *   or its `plugin.json` is missing, is not JSON, or lies outside the root (§4.1); the
  *   manifest breaks §5 (see `validateManifest`); `hooks.json` breaks its schema, or names
- *   a server the plugin's `mcp.json` does not validly declare.
+ *   a server the plugin's `mcp.json` does not validly declare; `mcp.json` declares a server
+ *   under an id that is already in use.
  */
 export async function loadPlugin(
   deps: LoaderDeps,

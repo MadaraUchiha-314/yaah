@@ -52,6 +52,15 @@ function toolResults(request: LlmRequest | undefined): ToolResult[] {
   );
 }
 
+async function refusal(attempt: Promise<unknown>): Promise<string> {
+  try {
+    await attempt;
+  } catch (error) {
+    return error instanceof Error ? error.message : String(error);
+  }
+  return '';
+}
+
 function ids(harness: TestHarness, kind: 'tool' | 'skill' | 'command'): string[] {
   return harness.harness.ctx.entities.list(kind).map((entity) => entity.ref.id);
 }
@@ -523,5 +532,80 @@ describe('agent plugins', () => {
     const notices = (await logLines(log, 'plugins/loaded')).join('\n');
     expect(notices).toContain('"plugin":"file-skills"');
     expect(notices).toContain('§6.2');
+  });
+
+  /**
+   * Feature: Skills, agent plugins and hooks
+   * Scenario: A plugin whose server id is already in use is refused
+   *   Given a plugin "lenient" whose server "policy" always allows
+   *   And a plugin "guarded-crm", loaded after it, whose own server "policy" denies refunds
+   *   When the harness starts
+   *   Then "guarded-crm" is refused by name, for the server id "policy"
+   *   And nothing of it is registered: no hook, no tool of its other server
+   *   And "lenient" is loaded as before
+   *   And the MCP service refuses a second server under that id, whoever adds it
+   * Requirement: docs/specs/issue-3/requirements.md R9.3; Security considerations
+   *   (self-review 1, extensions #2)
+   */
+  test('A plugin whose server id is already in use is refused', async () => {
+    scratch = await scratchDir('yaah-plugin-');
+    crm = await serveStubHttp(await freePort());
+    policy = await servePolicy(await freePort(), () => ({ decision: 'allow' }));
+    const strict = await servePolicy(await freePort(), () => ({ decision: 'deny' }));
+    const lenient = await writePlugin(scratch, {
+      name: 'lenient',
+      servers: { policy: http(policy.url) },
+    });
+    const guarded = await writePlugin(scratch, {
+      name: 'guarded-crm',
+      servers: { crm: http(crm.url), policy: http(strict.url) },
+      hooks: [
+        {
+          event: 'tool.before',
+          match: 'mcp__crm__refund',
+          run: { type: 'mcp-tool', server: 'policy', tool: 'check' },
+        },
+      ],
+    });
+    const log = join(scratch, 'yaah.log');
+    try {
+      running = await startHarness({
+        config: [
+          pluginsConfig(lenient, guarded),
+          `[o11y]\nlog_level = "warn"\nlog_file = ${JSON.stringify(log)}`,
+        ].join('\n'),
+      });
+      const refused = await logLines(log, 'plugins/refused');
+      expect(refused).toHaveLength(1);
+      expect(refused[0]).toContain('"rule":"mcp.json policy: server id in use"');
+      expect(refused[0]).toContain('guarded-crm');
+      expect(ids(running, 'tool').filter((id) => id.startsWith('mcp__'))).toEqual([
+        'mcp__policy__check',
+      ]);
+      const verdict = await running.harness.ctx.hooks.dispatch('tool.before', {
+        taskId: 't',
+        key: 'k',
+        callId: 'c',
+        args: {},
+        tool: 'mcp__crm__refund',
+      });
+      expect(verdict).toEqual({ decision: 'allow' });
+      expect(policy.asked).toEqual([]);
+      expect(strict.asked).toEqual([]);
+      // The service itself refuses the id too, whoever asks.
+      const again = await refusal(
+        running.harness.ctx.mcp.addServer({
+          id: 'policy',
+          transport: 'http',
+          command: undefined,
+          args: [],
+          env: [],
+          url: strict.url,
+        }),
+      );
+      expect(again).toContain('already connected under the id "policy"');
+    } finally {
+      await strict.close();
+    }
   });
 });
