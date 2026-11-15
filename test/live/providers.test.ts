@@ -9,7 +9,8 @@ import { HarnessSession } from '../../src/surface/session.ts';
 import type { TaskView } from '../../src/surface/view.ts';
 import { ensureKey } from './keys.ts';
 
-const MODEL = process.env['YAAH_LIVE_ANTHROPIC_MODEL'] ?? 'claude-haiku-5-5';
+const CLAUDE = `anthropic/${process.env['YAAH_LIVE_ANTHROPIC_MODEL'] ?? 'claude-haiku-5-5'}`;
+const GPT = `openai/${process.env['YAAH_LIVE_OPENAI_MODEL'] ?? 'gpt-6.1-sol'}`;
 const hasModel = ensureKey('ANTHROPIC_API_KEY', 'anthropic');
 const live = hasModel ? test : test.skip;
 /** The project's Temporal Cloud namespace; override with the two variables to use another. */
@@ -17,7 +18,9 @@ const TEMPORAL = {
   address: process.env['YAAH_LIVE_TEMPORAL_ADDRESS'] ?? 'yaah.gtebu.tmprl.cloud:7233',
   namespace: process.env['YAAH_LIVE_TEMPORAL_NAMESPACE'] ?? 'yaah.gtebu',
 };
-const cloud = hasModel && ensureKey('TEMPORAL_API_KEY', 'temporal') ? test : test.skip;
+const hasGpt = ensureKey('OPENAI_API_KEY', 'openai');
+const gpt = hasGpt ? test : test.skip;
+const cloud = hasGpt && ensureKey('TEMPORAL_API_KEY', 'temporal') ? test : test.skip;
 
 let harness: Harness | undefined = undefined;
 
@@ -43,7 +46,7 @@ const agentText = (view: TaskView): string =>
     .map((item) => item.text)
     .join('\n');
 
-describe('live: Anthropic', () => {
+describe('live providers', () => {
   /**
    * Feature: Live providers
    * Scenario: A real model works a long-running task with a tool across two turns
@@ -54,7 +57,7 @@ describe('live: Anthropic', () => {
    *        a second tool call being required, and the client completes the task
    * Requirement: docs/specs/issue-3/requirements.md R6.2, R8.1, R14.1–14.4, R27.2
    */
-  const scenario = async (extraConfig: readonly string[]): Promise<TaskView> => {
+  const scenario = async (llm: string, extraConfig: readonly string[]): Promise<TaskView> => {
     const lookups: string[] = [];
     const lookup = defineTool({
       id: 'lookup_order',
@@ -78,7 +81,7 @@ describe('live: Anthropic', () => {
         [
           'composition = "server"',
           'data_dir = ":memory:"',
-          `model = { llm = "anthropic/${MODEL}", effort = "low" }`,
+          `model = { llm = ${JSON.stringify(llm)}, effort = "low" }`,
           '[server]',
           'port = 0',
           '[o11y]',
@@ -116,7 +119,23 @@ describe('live: Anthropic', () => {
   live(
     'A real model works a long-running task with a tool across two turns',
     async () => {
-      await scenario([]);
+      await scenario(CLAUDE, []);
+    },
+    120_000,
+  );
+
+  /**
+   * Feature: Live providers
+   * Scenario: OpenAI GPT 6.1 works the same task
+   *   Given the harness using GPT 6.1 through the OpenAI plugin (Responses API)
+   *   When the two-turn task with a tool call is worked and completed
+   *   Then it behaves as with the Claude model
+   * Requirement: docs/specs/issue-3/requirements.md R6.1, R7.1, R27.5
+   */
+  gpt(
+    'OpenAI GPT 6.1 works the same task',
+    async () => {
+      await scenario(GPT, []);
     },
     120_000,
   );
@@ -133,7 +152,7 @@ describe('live: Anthropic', () => {
   live(
     'The same task runs as a workflow on embedded Temporal',
     async () => {
-      const done = await scenario([
+      const done = await scenario(CLAUDE, [
         '[durable]',
         'mode = "temporal-embedded"',
         '[durable.temporal]',
@@ -150,7 +169,7 @@ describe('live: Anthropic', () => {
    * Feature: Live providers
    * Scenario: The same task runs as a workflow on Temporal Cloud
    *   Given the harness in mode `temporal-remote` against the project's Temporal Cloud
-   *        namespace, with a real Claude model
+   *        namespace, with OpenAI GPT 6.1 — the demo's configuration
    *   When the two-turn task with a tool call is worked and completed
    *   Then it behaves as in the in-process mode, and the task links to its workflow in
    *        the Temporal Cloud UI
@@ -159,7 +178,7 @@ describe('live: Anthropic', () => {
   cloud(
     'The same task runs as a workflow on Temporal Cloud',
     async () => {
-      const done = await scenario([
+      const done = await scenario(GPT, [
         '[durable]',
         'mode = "temporal-remote"',
         '[durable.temporal]',

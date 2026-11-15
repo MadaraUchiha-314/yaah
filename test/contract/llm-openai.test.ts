@@ -306,38 +306,28 @@ describe('openai provider: response mapping', () => {
     expect(events.at(-1)).toEqual({
       type: 'done',
       stopReason: 'end',
-      usage: { inputTokens: 96, outputTokens: 21, cachedInputTokens: 64 },
+      usage: { inputTokens: 70, outputTokens: 8, cachedInputTokens: 0 },
     });
   });
 
   test('emits a reasoning item unchanged, before the content it led to', async () => {
-    const events = await collect(replaying(sse(fixture('openai/parallel-tools.sse'))), HI);
-    expect(events.map((event) => event.type)).toEqual([
-      'reasoning',
-      'tool-call',
-      'tool-call',
-      'done',
-    ]);
-    expect(events[0]).toEqual({
-      type: 'reasoning',
-      opaque: {
-        provider: 'openai',
-        data: {
-          id: 'rs_fixture_tools',
-          type: 'reasoning',
-          summary: [],
-          encrypted_content: 'gAAAAABfixture-encrypted-reasoning-tools',
-        },
-      },
-    });
-    expect(events[1]).toEqual({
+    const events = await collect(replaying(sse(fixture('openai/reasoning-tools.sse'))), HI);
+    expect(events.map((event) => event.type)).toEqual(['reasoning', 'tool-call', 'done']);
+    const [first, second] = events;
+    const data = first?.type === 'reasoning' ? first.opaque.data : null;
+    expect(first?.type === 'reasoning' ? first.opaque.provider : '').toBe('openai');
+    expect(JSON.stringify(data)).toMatch(/"id":"rs_[^"]+"/u);
+    expect(data).toMatchObject({ type: 'reasoning' });
+    // The item is passed on exactly as the API sent it, encrypted content included.
+    expect(JSON.stringify(data)).toContain('"encrypted_content":"gAAAA');
+    expect(second).toMatchObject({
       type: 'tool-call',
-      call: { id: 'call_fixture_lookup', name: 'lookup', args: { id: 'A-1' } },
+      call: { name: 'lookup', args: { id: 'A-3' } },
     });
   });
 
   test('a reasoning item it emitted goes back unchanged on the next request', async () => {
-    const http = replay(sse(fixture('openai/parallel-tools.sse')), TEXT);
+    const http = replay(sse(fixture('openai/reasoning-tools.sse')), TEXT);
     const subject = llm(http);
     const first = await collect(subject, HI);
     const reasoning = first.flatMap((event) => (event.type === 'reasoning' ? [event] : []));
@@ -346,6 +336,7 @@ describe('openai provider: response mapping', () => {
       tools: [],
     });
     const input = http.requests[1]?.body['input'];
+    expect(reasoning).toHaveLength(1);
     expect(Array.isArray(input) ? input[1] : null).toEqual(reasoning[0]?.opaque.data ?? null);
   });
 

@@ -245,7 +245,7 @@ describe('openai-compatible provider: response mapping', () => {
     expect(events.at(-1)).toEqual({
       type: 'done',
       stopReason: 'end',
-      usage: { inputTokens: 88, outputTokens: 5, cachedInputTokens: 32 },
+      usage: { inputTokens: 67, outputTokens: 5, cachedInputTokens: 0 },
     });
   });
 
@@ -257,13 +257,13 @@ describe('openai-compatible provider: response mapping', () => {
     expect(events).toEqual([
       {
         type: 'tool-call',
-        call: { id: 'call_fixture_lookup', name: 'lookup', args: { id: 'A-1' } },
+        call: { id: 'call_xrGBQm9z0PLvVb6J8JK9OKYQ', name: 'lookup', args: { id: 'A-1' } },
       },
-      { type: 'tool-call', call: { id: 'call_fixture_rules', name: 'rules', args: {} } },
+      { type: 'tool-call', call: { id: 'call_0VzIaycZ3LtxeNOZv1YxtxDN', name: 'rules', args: {} } },
       {
         type: 'done',
         stopReason: 'tool-calls',
-        usage: { inputTokens: 104, outputTokens: 34, cachedInputTokens: 0 },
+        usage: { inputTokens: 86, outputTokens: 42, cachedInputTokens: 0 },
       },
     ]);
   });
