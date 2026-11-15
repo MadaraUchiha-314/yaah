@@ -38,6 +38,8 @@ export interface StepDeps {
   readonly redactor: Redactor;
   /** The LLM entity id used when a task has not chosen one. */
   readonly defaultLlm: string;
+  /** The reasoning effort used when a task has not chosen one and the model offers it. */
+  readonly defaultEffort?: string | undefined;
   /** Fraction of the model's context window at which compaction starts. */
   readonly compactionThreshold: number;
   /** How long one tool call may take. */
@@ -81,7 +83,12 @@ async function request(
     events,
     skills: deps.skills,
   });
-  return { task, llm: resolveLlm(deps, task), request: built };
+  const llm = resolveLlm(deps, task);
+  const fallback = deps.defaultEffort;
+  const effort =
+    built.effort ??
+    (fallback !== undefined && llm.capabilities.efforts.includes(fallback) ? fallback : undefined);
+  return { task, llm, request: { ...built, effort } };
 }
 
 /** Collects what one model call produced, forwarding text to the stream as it arrives. */

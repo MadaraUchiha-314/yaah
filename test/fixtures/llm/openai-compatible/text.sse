@@ -1,0 +1,17 @@
+: Hand-written from the documented Chat Completions streaming chunk shape. Not a recording.
+: Replace by running scripts/record-llm-fixtures.ts with a valid key.
+
+data: {"id":"chatcmpl-fixture-text","object":"chat.completion.chunk","created":1794700000,"model":"fixture-model","choices":[{"index":0,"delta":{"role":"assistant","content":"","refusal":null},"finish_reason":null}],"usage":null}
+
+data: {"id":"chatcmpl-fixture-text","object":"chat.completion.chunk","created":1794700000,"model":"fixture-model","choices":[{"index":0,"delta":{"content":"Hello"},"finish_reason":null}],"usage":null}
+
+data: {"id":"chatcmpl-fixture-text","object":"chat.completion.chunk","created":1794700000,"model":"fixture-model","choices":[{"index":0,"delta":{"content":", world"},"finish_reason":null}],"usage":null}
+
+data: {"id":"chatcmpl-fixture-text","object":"chat.completion.chunk","created":1794700000,"model":"fixture-model","choices":[{"index":0,"delta":{"content":"."},"finish_reason":null}],"usage":null}
+
+data: {"id":"chatcmpl-fixture-text","object":"chat.completion.chunk","created":1794700000,"model":"fixture-model","choices":[{"index":0,"delta":{},"finish_reason":"stop"}],"usage":null}
+
+data: {"id":"chatcmpl-fixture-text","object":"chat.completion.chunk","created":1794700000,"model":"fixture-model","choices":[],"usage":{"prompt_tokens":88,"completion_tokens":5,"total_tokens":93,"prompt_tokens_details":{"cached_tokens":32,"audio_tokens":0},"completion_tokens_details":{"reasoning_tokens":0}}}
+
+data: [DONE]
+

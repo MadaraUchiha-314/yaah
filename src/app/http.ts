@@ -18,6 +18,14 @@ import express from 'express';
 import { JSONRPC_PATH, REST_PATH } from './api-server/agent-card.ts';
 import { limitGuard, originGuard } from './api-server/guards.ts';
 
+/**
+ * How an A2A client reaches this harness: over HTTP at a URL, or — in a build with no
+ * listener — through an in-memory transport onto the same request handler.
+ */
+export type HarnessTarget =
+  | { readonly type: 'http'; readonly url: string }
+  | { readonly type: 'in-memory' };
+
 /** The running listener. */
 export interface HttpService {
   /** Where the harness is reachable, without a trailing slash. */
@@ -30,6 +38,8 @@ declare module 'cordis' {
   interface Context {
     /** The HTTP listener of this harness. */
     http: HttpService;
+    /** How surfaces and the `self` sub-agent reach this harness. */
+    harnessTarget: HarnessTarget;
   }
   interface Events {
     /** The listener is up. */
@@ -89,8 +99,10 @@ export async function apply(ctx: Context): Promise<void> {
   app.use(JSONRPC_PATH, body, limitGuard(guards), jsonRpcHandler({ requestHandler, userBuilder }));
   ctx.effect(() => {
     const release = ctx.provide('http', { url, app });
+    const releaseTarget = ctx.provide('harnessTarget', { type: 'http', url });
     return async (): Promise<void> => {
       release();
+      releaseTarget();
       await close(server);
     };
   });

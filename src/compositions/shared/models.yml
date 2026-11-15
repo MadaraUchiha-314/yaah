@@ -1,0 +1,8 @@
+# Model providers. Each registers one llm entity per model id in its configuration, and
+# registers nothing when its credential is not in the environment.
+- id: llm-openai
+  name: ../../harness/models/llm/openai/index.ts
+- id: llm-anthropic
+  name: ../../harness/models/llm/anthropic/index.ts
+- id: llm-openai-compatible
+  name: ../../harness/models/llm/openai-compatible/index.ts

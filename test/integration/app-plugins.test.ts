@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, test } from 'bun:test';
 
 import { PluginLoadError } from '../../src/kernel/errors.ts';
-import { say } from '../../src/testing/scripted-llm.ts';
+import { call, callTools, say } from '../../src/testing/scripted-llm.ts';
 import type { TestHarness } from '../support/harness.ts';
 import { startHarness } from '../support/harness.ts';
 
@@ -142,5 +142,40 @@ describe('app plugins', () => {
       });
     }
     expect(reported).toEqual([taskId]);
+  });
+});
+
+describe('shipped composition', () => {
+  /**
+   * Feature: Tools and MCP
+   * Scenario: MCP tools from the configuration are usable with no code
+   *   Given a configuration that names an MCP server and nothing else
+   *   When the server composition starts and the model calls one of the server's tools
+   *   Then the tool was registered by the shipped composition and its result reached the model
+   * Requirement: docs/specs/issue-3/requirements.md R1.1, R8.1
+   */
+  test('MCP tools from the configuration are usable with no code', async () => {
+    const stub = new URL('../fixtures/mcp/stub-server.ts', import.meta.url).pathname;
+    running = await startHarness({
+      config: [
+        '[[mcp.servers]]',
+        'id = "orders"',
+        'transport = "stdio"',
+        `command = ${JSON.stringify(process.execPath)}`,
+        `args = [${JSON.stringify(stub)}]`,
+      ].join('\n'),
+      turns: [
+        callTools(call('c1', 'mcp__orders__lookup_order', { id: 'A-1041' })),
+        say('Found it.'),
+      ],
+    });
+    const registered = running.harness.ctx.entities.list('tool').map((tool) => tool.ref.id);
+    expect(registered).toContain('mcp__orders__lookup_order');
+    expect(registered).toContain('ask_user');
+    expect(registered).toContain('invoke_agent');
+    await running.send('Look up A-1041');
+    const shown = JSON.stringify(running.llm.requests[1]?.messages);
+    expect(shown).toContain('A-1041');
+    expect(shown).toContain('tool-result');
   });
 });

@@ -1,0 +1,21 @@
+: Hand-written from the documented Chat Completions streaming chunk shape. Not a recording.
+: Replace by running scripts/record-llm-fixtures.ts with a valid key.
+
+data: {"id":"chatcmpl-fixture-tools","object":"chat.completion.chunk","created":1794700000,"model":"fixture-model","choices":[{"index":0,"delta":{"role":"assistant","content":null,"refusal":null},"finish_reason":null}],"usage":null}
+
+data: {"id":"chatcmpl-fixture-tools","object":"chat.completion.chunk","created":1794700000,"model":"fixture-model","choices":[{"index":0,"delta":{"tool_calls":[{"index":0,"id":"call_fixture_lookup","type":"function","function":{"name":"lookup","arguments":""}}]},"finish_reason":null}],"usage":null}
+
+data: {"id":"chatcmpl-fixture-tools","object":"chat.completion.chunk","created":1794700000,"model":"fixture-model","choices":[{"index":0,"delta":{"tool_calls":[{"index":0,"function":{"arguments":"{\"id\":"}}]},"finish_reason":null}],"usage":null}
+
+data: {"id":"chatcmpl-fixture-tools","object":"chat.completion.chunk","created":1794700000,"model":"fixture-model","choices":[{"index":0,"delta":{"tool_calls":[{"index":0,"function":{"arguments":"\"A-1\"}"}}]},"finish_reason":null}],"usage":null}
+
+data: {"id":"chatcmpl-fixture-tools","object":"chat.completion.chunk","created":1794700000,"model":"fixture-model","choices":[{"index":0,"delta":{"tool_calls":[{"index":1,"id":"call_fixture_rules","type":"function","function":{"name":"rules","arguments":""}}]},"finish_reason":null}],"usage":null}
+
+data: {"id":"chatcmpl-fixture-tools","object":"chat.completion.chunk","created":1794700000,"model":"fixture-model","choices":[{"index":0,"delta":{"tool_calls":[{"index":1,"function":{"arguments":"{}"}}]},"finish_reason":null}],"usage":null}
+
+data: {"id":"chatcmpl-fixture-tools","object":"chat.completion.chunk","created":1794700000,"model":"fixture-model","choices":[{"index":0,"delta":{},"finish_reason":"tool_calls"}],"usage":null}
+
+data: {"id":"chatcmpl-fixture-tools","object":"chat.completion.chunk","created":1794700000,"model":"fixture-model","choices":[],"usage":{"prompt_tokens":104,"completion_tokens":34,"total_tokens":138}}
+
+data: [DONE]
+

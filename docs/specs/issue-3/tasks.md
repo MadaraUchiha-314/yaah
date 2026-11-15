@@ -199,20 +199,20 @@ suite. `T<n>` refers to a row of the testing plan's matrix.
 
 ### Slice 4 — models, tools, sub-agents
 
-- [ ] 23. OpenAI provider (Responses)
+- [x] 23. OpenAI provider (Responses)
   - Streaming, parallel tool calls, encrypted reasoning pass-back, cache breakpoints,
     image input, error mapping.
   - _Depends on:_ 9
   - _Requirements:_ R7.1, R7.3, R7.4
   - _Test:_ T3 — `llm.contract.ts` against recorded Responses fixtures; live variant in
     T12
-- [ ] 24. Anthropic provider and the OpenAI-compatible provider
+- [x] 24. Anthropic provider and the OpenAI-compatible provider
   - Messages API with `cache_control`; Chat Completions with `baseURL`.
   - _Depends on:_ 9
   - _Requirements:_ R7.1, R7.2, R7.4
   - _Test:_ T3 — `llm.contract.ts` against recorded fixtures for both; `Scenario: A
     provider error names provider and model`
-- [ ] 25. MCP tools
+- [x] 25. MCP tools
   - `@modelcontextprotocol/client` over stdio and Streamable HTTP; registration;
     `retrySafe` from annotations; reconnect with backoff; the stub MCP server fixture.
   - _Depends on:_ 10
@@ -220,7 +220,7 @@ suite. `T<n>` refers to a row of the testing plan's matrix.
   - _Test:_ T2, T8 — `Scenario: MCP tools are registered from a configured server` ·
     `Scenario: An unreachable MCP server does not stop start-up`; negative test:
     unregistered tool
-- [ ] 26. Sub-agents over A2A
+- [x] 26. Sub-agents over A2A
   - Agent entities from card URLs with the host allowlist; `invoke_agent`; sub-task
     linking; depth limit; `HarnessTarget` and the `self` agent.
   - _Depends on:_ 20
@@ -229,14 +229,14 @@ suite. `T<n>` refers to a row of the testing plan's matrix.
     loopback sub-agent gets a fresh context` · `Scenario: A failed sub-task is reported
     to the model` · `Scenario: Delegation past the depth limit is refused` ·
     `Scenario: A sub-task ignores the long-running request`; negative test: runtime URL
-- [ ] 27. Commands
+- [x] 27. Commands
   - `Command` entity, registry service, `/model`, `/effort`, lifecycle events, the
     commands extension in the card.
   - _Depends on:_ 19
   - _Requirements:_ R23.1–23.5
   - _Test:_ T2 — `Scenario: A command never reaches the model` · `Scenario: An unknown
     command is reported`
-- [ ] 28. Model selection per context
+- [x] 28. Model selection per context
   - Context settings read by `llm.invoke`; `LlmCapabilities` drives the compaction
     window.
   - _Depends on:_ 23, 27

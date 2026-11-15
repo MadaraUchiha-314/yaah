@@ -54,6 +54,7 @@ export function apply(ctx: Context): void {
     ...shared,
     sink: hub,
     redactor: ctx.redactor,
+    defaultEffort: config.model.effort,
     compactionThreshold: config.compaction.threshold,
     toolTimeoutMs: TOOL_TIMEOUT_MS,
     compact: createCompactor({
