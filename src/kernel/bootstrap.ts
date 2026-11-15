@@ -14,12 +14,17 @@ import loaderPlugin from '@cordisjs/loader';
 import { Context } from 'cordis';
 import { parse as parseYaml } from 'yaml';
 
-import { PluginLoadError } from './errors.ts';
+import { ConfigError, PluginLoadError } from './errors.ts';
 import type { Json } from './json.ts';
 import { EntityRegistry } from './registry.ts';
+import { t } from './strings.ts';
 
 /** The module name of cordis' include plugin, as it appears in a composition. */
 export const INCLUDE = '@cordisjs/include';
+/** The file overrides come from, as an error names it. */
+const CONFIG_FILE = 'config.toml';
+/** The configuration key that holds the overrides. */
+const OVERRIDES_KEY = 'overrides';
 
 /**
  * An operator's change to one entry of the composition, addressed by the entry's `id`.
@@ -104,12 +109,14 @@ function patchFor(override: EntryOverride): Patch[] {
 async function planInclude(
   file: string,
   overrides: readonly EntryOverride[],
+  matched: Set<string>,
 ): Promise<IncludeConfig> {
   const entries = await readEntries(file);
   const patches: Patch[] = [];
   const direct = new Set(entries.map((entry: FileEntry) => entry.id));
   for (const override of overrides) {
     if (direct.has(override.id)) {
+      matched.add(override.id);
       patches.push(...patchFor(override));
     }
   }
@@ -118,13 +125,33 @@ async function planInclude(
     const nested = entry.config?.path;
     if (entry.name === INCLUDE && entry.id !== undefined && nested !== undefined) {
       // oxlint-disable-next-line no-await-in-loop -- files are few and order must be stable
-      const plan = await planInclude(resolvePath(dirname(file), nested), remaining);
+      const plan = await planInclude(resolvePath(dirname(file), nested), remaining, matched);
       if (plan.patches !== undefined) {
         patches.push({ id: entry.id, config: { path: nested, patches: plan.patches } });
       }
     }
   }
   return patches.length === 0 ? { path: file } : { path: file, patches };
+}
+
+/**
+ * The include configuration for the root file, with every override carried to its entry.
+ *
+ * @throws ConfigError `config.override-unknown` naming the first override whose id is
+ *   no entry of the composition: an override that changes nothing is refused, not ignored.
+ */
+async function planOverrides(
+  root: string,
+  overrides: readonly EntryOverride[],
+): Promise<IncludeConfig> {
+  const matched = new Set<string>();
+  const plan = await planInclude(root, overrides, matched);
+  const unknown = overrides.find((override: EntryOverride) => !matched.has(override.id));
+  if (unknown !== undefined) {
+    const message = t('error.config.override-unknown', { file: CONFIG_FILE, id: unknown.id });
+    throw new ConfigError('config.override-unknown', message, CONFIG_FILE, OVERRIDES_KEY);
+  }
+  return plan;
 }
 
 function* walk(tree: EntryTree): Generator<Entry> {
@@ -182,6 +209,7 @@ async function fiberFailure(fiber: { await(): Promise<unknown> }): Promise<unkno
  *
  * @throws PluginLoadError when an entry's module cannot be imported or throws while
  *   starting. Nothing is left running in that case.
+ * @throws ConfigError `config.override-unknown` when an override names no entry.
  */
 export async function bootstrap(options: BootstrapOptions): Promise<Harness> {
   const root = resolvePath(options.root);
@@ -198,7 +226,7 @@ export async function bootstrap(options: BootstrapOptions): Promise<Harness> {
     await ctx.fiber.dispose();
   };
   try {
-    const config = await planInclude(root, options.overrides ?? []);
+    const config = await planOverrides(root, options.overrides ?? []);
     const entry: Omit<EntryOptions, 'id'> = { name: INCLUDE, config };
     await ctx.loader.create(entry);
     await ctx.loader.await();

@@ -6,6 +6,7 @@
   "error.config.read": "Cannot read configuration file {file}: {reason}",
   "error.config.parse": "Configuration file {file} is not valid TOML: {reason}",
   "error.config.invalid": "Configuration file {file}: {key}: {reason}",
+  "error.config.override-unknown": "Configuration file {file}: overrides: no entry of the composition has the id \"{id}\".",
   "error.config.credential": "Environment variable {variable} (named by {key} in {file}) is not set.",
   "error.prompt.variable": "Prompt {id} needs a value for \"{variable}\".",
   "error.composition.unknown": "Unknown composition \"{name}\". Use \"cli\", \"server\" or a path to a cordis.yaml.",
