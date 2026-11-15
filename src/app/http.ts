@@ -5,17 +5,13 @@
 import type { Server } from 'node:http';
 
 import { AGENT_CARD_PATH } from '@a2a-js/sdk';
-import {
-  UserBuilder,
-  agentCardHandler,
-  jsonRpcHandler,
-  restHandler,
-} from '@a2a-js/sdk/server/express';
+import { agentCardHandler, jsonRpcHandler, restHandler } from '@a2a-js/sdk/server/express';
 import type { Context } from 'cordis';
 import type { Express, Request, Response } from 'express';
 import express from 'express';
 
 import { JSONRPC_PATH, REST_PATH } from './api-server/agent-card.ts';
+import { connectedCaller } from './api-server/caller.ts';
 import type { ListenerAddress } from './api-server/guards.ts';
 import { limitGuard, originGuard } from './api-server/guards.ts';
 
@@ -98,7 +94,8 @@ export async function apply(ctx: Context): Promise<void> {
   const host = settings.host.includes(':') ? `[${settings.host}]` : settings.host;
   const url = `http://${host}:${String(port)}`;
   const requestHandler = ctx.a2a.handlerFor(url);
-  const userBuilder = UserBuilder.noAuthentication;
+  // Nobody is authenticated; the caller carries the closing of its connection.
+  const userBuilder = connectedCaller;
   const body = express.json({
     limit: limits.maxBodyBytes,
     type: ['application/json', 'application/a2a+json'],

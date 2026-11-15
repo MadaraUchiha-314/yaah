@@ -120,4 +120,41 @@ describe('self-review findings', () => {
       );
     expect(missing).toContain('not found');
   });
+
+  /**
+   * Feature: Inbox and events
+   * Scenario: Resending a message that was already answered ends at once
+   *   Given a long-running task waiting for its next message after message "dup-1" was answered
+   *   When the client sends "dup-1" to the task again, streaming and then blocking
+   *   Then each call ends promptly with the task still waiting for input
+   *   And the model is not called again
+   * Requirement: docs/specs/issue-3/requirements.md R15.2 (self-review 1, core #5)
+   */
+  test('Resending a message that was already answered ends at once', async () => {
+    running = await startHarness({ turns: [say('First.'), say('never')] });
+    const first = await running.send('One', { metadata: longRunning, messageId: 'dup-1' });
+    const taskId = first.task?.id ?? '';
+    expect(first.task?.status?.state).toBe(TaskState.TASK_STATE_INPUT_REQUIRED);
+    const hung = sleep(1500).then(() => 'hung' as const);
+
+    const again = await Promise.race([running.send('One', { taskId, messageId: 'dup-1' }), hung]);
+    expect(again === 'hung' ? again : again.events.at(-1)?.payload?.$case).toBe('statusUpdate');
+    const last = again === 'hung' ? undefined : again.events.at(-1)?.payload;
+    expect(last?.$case === 'statusUpdate' ? last.value.status?.state : undefined).toBe(
+      TaskState.TASK_STATE_INPUT_REQUIRED,
+    );
+    const blocking = await Promise.race([
+      running.client.sendMessage({
+        tenant: '',
+        message: running.message('One', { taskId, messageId: 'dup-1' }),
+        configuration: undefined,
+        metadata: undefined,
+      }),
+      hung,
+    ]);
+    expect(blocking === 'hung' || !('status' in blocking) ? blocking : blocking.status?.state).toBe(
+      TaskState.TASK_STATE_INPUT_REQUIRED,
+    );
+    expect(running.llm.requests).toHaveLength(1);
+  });
 });

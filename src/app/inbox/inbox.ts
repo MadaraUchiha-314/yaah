@@ -36,10 +36,17 @@ export class Inbox {
    * Stores `item` and hands it to its task's run.
    *
    * Delivering an item twice — a client retry, a redelivery after a restart — stores it
-   * once and consumes it once.
+   * once and consumes it once. An item the run has consumed already is not handed over
+   * again, and the outcome is `consumed`: no run will act on it.
    */
-  async accept(item: InboxItem): Promise<'stored' | 'duplicate'> {
+  async accept(item: InboxItem): Promise<'stored' | 'duplicate' | 'consumed'> {
     const outcome = await this.#store.put(item);
+    if (outcome === 'duplicate') {
+      const pending = await this.#store.pending(item.taskId);
+      if (!pending.some((stored: InboxItem) => stored.id === item.id)) {
+        return 'consumed';
+      }
+    }
     await this.#durable.deliver(item.taskId, refOf(item));
     return outcome;
   }
