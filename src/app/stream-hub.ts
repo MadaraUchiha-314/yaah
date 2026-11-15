@@ -53,14 +53,38 @@ interface TaskLog {
 
 /** How many events a task's log keeps before dropping the oldest. */
 const DEFAULT_CAPACITY = 2000;
+/** How long a finished task's log stays for a subscriber that comes late. */
+const DEFAULT_RETAIN_MS = 30_000;
+const FINAL: ReadonlySet<TaskState> = new Set(['completed', 'canceled', 'failed']);
+
+/** Keeps a timer from holding the process open, where timers can do that. */
+function unref(timer: unknown): void {
+  if (typeof timer === 'object' && timer !== null && 'unref' in timer) {
+    const { unref: release } = timer;
+    if (typeof release === 'function') {
+      release.call(timer);
+    }
+  }
+}
 
 /** An in-process stream hub. One harness process serves one data store. */
 export class StreamHub implements StreamSink {
   readonly #logs = new Map<TaskId, TaskLog>();
   readonly #capacity: number;
+  readonly #retainMs: number;
 
-  constructor(capacity: number = DEFAULT_CAPACITY) {
+  /**
+   * @param retainMs How long a task's log is kept after its final status: long enough for
+   *   a request that started following just before the end to read it.
+   */
+  constructor(capacity: number = DEFAULT_CAPACITY, retainMs: number = DEFAULT_RETAIN_MS) {
     this.#capacity = capacity;
+    this.#retainMs = retainMs;
+  }
+
+  /** How many tasks have a log. */
+  get size(): number {
+    return this.#logs.size;
   }
 
   /** Appends to the task's log and returns the event's sequence number. */
@@ -73,6 +97,9 @@ export class StreamHub implements StreamSink {
     }
     for (const wake of log.waiters) {
       wake();
+    }
+    if (event.type === 'status' && FINAL.has(event.state)) {
+      this.#dropLater(taskId, log);
     }
     return log.head;
   }
@@ -104,18 +131,25 @@ export class StreamHub implements StreamSink {
   ): AsyncIterable<SequencedHubEvent> {
     const log = this.#log(taskId);
     let cursor = afterSeq;
-    while (!signal.aborted) {
-      const batch = this.replay(taskId, cursor);
-      for (const entry of batch) {
-        if (signal.aborted) {
-          return;
+    try {
+      while (!signal.aborted) {
+        const batch = this.replay(taskId, cursor);
+        for (const entry of batch) {
+          if (signal.aborted) {
+            return;
+          }
+          cursor = entry.seq;
+          yield entry;
         }
-        cursor = entry.seq;
-        yield entry;
+        if (batch.length === 0) {
+          // oxlint-disable-next-line no-await-in-loop -- waiting for the next publish
+          await this.#nextPublish(log, signal);
+        }
       }
-      if (batch.length === 0) {
-        // oxlint-disable-next-line no-await-in-loop -- waiting for the next publish
-        await this.#nextPublish(log, signal);
+    } finally {
+      // Following a task nothing was published for leaves no log behind.
+      if (log.head === 0 && log.waiters.size === 0 && this.#logs.get(taskId) === log) {
+        this.#logs.delete(taskId);
       }
     }
   }
@@ -143,6 +177,17 @@ export class StreamHub implements StreamSink {
       this.#logs.set(taskId, log);
     }
     return log;
+  }
+
+  /** Forgets the task's log `retainMs` after its final status, unless a newer log took its place. */
+  #dropLater(taskId: TaskId, log: TaskLog): void {
+    unref(
+      setTimeout(() => {
+        if (this.#logs.get(taskId) === log) {
+          this.#logs.delete(taskId);
+        }
+      }, this.#retainMs),
+    );
   }
 
   #nextPublish(log: TaskLog, signal: AbortSignal): Promise<void> {
