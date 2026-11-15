@@ -101,8 +101,10 @@ export async function apply(ctx: Context): Promise<void> {
     type: ['application/json', 'application/a2a+json'],
   });
   app.use(`/${AGENT_CARD_PATH}`, agentCardHandler({ agentCardProvider: requestHandler }));
-  app.use(REST_PATH, body, limitGuard(guards), restHandler({ requestHandler, userBuilder }));
-  app.use(JSONRPC_PATH, body, limitGuard(guards), jsonRpcHandler({ requestHandler, userBuilder }));
+  // One guard, so one rate per caller, for both bindings: alternating gains nothing.
+  const limited = limitGuard(guards);
+  app.use(REST_PATH, body, limited, restHandler({ requestHandler, userBuilder }));
+  app.use(JSONRPC_PATH, body, limited, jsonRpcHandler({ requestHandler, userBuilder }));
   ctx.effect(() => {
     const release = ctx.provide('http', { url, app });
     const releaseTarget = ctx.provide('harnessTarget', { type: 'http', url });

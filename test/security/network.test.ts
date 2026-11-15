@@ -237,6 +237,30 @@ describe('network boundary', () => {
   });
 });
 
+describe('one budget per caller', () => {
+  /**
+   * Feature: Security
+   * Scenario: Both bindings count against one rate limit
+   *   Given a harness that allows two requests a minute per caller
+   *   When one caller alternates between JSON-RPC at /a2a and REST at /a2a/rest
+   *   Then its third request is refused with 429, whichever binding it uses
+   * Requirement: docs/specs/issue-3/requirements.md abuse case 8 (self-review 2, #13)
+   */
+  test('Both bindings count against one rate limit', async () => {
+    const harness = await start({ config: '[limits]\nmax_requests_per_minute = 2' });
+    const rest = () =>
+      fetch(`${harness.url}/a2a/rest/tasks/none`, { headers: { 'a2a-version': '1.0' } });
+    const statuses = [
+      (await rpc(harness, message([text('x')], { taskId: 'none' }))).status,
+      (await rest()).status,
+      (await rpc(harness, message([text('x')], { taskId: 'none' }))).status,
+      (await rest()).status,
+    ];
+    expect(statuses.slice(2)).toEqual([429, 429]);
+    expect(statuses.slice(0, 2)).not.toContain(429);
+  });
+});
+
 describe('behind a proxy', () => {
   /**
    * Feature: Security
