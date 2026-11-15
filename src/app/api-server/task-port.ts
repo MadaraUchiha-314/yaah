@@ -5,7 +5,13 @@
  */
 import type { Task } from '@a2a-js/sdk';
 
-import type { TaskPort, TaskSnapshot, TaskStatusUpdate } from '../../harness/core/task-port.ts';
+import type {
+  ModelChange,
+  TaskPort,
+  TaskSnapshot,
+  TaskStatusUpdate,
+} from '../../harness/core/task-port.ts';
+import { applyModelChange } from '../../harness/core/task-port.ts';
 import type { ContentPart, StepKey, TaskId, TaskModel } from '../../harness/core/types.ts';
 import { YaahError } from '../../kernel/errors.ts';
 import type { StreamHub } from '../stream-hub.ts';
@@ -221,10 +227,13 @@ export class A2aTaskPort implements TaskPort {
     return Promise.resolve();
   }
 
-  setModel(taskId: TaskId, _key: StepKey, model: TaskModel): Promise<void> {
+  setModel(taskId: TaskId, _key: StepKey, model: ModelChange): Promise<void> {
     this.#change(taskId, (task: Task): Task => ({
       ...task,
-      metadata: { ...task.metadata, [EXT.taskModel]: model },
+      metadata: {
+        ...task.metadata,
+        [EXT.taskModel]: applyModelChange(readTaskModel(task), model),
+      },
     }));
     return Promise.resolve();
   }

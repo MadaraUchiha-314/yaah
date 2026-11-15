@@ -8,6 +8,9 @@ import type { ToolResult } from '../core/types.ts';
 import { buildContext } from '../core/context/builder.ts';
 import { definePrompt } from '../system-prompt/prompt.ts';
 import { createMemoryPersistence } from '../core/memory-persistence.ts';
+import type { StateStore } from '../core/persistence.ts';
+import { openSqlitePersistence } from '../core/sqlite-persistence.ts';
+import { delegatedTo } from './delegated.ts';
 import type { Delegation } from './invoke-tool.ts';
 import { createInvokeAgentTool, delegate } from './invoke-tool.ts';
 import type { Agent } from './types.ts';
@@ -181,6 +184,42 @@ describe('delegate', () => {
     expect((await question.tasks.load('t1')).model.subTasks).toEqual([]);
     expect((await question.run({ taskId: 'rt1', track: false })).ok).toBe(true);
     expect(question.received.map((message) => message.taskId)).toEqual(['', 'rt1']);
+  });
+});
+
+const stores: readonly [string, () => StateStore][] = [
+  ['in-memory', () => createMemoryPersistence().state],
+  ['SQLite', () => openSqlitePersistence(':memory:').state],
+];
+
+describe.each(stores)('parallel delegations (%s state)', (_name, openState) => {
+  test('each call keeps its record of the task it opened', async () => {
+    const registry = new EntityRegistry();
+    const ids = ['a', 'b', 'c', 'd'];
+    for (const id of ids) {
+      const task = {
+        ...wholeTask(TaskState.TASK_STATE_INPUT_REQUIRED, 'Which?', ''),
+        id: `r${id}`,
+      };
+      registry.register(scriptedAgent(id, [{ payload: { $case: 'task', value: task } }]));
+    }
+    const tasks = new MemoryTaskPort();
+    tasks.create({ taskId: 't1' });
+    const deps = { registry, tasks, state: openState(), maxDepth: 3 };
+    await Promise.all(
+      ids.map((id, index) =>
+        delegate(
+          deps,
+          id,
+          { message: 'Do it.', taskId: '', track: index < 2 },
+          { taskId: 't1', key: `k${id}`, signal: new AbortController().signal },
+        ),
+      ),
+    );
+    const known = await Promise.all(ids.map((id) => delegatedTo(deps, 't1', id, `r${id}`)));
+    expect(known).toEqual([true, true, true, true]);
+    const subTasks = (await tasks.load('t1')).model.subTasks.map((ref) => ref.taskId);
+    expect(subTasks.toSorted()).toEqual(['ra', 'rb']);
   });
 });
 

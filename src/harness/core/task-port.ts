@@ -7,6 +7,14 @@ import type { TaskState, TaskSubState } from './step-runner.ts';
 import type { JsonObject } from '../../kernel/json.ts';
 import type { ContentPart, StepKey, TaskId, TaskModel } from './types.ts';
 
+/** A new task model, or a function from the current model to the new one. */
+export type ModelChange = TaskModel | ((current: TaskModel) => TaskModel);
+
+/** The task model `change` makes of `current`. */
+export function applyModelChange(current: TaskModel, change: ModelChange): TaskModel {
+  return typeof change === 'function' ? change(current) : change;
+}
+
 /** The task as the core needs to see it. */
 export interface TaskSnapshot {
   readonly taskId: TaskId;
@@ -65,8 +73,12 @@ export interface TaskPort {
    * clients following the task. Repeating the call with the same `key` replaces it.
    */
   addArtifact(taskId: TaskId, key: StepKey, parts: readonly ContentPart[]): Promise<void>;
-  /** Replaces the task model. Repeating the call with the same `key` has no further effect. */
-  setModel(taskId: TaskId, key: StepKey, model: TaskModel): Promise<void>;
+  /**
+   * Replaces the task model, or applies `model` to the current one in a single atomic
+   * update when it is a function. Repeating the call with the same `key` has no further
+   * effect.
+   */
+  setModel(taskId: TaskId, key: StepKey, model: ModelChange): Promise<void>;
 }
 
 /** A piece of synthesised speech, as step `key` produces it. */

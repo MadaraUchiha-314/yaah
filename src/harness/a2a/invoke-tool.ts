@@ -16,7 +16,7 @@ import { t } from '../../kernel/strings.ts';
 import { MAX_DESCRIPTION_LENGTH, sanitizeDescription } from '../core/context/builder.ts';
 import type { StateStore } from '../core/persistence.ts';
 import type { TaskPort } from '../core/task-port.ts';
-import type { TaskRef, ToolResult } from '../core/types.ts';
+import type { TaskModel, TaskRef, ToolResult } from '../core/types.ts';
 import type { Tool, ToolCallContext } from '../tools/types.ts';
 import { errorResult, textResult } from '../tools/types.ts';
 import { delegatedTo, rememberAsked } from './delegated.ts';
@@ -155,13 +155,13 @@ function field(args: Json, name: string): string {
   return typeof value === 'string' ? value : '';
 }
 
-/** Records the sub-task on the parent, once. */
+/** Records the sub-task on the parent, once, in one update: parallel calls lose none. */
 async function link(deps: InvokeAgentDeps, ctx: DelegationContext, ref: TaskRef): Promise<void> {
-  const parent = await deps.tasks.load(ctx.taskId);
-  if (!parent.model.subTasks.some((known) => known.taskId === ref.taskId)) {
-    const subTasks = [...parent.model.subTasks, ref];
-    await deps.tasks.setModel(ctx.taskId, ctx.key, { ...parent.model, subTasks });
-  }
+  await deps.tasks.setModel(ctx.taskId, ctx.key, (model: TaskModel): TaskModel =>
+    model.subTasks.some((known) => known.taskId === ref.taskId)
+      ? model
+      : { ...model, subTasks: [...model.subTasks, ref] },
+  );
 }
 
 async function call(

@@ -1,4 +1,10 @@
-import type { TaskPort, TaskSnapshot, TaskStatusUpdate } from '../harness/core/task-port.ts';
+import type {
+  ModelChange,
+  TaskPort,
+  TaskSnapshot,
+  TaskStatusUpdate,
+} from '../harness/core/task-port.ts';
+import { applyModelChange } from '../harness/core/task-port.ts';
 import type { ContentPart, StepKey, TaskId, TaskModel } from '../harness/core/types.ts';
 import type { JsonObject } from '../kernel/json.ts';
 
@@ -83,12 +89,17 @@ export class MemoryTaskPort implements TaskPort {
     return Promise.resolve();
   }
 
-  async setModel(taskId: TaskId, key: StepKey, model: TaskModel): Promise<void> {
-    if (this.#applied.has(key)) {
-      return;
+  setModel(taskId: TaskId, key: StepKey, model: ModelChange): Promise<void> {
+    const task = this.#tasks.get(taskId);
+    if (task === undefined) {
+      return Promise.reject(new Error(`no task ${taskId}`));
     }
-    this.#applied.add(key);
-    this.#tasks.set(taskId, { ...(await this.load(taskId)), model });
+    if (!this.#applied.has(key)) {
+      // Read and written in one go, so that a concurrent change is not lost.
+      this.#applied.add(key);
+      this.#tasks.set(taskId, { ...task, model: applyModelChange(task.model, model) });
+    }
+    return Promise.resolve();
   }
 
   /** Changes the model or effort chosen for a task, as `/model` and `/effort` do. */

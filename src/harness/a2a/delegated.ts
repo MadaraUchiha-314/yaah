@@ -4,13 +4,14 @@
  * question is remembered in the task's state. A `taskId` the model names is checked
  * against both, so it cannot post into a task it did not start.
  */
-import type { Json } from '../../kernel/json.ts';
-import { isJsonObject } from '../../kernel/json.ts';
 import type { StateStore } from '../core/persistence.ts';
 import type { TaskPort } from '../core/task-port.ts';
 import type { StepKey, TaskId, TaskRef } from '../core/types.ts';
 
-/** State name under which a task keeps the agent tasks its questions opened. */
+/**
+ * Prefix of the state names under which a task keeps the agent tasks its questions opened:
+ * one name per task, so that parallel calls each write their own and none is lost.
+ */
 export const ASKED_TASKS = 'yaah.asked-tasks';
 
 /** What the checks read. */
@@ -19,21 +20,8 @@ export interface DelegatedDeps {
   readonly state: StateStore;
 }
 
-/** One agent task a question opened, as kept in the state. */
-interface Asked {
-  readonly taskId: string;
-  readonly agent: string;
-}
-
-function askedOf(value: Json | undefined): Asked[] {
-  if (!Array.isArray(value)) {
-    return [];
-  }
-  return value.flatMap((entry: Json): Asked[] =>
-    isJsonObject(entry) && typeof entry['taskId'] === 'string' && typeof entry['agent'] === 'string'
-      ? [{ taskId: entry['taskId'], agent: entry['agent'] }]
-      : [],
-  );
+function askedName(agent: string, taskId: string): string {
+  return `${ASKED_TASKS}:${JSON.stringify([agent, taskId])}`;
 }
 
 /** Whether `taskId` is a task of `agent`'s that the task `parent` handed it. */
@@ -43,12 +31,11 @@ export async function delegatedTo(
   agent: string,
   taskId: string,
 ): Promise<boolean> {
-  const same = (ref: Asked): boolean => ref.taskId === taskId && ref.agent === agent;
   const { model } = await deps.tasks.load(parent);
-  if (model.subTasks.some((ref: TaskRef) => same(ref))) {
+  if (model.subTasks.some((ref: TaskRef) => ref.taskId === taskId && ref.agent === agent)) {
     return true;
   }
-  return askedOf(await deps.state.get(parent, ASKED_TASKS)).some((ref: Asked) => same(ref));
+  return (await deps.state.get(parent, askedName(agent, taskId))) === true;
 }
 
 /** Remembers that a question of the task `parent`, made in step `key`, opened `ref`. */
@@ -58,12 +45,5 @@ export async function rememberAsked(
   key: StepKey,
   ref: TaskRef,
 ): Promise<void> {
-  const known = askedOf(await deps.state.get(parent, ASKED_TASKS));
-  if (!known.some((entry: Asked) => entry.taskId === ref.taskId && entry.agent === ref.agent)) {
-    const next: Json = [...known, ref].map((entry: Asked) => ({
-      taskId: entry.taskId,
-      agent: entry.agent,
-    }));
-    await deps.state.set(parent, key, ASKED_TASKS, next);
-  }
+  await deps.state.set(parent, key, askedName(ref.agent, ref.taskId), true);
 }
