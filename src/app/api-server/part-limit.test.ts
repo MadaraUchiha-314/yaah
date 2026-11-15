@@ -38,4 +38,23 @@ describe('part size admission', () => {
     expect(refused instanceof PartTooLargeError && refused.code).toBe('limit.part-size');
     expect(refused instanceof Error ? refused.message : '').toContain('100');
   });
+
+  test('measures a text part in UTF-8 bytes, not characters (critic 1, #4)', async () => {
+    const admit = partSizeAdmission(100);
+    const text = (value: string): Part => ({
+      content: { $case: 'text', value },
+      mediaType: 'text/plain',
+      filename: '',
+      metadata: undefined,
+    });
+    // 34 characters, 102 bytes: over the limit though short.
+    const refused = await admit(message(text('漢'.repeat(34)))).catch((error: unknown) => error);
+    expect(refused).toBeInstanceOf(PartTooLargeError);
+    // 33 characters, 99 bytes; and 100 ASCII characters: within it.
+    const outcomes = await Promise.allSettled([
+      admit(message(text('漢'.repeat(33)))),
+      admit(message(text('a'.repeat(100)))),
+    ]);
+    expect(outcomes.map((outcome) => outcome.status)).toEqual(['fulfilled', 'fulfilled']);
+  });
 });

@@ -237,6 +237,26 @@ describe('network boundary', () => {
   });
 });
 
+describe('part size in bytes', () => {
+  /**
+   * Feature: Security
+   * Scenario: A short text of multibyte characters over the part-size limit is refused
+   *   Given a harness that allows parts of 100 bytes
+   *   When a message carries a text part of 60 "漢", 191 bytes as JSON but 71 characters
+   *   Then it is refused with 413 before any model call
+   *   And a text part of 60 ASCII characters is accepted
+   * Requirement: docs/specs/issue-3/requirements.md abuse case 8 (critic 1, #4)
+   */
+  test('A short text of multibyte characters over the part-size limit is refused', async () => {
+    const harness = await start({ turns: [say('fine')], config: '[limits]\nmax_part_bytes = 100' });
+    const wide = await rpc(harness, message([text('漢'.repeat(60))]));
+    expect(wide.status).toBe(413);
+    expect(harness.llm.requests.length).toBe(0);
+    const narrow = await rpc(harness, message([text('a'.repeat(60))]));
+    expect(narrow.status).toBe(200);
+  });
+});
+
 describe('concurrent new tasks', () => {
   /**
    * Feature: Security

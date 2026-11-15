@@ -225,8 +225,9 @@ function messageOf(body: unknown): Readonly<Record<string, unknown>> | null {
   return typeof message === 'object' && message !== null ? record(message) : null;
 }
 
+/** Whether `part`, as JSON, is over `limit` bytes: UTF-8 bytes, not UTF-16 code units. */
 function tooLarge(part: unknown, limit: number): boolean {
-  return JSON.stringify(part).length > limit;
+  return Buffer.byteLength(JSON.stringify(part), 'utf8') > limit;
 }
 
 /**
