@@ -172,4 +172,38 @@ describe('durable execution on embedded Temporal', () => {
     });
     expect(canceled.status?.state).toBe(TaskState.TASK_STATE_CANCELED);
   }, 60_000);
+
+  /**
+   * Feature: Inbox and events
+   * Scenario: An item left behind by a cancelled task is retired, not delivered
+   *   Given a task that was cancelled, with an item still unconsumed in its inbox
+   *   When the harness hands unconsumed inbox items to their tasks again
+   *   Then the task is still cancelled and the model is not called
+   *   And the item is no longer pending
+   * Requirement: docs/specs/issue-3/requirements.md R15.2, R14.4 (self-review 1, core #1)
+   */
+  test('An item left behind by a cancelled task is retired, not delivered', async () => {
+    llm.push(say('Open.'), say('Back again.'));
+    const { ctx } = running().harness;
+    const open = await running().send('Stay', { metadata: longRunning });
+    const taskId = open.task?.id ?? '';
+    await running().client.cancelTask({ tenant: '', id: taskId, metadata: undefined });
+    const calls = llm.requests.length;
+    await ctx.persistence.inbox.put({
+      id: `${taskId}:left-behind`,
+      taskId,
+      receivedAt: new Date().toISOString(),
+      interrupt: false,
+      payload: { kind: 'message', parts: [{ type: 'text', text: 'Too late' }] },
+    });
+
+    await ctx.a2a.inbox.redeliverPending();
+    await new Promise((resolve) => {
+      setTimeout(resolve, 3000);
+    });
+    const stored = await running().client.getTask({ tenant: '', id: taskId });
+    expect(stored.status?.state).toBe(TaskState.TASK_STATE_CANCELED);
+    expect(llm.requests).toHaveLength(calls);
+    expect(await ctx.persistence.inbox.pending(taskId)).toEqual([]);
+  }, 60_000);
 });

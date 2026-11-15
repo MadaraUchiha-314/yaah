@@ -8,6 +8,7 @@ import type { A2ARequestHandler, RequestContext } from '@a2a-js/sdk/server';
 import { STATE_HEADERS_KEY } from '@a2a-js/sdk/server';
 import type { Context } from 'cordis';
 
+import { isTerminal } from '../../harness/core/transitions.ts';
 import type { InboxItem } from '../../harness/core/types.ts';
 import { VERSION } from '../../kernel/version.ts';
 import { Inbox } from '../inbox/inbox.ts';
@@ -15,12 +16,14 @@ import { createTriage } from '../inbox/triage.ts';
 import type { Admission } from './admission.ts';
 import { AdmissionGate } from './admission.ts';
 import { buildAgentCard } from './agent-card.ts';
+import { fromA2aState } from './convert.ts';
 import type { CommandDispatcher } from './executor.ts';
 import { emptyMessageAdmission } from './empty-message.ts';
 import { partSizeAdmission } from './part-limit.ts';
 import { HarnessExecutor } from './executor.ts';
 import type { CommandInfo } from './extensions/index.ts';
 import { CALLER_HEADER } from './guards.ts';
+import type { YaahTaskStore } from './task-store.ts';
 import { handlerFacing } from './task-store.ts';
 import type { TaskSettings } from './task-port.ts';
 import { readSettings } from './task-port.ts';
@@ -151,10 +154,18 @@ function standingAdmission(maxPartBytes: number): Admission {
   };
 }
 
+/** Whether a task in `store` has reached a terminal state. An unknown task has not. */
+function closedIn(store: YaahTaskStore): (taskId: string) => boolean {
+  return (taskId: string): boolean => {
+    const state = store.get(taskId)?.status?.state;
+    return state !== undefined && isTerminal(fromA2aState(state));
+  };
+}
+
 /** Builds the A2A service and picks open tasks up again. */
 export function apply(ctx: Context): void {
   const { taskRuntime: runtime, durable, strings } = ctx;
-  const inbox = new Inbox(ctx.persistence.inbox, durable);
+  const inbox = new Inbox(ctx.persistence.inbox, durable, closedIn(runtime.taskStore));
   const extensions = new Set<AgentExtension>();
   const gate = new AdmissionGate();
   gate.add(standingAdmission(ctx.config.limits.maxPartBytes));

@@ -5,7 +5,7 @@
  */
 import type { InboxStore } from '../../harness/core/persistence.ts';
 import type { InboxItemRef } from '../../harness/core/step-runner.ts';
-import type { InboxItem } from '../../harness/core/types.ts';
+import type { InboxItem, TaskId } from '../../harness/core/types.ts';
 import type { DurableExecution } from '../durable/types.ts';
 
 function refOf(item: InboxItem): InboxItemRef {
@@ -16,10 +16,20 @@ function refOf(item: InboxItem): InboxItemRef {
 export class Inbox {
   readonly #store: InboxStore;
   readonly #durable: DurableExecution;
+  readonly #isClosed: (taskId: TaskId) => boolean;
 
-  constructor(store: InboxStore, durable: DurableExecution) {
+  /**
+   * @param isClosed Whether a task has reached a terminal state. An item left behind for
+   *   such a task is never handed to a run again: that would start the task anew.
+   */
+  constructor(
+    store: InboxStore,
+    durable: DurableExecution,
+    isClosed: (taskId: TaskId) => boolean = (): boolean => false,
+  ) {
     this.#store = store;
     this.#durable = durable;
+    this.#isClosed = isClosed;
   }
 
   /**
@@ -38,13 +48,21 @@ export class Inbox {
    * Hands stored, unconsumed items to their tasks' runs again — all of them after a
    * restart, or only those received before `before` when the heartbeat looks for items
    * a run never took. A run that already holds an item ignores the second delivery.
+   *
+   * An item whose task has ended — it was queued when the task was cancelled or failed —
+   * is retired instead: delivering it would start a run for a task that is over.
    */
   async redeliverPending(before?: Date): Promise<number> {
     const stored = await this.#store.pending();
+    const stranded = stored.filter((item: InboxItem) => this.#isClosed(item.taskId));
+    if (stranded.length > 0) {
+      await this.#store.markProcessed(stranded.map((item: InboxItem) => item.id));
+    }
+    const open = stored.filter((item: InboxItem) => !stranded.includes(item));
     const pending =
       before === undefined
-        ? stored
-        : stored.filter((item: InboxItem) => new Date(item.receivedAt) < before);
+        ? open
+        : open.filter((item: InboxItem) => new Date(item.receivedAt) < before);
     await Promise.all(
       pending.map((item: InboxItem) => this.#durable.deliver(item.taskId, refOf(item))),
     );
