@@ -314,15 +314,35 @@ describe('openai-compatible provider: response mapping', () => {
       chunk({}, 'stop'),
     ]);
     const events = await collect(replaying(sse(body)), HI);
+    const ids = events.map((event) => (event.type === 'tool-call' ? event.call.id : ''));
+    expect(ids[0]).toMatch(/^call_[0-9a-f]{8}_0$/u);
+    expect(ids[1]).toBe(ids[0]?.replace(/_0$/u, '_1'));
     expect(events).toEqual([
-      { type: 'tool-call', call: { id: 'call_0', name: 'rules', args: {} } },
-      { type: 'tool-call', call: { id: 'call_1', name: 'rules', args: {} } },
+      { type: 'tool-call', call: { id: ids[0] ?? '', name: 'rules', args: {} } },
+      { type: 'tool-call', call: { id: ids[1] ?? '', name: 'rules', args: {} } },
       {
         type: 'done',
         stopReason: 'tool-calls',
         usage: { inputTokens: 0, outputTokens: 0, cachedInputTokens: 0 },
       },
     ]);
+  });
+
+  test('gives id-less calls of two responses ids that differ', async () => {
+    const body = (): string =>
+      chatSse([
+        chunk({ tool_calls: [{ index: 0, function: { name: 'get_balance', arguments: '{}' } }] }),
+        chunk({}, 'tool_calls'),
+      ]);
+    const model = replaying(sse(body()), sse(body()));
+    const idOf = async (): Promise<string> => {
+      const [first] = await collect(model, HI);
+      return first?.type === 'tool-call' ? first.call.id : '';
+    };
+    const turn1 = await idOf();
+    const turn2 = await idOf();
+    expect(turn1).not.toBe('');
+    expect(turn2).not.toBe(turn1);
   });
 
   test('maps length, a content filter and a refusal to their stop reasons', async () => {

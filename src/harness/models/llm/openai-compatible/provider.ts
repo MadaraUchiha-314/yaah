@@ -104,13 +104,15 @@ function closingEvents(scope: ErrorScope, progress: Progress): LlmEvent[] {
   const ordered = [...progress.calls.entries()].toSorted(
     (a: [number, PendingCall], b: [number, PendingCall]) => a[0] - b[0],
   );
+  // Some endpoints omit the id. The index is unique only within this response, and a
+  // conversation pairs each result with its call by id, so the response gets a suffix.
+  const response = globalThis.crypto.randomUUID().slice(0, 8);
   const events = ordered.map(([index, pending]: [number, PendingCall]): LlmEvent => {
     const args = parseArguments(pending.args);
     if (args === undefined) {
       throw argumentsError(scope, pending.name);
     }
-    // Some endpoints omit the id; the index is unique within the response.
-    const id = pending.id === '' ? `call_${index}` : pending.id;
+    const id = pending.id === '' ? `call_${response}_${index}` : pending.id;
     return { type: 'tool-call', call: { id, name: pending.name, args } };
   });
   return [...events, { type: 'done', usage: progress.usage, stopReason: stopReason(progress) }];
