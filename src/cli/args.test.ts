@@ -13,6 +13,17 @@ describe('parseArgs', () => {
     expect(parseArgs(['tui', '--url', 'http://127.0.0.1:7420/'])).toEqual({
       command: 'tui',
       url: 'http://127.0.0.1:7420',
+      attach: false,
+    });
+    expect(parseArgs(['tui', '--attach', '--url=http://h'])).toEqual({
+      command: 'tui',
+      url: 'http://h',
+      attach: true,
+    });
+    expect(parseArgs(['serve', '--attach'])).toEqual({
+      command: 'invalid',
+      problem: 'cli.error.unknown',
+      subject: '--attach',
     });
     expect(parseArgs(['tui'])).toEqual({
       command: 'invalid',

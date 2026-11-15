@@ -2,10 +2,12 @@
  * The state of the chat screen: one task's view, driven through a session. The hook owns
  * no protocol knowledge — it calls the session and shows the views it yields.
  */
-import { useCallback, useRef, useState, useSyncExternalStore } from 'react';
+import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from 'react';
 
 import type { CommandInfo } from '../../../app/api-server/extensions/index.ts';
 import { t } from '../../../kernel/strings.ts';
+import type { Followable } from '../../attach.ts';
+import { attach } from '../../attach.ts';
 import type { TurnFile, TurnInput, VoiceSupport } from '../../session.ts';
 import type { TaskView } from '../../view.ts';
 import { EMPTY_VIEW } from '../../view.ts';
@@ -20,6 +22,11 @@ export interface ChatSession {
   send(input: TurnInput, view?: TaskView): AsyncIterable<TaskView>;
   complete(view: TaskView): Promise<TaskView>;
   cancel(view: TaskView): Promise<TaskView>;
+  /** With both, the chat adopts a task open on the harness and follows other surfaces. */
+  openTasks?: Followable['openTasks'] | undefined;
+  follow?: Followable['follow'] | undefined;
+  /** Take up the task that is already open on the harness (the page was opened with `?attach`). */
+  adopt?: boolean | undefined;
 }
 
 /** What the chat screen draws and can do. */
@@ -79,6 +86,8 @@ function useShown(): Shown {
 
 /** Runs one request at a time, and keeps why the last one failed. */
 interface Runner {
+  /** The same as `busy`, readable at any moment. */
+  readonly running: () => boolean;
   readonly busy: boolean;
   readonly error: string | null;
   readonly fail: (error: unknown) => void;
@@ -118,7 +127,8 @@ function useRunner({ latest, show }: Shown): Runner {
     },
     [fail, latest, show],
   );
-  return { busy, error, fail, run };
+  const running = useCallback((): boolean => inFlight.current, []);
+  return { busy, error, fail, run, running };
 }
 
 /** What plays a spoken answer; the chat only turns it on and off. */
@@ -159,12 +169,30 @@ function useSpeak(
   return { on: on && offered, speaking, control: offered ? { on, onToggle } : null };
 }
 
+/** Adopts a task open on the harness and follows what other surfaces do on it. */
+function useAttach(session: ChatSession, { latest, show }: Shown, running: () => boolean): void {
+  useEffect(() => {
+    const { openTasks, follow } = session;
+    if (openTasks === undefined || follow === undefined) {
+      return undefined;
+    }
+    return attach(
+      {
+        openTasks: () => openTasks.call(session),
+        follow: (id, signal) => follow.call(session, id, signal),
+      },
+      { current: latest, busy: running, show, adopt: session.adopt === true },
+    );
+  }, [latest, running, session, show]);
+}
+
 /** Drives one conversation through `session`. */
 export function useChat(session: ChatSession, player: SpeechPlayer = SILENT): Chat {
   const speak = useSpeak(session, player);
   const shown = useShown();
   const { view, latest, show, close } = shown;
-  const { busy, error, fail, run } = useRunner(shown);
+  const { busy, error, fail, run, running } = useRunner(shown);
+  useAttach(session, shown, running);
 
   const turn = useCallback(
     (input: TurnInput): void => {

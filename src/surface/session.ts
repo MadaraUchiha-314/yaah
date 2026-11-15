@@ -26,6 +26,23 @@ import {
 /** The official A2A extension through which A2UI travels. */
 const A2UI_EXTENSION = 'https://a2ui.org/a2a-extension/a2ui/v1.0';
 
+/** The shortest time between two looks at a task that is being followed. */
+const FOLLOW_ROUND_MS = 750;
+
+function pause(ms: number, signal: AbortSignal): Promise<void> {
+  return new Promise((resolve: () => void) => {
+    const timer = setTimeout(resolve, ms);
+    signal.addEventListener(
+      'abort',
+      () => {
+        clearTimeout(timer);
+        resolve();
+      },
+      { once: true },
+    );
+  });
+}
+
 /** What a surface tells the session about itself. */
 export interface SessionOptions {
   /** A2UI catalog ids the surface's renderer can draw. Empty means text only. */
@@ -184,6 +201,7 @@ export class HarnessSession {
   async *follow(taskId: string, signal: AbortSignal): AsyncIterable<TaskView> {
     let current: TaskView = EMPTY_VIEW;
     while (!signal.aborted) {
+      const startedAt = Date.now();
       // oxlint-disable-next-line no-await-in-loop -- rounds are sequential by nature
       const task = await this.#client.getTask({ tenant: '', id: taskId });
       current = foldEvent(current, { payload: { $case: 'task', value: task } });
@@ -204,6 +222,13 @@ export class HarnessSession {
           return;
         }
         throw error;
+      }
+      // A resting task has no live stream: the subscription ends at once. Look again at
+      // a human pace instead of asking the harness in a tight loop.
+      const wait = FOLLOW_ROUND_MS - (Date.now() - startedAt);
+      if (wait > 0) {
+        // oxlint-disable-next-line no-await-in-loop -- rounds are sequential by nature
+        await pause(wait, signal);
       }
     }
   }

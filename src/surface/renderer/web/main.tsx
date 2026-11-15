@@ -19,12 +19,25 @@ installBufferShim();
 
 const player = new PcmPlayer();
 
-const connect = (): Promise<ChatSession> =>
-  HarnessSession.connect(window.location.origin, {
+const connect = async (): Promise<ChatSession> => {
+  const session = await HarnessSession.connect(window.location.origin, {
     a2uiCatalogs: [BASIC_CATALOG_ID],
     longRunning: true,
     onSpeech: player.play,
   });
+  return {
+    commands: session.commands,
+    dashboardUrl: session.dashboardUrl,
+    voice: session.voice,
+    send: (input, view) => session.send(input, view),
+    complete: (view) => session.complete(view),
+    cancel: (view) => session.cancel(view),
+    openTasks: () => session.openTasks(),
+    follow: (taskId, signal) => session.follow(taskId, signal),
+    // `/?attach` takes up the task that is already open on the harness.
+    adopt: new URLSearchParams(window.location.search).has('attach'),
+  };
+};
 
 const root = document.querySelector('#root');
 if (root !== null) {

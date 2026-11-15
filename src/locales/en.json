@@ -124,7 +124,7 @@
   "view.input.placeholder.closed": "This task is closed. Type a message to start a new one.",
   "view.command.hint": "{name} is a command and will not be sent to the model.",
   "view.command.list": "Commands: {names}",
-  "cli.usage": "Usage:\n  yaah [--config <path>]          Start a harness and chat with it in the terminal.\n  yaah serve [--config <path>]    Start a harness and serve the A2A API and the web UI.\n  yaah tui --url <harness>        Chat in the terminal with a harness that is already running.\n\nOptions:\n  --config <path>   Use this configuration file instead of ~/.yaah/config.toml.\n  -h, --help        Show this help.\n  -v, --version     Show the version.",
+  "cli.usage": "Usage:\n  yaah [--config <path>]          Start a harness and chat with it in the terminal.\n  yaah serve [--config <path>]    Start a harness and serve the A2A API and the web UI.\n  yaah tui --url <harness>        Chat in the terminal with a harness that is already running.\n      [--attach]                  Take up the task that is already open on that harness.\n\nOptions:\n  --config <path>   Use this configuration file instead of ~/.yaah/config.toml.\n  -h, --help        Show this help.\n  -v, --version     Show the version.",
   "cli.error.unknown": "yaah: \"{subject}\" is not a command or option.",
   "cli.error.value": "yaah: {subject} needs a value.",
   "cli.error.url": "yaah tui needs --url <harness>, a full URL such as http://127.0.0.1:7420. Got \"{subject}\".",

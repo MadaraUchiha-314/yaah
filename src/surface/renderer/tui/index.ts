@@ -28,6 +28,8 @@ export interface TuiOptions {
   readonly stdout?: NodeJS.WritableStream;
   /** The environment `NO_COLOR` is read from. Defaults to `process.env`. */
   readonly env?: Readonly<Record<string, string | undefined>>;
+  /** Take up the task that is already open on the harness instead of starting fresh. */
+  readonly attach?: boolean;
   /** The model in use, shown in the status line when given. */
   readonly model?: string;
   /** The reasoning effort in use, shown in the status line when given. */
@@ -59,6 +61,7 @@ export async function runTui(options: TuiOptions): Promise<void> {
     longRunning: true,
   });
   const controller = new TuiController(session);
+  controller.attach(session, options.attach === true);
   if (isPlain(stdout, options.env ?? process.env)) {
     await runPlain(controller, stdin, stdout);
     return;

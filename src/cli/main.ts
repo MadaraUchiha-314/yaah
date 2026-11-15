@@ -21,6 +21,8 @@ import { parseArgs } from './args.ts';
 export interface TuiHints {
   readonly model?: string;
   readonly effort?: string;
+  /** Take up the task that is already open on the harness. */
+  readonly attach?: boolean;
 }
 
 /** What the command needs from the process it runs in. Tests pass their own. */
@@ -146,7 +148,7 @@ async function dispatch(invocation: Invocation, io: CliIo): Promise<number> {
     io.stderr.write(`${t('cli.usage')}\n`);
     return EXIT.usage;
   } else if (invocation.command === 'tui') {
-    await io.tui(invocation.url);
+    await io.tui(invocation.url, { attach: invocation.attach });
   } else if (invocation.command === 'serve') {
     await serve(invocation.config, io);
   } else {

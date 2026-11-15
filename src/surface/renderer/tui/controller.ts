@@ -9,6 +9,8 @@ import type { TaskView, TranscriptItem } from '../../view.ts';
 import { EMPTY_VIEW, isOpen } from '../../view.ts';
 import type { A2uiAction } from './a2ui-model.ts';
 import { A2uiModel } from './a2ui-model.ts';
+import type { Followable } from '../../attach.ts';
+import { attach } from '../../attach.ts';
 import { VoiceRecorder } from './recorder.ts';
 
 /** The part of a {@link HarnessSession} the terminal UI uses. */
@@ -57,11 +59,29 @@ export class TuiController {
   #generation = 0;
   /** The generation of the turn whose stream is still being read, or null. */
   #streaming: number | null = null;
+  /** Stops following other surfaces. */
+  #detach: () => void = () => undefined;
 
   /** @param recorder Records voice messages; the system's recorder unless given. */
   constructor(session: TuiSession, recorder: TuiRecorder = new VoiceRecorder()) {
     this.session = session;
     this.#recorder = recorder;
+  }
+
+  /**
+   * Shows what other surfaces do on the current task while this one is not in a turn.
+   * With `adopt`, it first takes up the task that is already open on the harness.
+   */
+  attach(session: Followable, adopt = false): void {
+    this.#detach();
+    this.#detach = attach(session, {
+      adopt,
+      current: () => this.#state.view,
+      busy: () => this.#state.busy || this.#state.exited,
+      show: (view: TaskView) => {
+        this.#set({ view });
+      },
+    });
   }
 
   /** The current state. The same object until something changes. */
@@ -198,6 +218,7 @@ export class TuiController {
       if (this.#state.recording !== 'off') {
         void this.#recorder.stop();
       }
+      this.#detach();
       this.#set({ exited: true, recording: 'off' });
       for (const model of this.#models.values()) {
         model.dispose();
