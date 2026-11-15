@@ -44,5 +44,7 @@ workItem: "github:MadaraUchiha-314/yaah#3"
   browser build's documented credential caveat).
 - **Effective risk tier:** 4 — the change touches fixed sensitive paths
   (`.github/workflows/**`, `**/*schema*`, `**/*credential*`).
-- **Human sign-off:** **pending** — a tier-4 work item needs a named human to approve
-  this security review before it completes. Requested on the pull request.
+- **Human sign-off:** **approved** by @MadaraUchiha-314 (role: approver), 2026-11-15 —
+  [comment](https://github.com/MadaraUchiha-314/yaah/pull/13#issuecomment-6901073505),
+  given after the critic round's security fixes were recorded here. The two residual
+  risks above were put to them in the same request and accepted.
