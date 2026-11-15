@@ -8,7 +8,9 @@
 import type { Redactor } from '../../kernel/redactor.ts';
 import type { EntityRegistry } from '../../kernel/registry.ts';
 import type { LLM, LlmEvent } from '../models/llm/types.ts';
+import { t } from '../../kernel/strings.ts';
 import { executeToolCall } from '../tools/execute.ts';
+import { errorResult } from '../tools/types.ts';
 import type { SkillsSection } from './context/builder.ts';
 import { PLAN_SNAPSHOT, buildContext, estimateTokens } from './context/builder.ts';
 import type { StepContext, StepHandlers } from './direct-runner.ts';
@@ -215,9 +217,9 @@ export function createStepHandlers(deps: StepDeps): StepHandlers {
       return result.output;
     },
     'tool.invoke': async (ctx, input) => {
-      const raw = await executeToolCall(deps.registry, input.call, ctx, {
-        timeoutMs: deps.toolTimeoutMs,
-      });
+      const raw = ctx.outcomeUnknown
+        ? errorResult('unknown-outcome', t('tool.error.unknown-outcome', { name: input.call.name }))
+        : await executeToolCall(deps.registry, input.call, ctx, { timeoutMs: deps.toolTimeoutMs });
       const result = redactResult(deps, raw);
       assertCurrent(ctx);
       await conversation.put(ctx.taskId, ctx.key, [

@@ -6,7 +6,13 @@
  * is bundled as a Temporal workflow, where determinism is what makes replay correct.
  */
 import { isJsonObject } from '../../kernel/json.ts';
-import type { InboxItemRef, StepName, StepRunner, TransitionResult } from './step-runner.ts';
+import type {
+  InboxItemRef,
+  RunPosition,
+  StepName,
+  StepRunner,
+  TransitionResult,
+} from './step-runner.ts';
 import {
   LimitError,
   RunAbandonedError,
@@ -150,6 +156,8 @@ function finish(run: Run, reason: 'client-complete'): Promise<TransitionResult> 
 async function life(run: Run): Promise<TransitionResult> {
   for (;;) {
     // oxlint-disable-next-line no-await-in-loop -- a task's turns are sequential
+    await run.runner.checkpoint?.({ sequence: run.sequence, tokens: run.tokens });
+    // oxlint-disable-next-line no-await-in-loop -- as above
     const item = await run.runner.nextInboxItem();
     if (isComplete(item)) {
       return finish(run, 'client-complete');
@@ -182,11 +190,11 @@ async function life(run: Run): Promise<TransitionResult> {
  *
  * @throws RunAbandonedError when the runner is abandoned; nothing is recorded.
  *
- * @param startSequence Where step numbering resumes — the number of steps already
- *   performed, when a run continues an earlier one.
+ * @param start Where a run that continues an earlier one resumes its step numbering and
+ *   its token count.
  */
-export async function runTask(runner: StepRunner, startSequence = 0): Promise<TransitionResult> {
-  const run: Run = { runner, sequence: startSequence, tokens: 0 };
+export async function runTask(runner: StepRunner, start?: RunPosition): Promise<TransitionResult> {
+  const run: Run = { runner, sequence: start?.sequence ?? 0, tokens: start?.tokens ?? 0 };
   try {
     const outcome = await life(run);
     return outcome;

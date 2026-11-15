@@ -4,7 +4,7 @@
  * store write, a wait — is a step the runner performs. Two runners exist: one executes
  * steps in this process, the other is a Temporal workflow whose steps are activities.
  */
-import { YaahError } from '../../kernel/errors.ts';
+import { YaahError } from '../../kernel/yaah-error.ts';
 import type { StepKey, TaskId, TokenUsage, ToolCall } from './types.ts';
 
 /** The states of a task as the core sees them. They map one-to-one to A2A task states. */
@@ -77,6 +77,44 @@ export type StepInput<N extends StepName> = StepContract[N]['input'];
 /** The output of step `N`. */
 export type StepOutput<N extends StepName> = StepContract[N]['output'];
 
+/** How a failed step is attempted again. */
+export interface RetryPolicy {
+  /** Wait before the second attempt. */
+  readonly initialIntervalMs: number;
+  /** Each wait is the previous one multiplied by this. */
+  readonly backoffCoefficient: number;
+  /** No wait is longer than this. */
+  readonly maximumIntervalMs: number;
+  /** Attempts in total, the first included. */
+  readonly maximumAttempts: number;
+}
+
+/** The policy used when none is configured: 1 s, doubling, capped at 60 s, 5 attempts. */
+export const DEFAULT_RETRY: RetryPolicy = {
+  initialIntervalMs: 1000,
+  backoffCoefficient: 2,
+  maximumIntervalMs: 60_000,
+  maximumAttempts: 5,
+};
+
+/** The wait before attempt number `attempt` (2 is the first retry). */
+export function retryDelay(policy: RetryPolicy, attempt: number): number {
+  const wait = policy.initialIntervalMs * policy.backoffCoefficient ** (attempt - 2);
+  return Math.min(wait, policy.maximumIntervalMs);
+}
+
+/**
+ * Whether trying again can help. A provider says so itself (`retryable`); an error yaah
+ * raised on purpose is final; anything else — a dropped connection, a busy store — is
+ * worth another attempt.
+ */
+export function isRetryable(error: unknown): boolean {
+  if (typeof error === 'object' && error !== null && 'retryable' in error) {
+    return error.retryable === true;
+  }
+  return !(error instanceof YaahError);
+}
+
 /** Bounds on one task's run. */
 export interface RunLimits {
   /** Most model calls in one turn. */
@@ -110,6 +148,19 @@ export interface StepRunner {
   interruptible<T>(body: () => Promise<T>): Promise<T>;
   /** Runs `body` shielded from cancellation — for recording the final status. */
   shielded<T>(body: () => Promise<T>): Promise<T>;
+  /**
+   * Called each time the task goes idle, with where the run stands. A runner whose
+   * history is bounded uses it to start afresh from this point; it then never returns.
+   */
+  checkpoint?(position: RunPosition): Promise<void>;
+}
+
+/** Where a run stands between turns: enough to continue it in a fresh run. */
+export interface RunPosition {
+  /** How many steps the run has numbered so far. */
+  readonly sequence: number;
+  /** Input plus output tokens used so far. */
+  readonly tokens: number;
 }
 
 /** The task was cancelled. */

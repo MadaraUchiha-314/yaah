@@ -271,7 +271,12 @@ describe('inbox during a turn', () => {
     await core.finished;
     const [first] = await core.persistence.conversation.read(core.taskId);
     await core.handlers['conversation.accept'](
-      { taskId: core.taskId, key: first?.key ?? '', signal: new AbortController().signal },
+      {
+        taskId: core.taskId,
+        key: first?.key ?? '',
+        signal: new AbortController().signal,
+        outcomeUnknown: false,
+      },
       { itemIds: [id] },
     );
     expect(await core.transcript()).toEqual(['user: Hello', 'agent: Hi.']);

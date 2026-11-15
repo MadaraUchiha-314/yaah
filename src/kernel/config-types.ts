@@ -69,6 +69,13 @@ export interface YaahConfig {
   };
   readonly durable: {
     readonly mode: DurableMode;
+    /** How a failed step is attempted again: exponential backoff, bounded. */
+    readonly retry: {
+      readonly initialIntervalMs: number;
+      readonly backoffCoefficient: number;
+      readonly maximumIntervalMs: number;
+      readonly maximumAttempts: number;
+    };
     readonly temporal: {
       readonly address: string;
       readonly namespace: string;

@@ -48,7 +48,12 @@ describe('compaction', () => {
     // Shrink the model's window so that the conversation so far sits just at the threshold:
     // the third question then pushes the next request over it.
     const measured = await core.handlers['context.build'](
-      { taskId: core.taskId, key: 'probe', signal: new AbortController().signal },
+      {
+        taskId: core.taskId,
+        key: 'probe',
+        signal: new AbortController().signal,
+        outcomeUnknown: false,
+      },
       {},
     );
     Object.assign(core.llm.capabilities, { contextWindow: measured.estimatedTokens / 0.8 });

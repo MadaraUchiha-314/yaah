@@ -20,6 +20,7 @@ import type { DurableExecution } from '../durable/types.ts';
 import type { Inbox } from '../inbox/inbox.ts';
 import type { HubEvent, StreamHub } from '../stream-hub.ts';
 import { messageText, partsFromA2a, resultArtifact } from './convert.ts';
+import type { DurableExecutionTask } from './extensions/index.ts';
 import { A2A_EVENT_MEDIA_TYPE, EXT, SCHEMAS, readExtension } from './extensions/index.ts';
 import type { A2aTaskPort, TaskSettings } from './task-port.ts';
 import { SETTINGS_KEY, STATUS_KEY, readTaskModel, replyArtifactId } from './task-port.ts';
@@ -215,10 +216,22 @@ export class HarnessExecutor implements AgentExecutor {
       },
       history: [message],
       artifacts: [],
-      metadata: { [EXT.taskModel]: model, [SETTINGS_KEY]: settings },
+      metadata: {
+        [EXT.taskModel]: model,
+        [SETTINGS_KEY]: settings,
+        ...this.#durableLink(request.taskId),
+      },
     };
     this.#deps.store.update(task.id, (existing: Task | undefined) => existing ?? task);
     return task;
+  }
+
+  /** Where the task's workflow can be watched, as durable-execution extension data. */
+  #durableLink(taskId: string): Record<string, DurableExecutionTask> {
+    const url = this.#deps.durable.taskUrl(taskId);
+    return url === null
+      ? {}
+      : { [EXT.durableExecution]: { workflowId: `yaah-${taskId}`, runId: '', url } };
   }
 
   /**

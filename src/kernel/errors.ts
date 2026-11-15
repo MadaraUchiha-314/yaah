@@ -1,22 +1,8 @@
 import type { EntityRef } from './entity.ts';
 import { t } from './strings.ts';
+import { YaahError } from './yaah-error.ts';
 
-/**
- * The base of every error yaah raises on purpose.
- *
- * `code` is stable and machine-readable; `message` comes from the strings table and may
- * be localised. A caller that needs to branch does so on `code` or on the subclass.
- */
-export class YaahError extends Error {
-  /** A stable, dot-separated identifier such as `entity.not-found`. */
-  readonly code: string;
-
-  constructor(code: string, message: string, cause?: unknown) {
-    super(message, cause === undefined ? undefined : { cause });
-    this.code = code;
-    this.name = new.target.name;
-  }
-}
+export { YaahError } from './yaah-error.ts';
 
 function refParams(ref: EntityRef): Record<string, string> {
   return { kind: ref.kind, id: ref.id, version: ref.version ?? 'null' };
