@@ -59,6 +59,22 @@ async function accept(run: Run, items: readonly InboxItemRef[]): Promise<boolean
   return items.some((item: InboxItemRef) => isComplete(item));
 }
 
+/**
+ * The next message from a person, or the client's action ending the task. A sub-task's
+ * event that arrives meanwhile is not an answer: it joins the conversation as an event.
+ */
+async function nextAnswer(run: Run): Promise<InboxItemRef> {
+  for (;;) {
+    // oxlint-disable-next-line no-await-in-loop -- items arrive one after another
+    const item = await run.runner.nextInboxItem();
+    if (item.kind !== 'event') {
+      return item;
+    }
+    // oxlint-disable-next-line no-await-in-loop -- as above
+    await accept(run, [item]);
+  }
+}
+
 /** Suspends the loop on the model's question and stores the reply as the call's result. */
 async function askUser(run: Run, call: ToolCall): Promise<boolean> {
   await run.runner.step('task.transition', nextKey(run, 'task.transition'), {
@@ -66,7 +82,7 @@ async function askUser(run: Run, call: ToolCall): Promise<boolean> {
     callId: call.id,
     question: questionOf(call),
   });
-  const answer = await run.runner.nextInboxItem();
+  const answer = await nextAnswer(run);
   if (isComplete(answer)) {
     return true;
   }

@@ -168,6 +168,38 @@ describe('task lifecycle', () => {
     expect(await core.transcript()).toContain('result c2: error one-at-a-time');
     expect(await core.transcript()).toContain('result c1: Answer to first');
   });
+
+  /**
+   * Feature: Task lifecycle
+   * Scenario: A sub-task event while the agent waits for an answer is not the answer
+   *   Given a model that asked the user a question
+   *   When an event about a sub-task arrives before the user replies, and then the reply
+   *   Then the event joins the conversation as an event and the task keeps waiting
+   *   And the reply, not the event, reaches the model as the answer to the question
+   * Requirement: docs/specs/issue-3/requirements.md R14.5, R15.2 (self-review 1, core #12)
+   */
+  test('A sub-task event while the agent waits for an answer is not the answer', async () => {
+    const core = await createCore({
+      turns: [callTools(call('c1', 'ask_user', { question: 'Which order?' })), say('Done.')],
+    });
+    await core.send('Go');
+    await core.statuses(2);
+    await core.deliver({ kind: 'event', event: { statusUpdate: { taskId: 's1', state: 'done' } } });
+    await new Promise((resolve) => {
+      setTimeout(resolve, 50);
+    });
+    expect(core.tasks.history).toHaveLength(2);
+    expect(await core.transcript()).toEqual(['user: Go', 'call c1: ask_user', 'event']);
+    await core.send('A-1041');
+    expect((await core.finished).state).toBe('completed');
+    expect(await core.transcript()).toEqual([
+      'user: Go',
+      'call c1: ask_user',
+      'event',
+      'result c1: A-1041',
+      'agent: Done.',
+    ]);
+  });
 });
 
 describe('inbox during a turn', () => {
