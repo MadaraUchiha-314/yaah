@@ -1,7 +1,7 @@
 import { describe, expect, test } from 'bun:test';
 
 import { EntityRegistry } from '../../kernel/registry.ts';
-import { executeToolCall, validateToolArgs } from './execute.ts';
+import { executeToolCall, isUsableSchema, validateToolArgs } from './execute.ts';
 import { defineTool, textResult } from './types.ts';
 
 const context = { taskId: 't1', key: 't1/0/tool.invoke/c1', signal: new AbortController().signal };
@@ -107,6 +107,29 @@ describe('executeToolCall', () => {
     );
     expect(result.ok ? '' : result.error.message).toContain('declares no input schema');
     expect(ran).toBe(false);
+  });
+
+  test('refuses a call whose schema cannot be used, without throwing', async () => {
+    let ran = false;
+    const dangling = defineTool({
+      id: 'dangling',
+      description: 'x',
+      inputSchema: { type: 'object', properties: { a: { $ref: '#/$defs/missing' } } },
+      invoke: () => {
+        ran = true;
+        return Promise.resolve(textResult('ran'));
+      },
+    });
+    const result = await executeToolCall(
+      registryWith(dangling),
+      { id: 'c1', name: 'dangling', args: { a: 1 } },
+      context,
+    );
+    expect(result.ok ? '' : result.error.code).toBe('invalid-arguments');
+    expect(result.ok ? '' : result.error.message).toContain('cannot be checked');
+    expect(ran).toBe(false);
+    expect(isUsableSchema(dangling.inputSchema)).toBe(true);
+    expect(isUsableSchema({ $ref: '#/$defs/missing' })).toBe(false);
   });
 
   test('turns a thrown error into a failed result', async () => {

@@ -202,6 +202,7 @@ describe('ServerConnection', () => {
             { name: 'no_schema' },
             { name: 'bad_schema', inputSchema: ['not', 'a', 'schema'] },
             { name: 'bigint_schema', inputSchema: { maximum: 10n } },
+            { name: 'dangling_schema', inputSchema: { $ref: '#/$defs/missing' } },
           ]),
         ),
     });
@@ -215,6 +216,7 @@ describe('ServerConnection', () => {
       { tool: 'no_schema', reason: 'no-input-schema' },
       { tool: 'bad_schema', reason: 'no-input-schema' },
       { tool: 'bigint_schema', reason: 'no-input-schema' },
+      { tool: 'dangling_schema', reason: 'no-input-schema' },
     ]);
     expect(await invoke(registry, 'mcp__crm__taken')).toEqual(textResult('local'));
     await connection.stop();

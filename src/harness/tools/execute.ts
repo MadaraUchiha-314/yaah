@@ -4,7 +4,7 @@
  */
 import { Validator } from '@cfworker/json-schema';
 
-import type { Json } from '../../kernel/json.ts';
+import type { Json, JsonObject } from '../../kernel/json.ts';
 import type { EntityRegistry } from '../../kernel/registry.ts';
 import { t } from '../../kernel/strings.ts';
 import type { ToolCall, ToolError, ToolResult } from '../core/types.ts';
@@ -48,7 +48,17 @@ export function validateToolArgs(tool: Tool, args: Json): ToolError | null {
       message: t('tool.error.uncallable', { name: tool.ref.id }),
     };
   }
-  const outcome = new Validator(tool.inputSchema, '2020-12', true).validate(args);
+  let outcome: ReturnType<Validator['validate']>;
+  try {
+    outcome = new Validator(tool.inputSchema, '2020-12', true).validate(args);
+  } catch (error) {
+    // A schema the validator cannot follow (an unresolvable `$ref`) checks nothing: fail closed.
+    const reason = error instanceof Error ? error.message : String(error);
+    return {
+      code: 'invalid-arguments',
+      message: t('tool.error.unusable-schema', { name: tool.ref.id, reason }),
+    };
+  }
   if (outcome.valid) {
     return null;
   }
@@ -57,6 +67,20 @@ export function validateToolArgs(tool: Tool, args: Json): ToolError | null {
     code: 'invalid-arguments',
     message: t('tool.error.invalid-arguments', { name: tool.ref.id, reason }),
   };
+}
+
+/**
+ * Whether `schema` can check arguments at all: a dry run against an empty object. A schema
+ * whose root the validator cannot follow fails it; one that fails only for some arguments
+ * is caught when a call is checked.
+ */
+export function isUsableSchema(schema: JsonObject): boolean {
+  try {
+    new Validator(schema, '2020-12', true).validate({});
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 function findTool(

@@ -173,6 +173,7 @@
   "surface.tui.description": "The terminal interface: a conversation with the harness in a terminal.",
   "renderer.tui.description": "Draws a task in a terminal with Ink, including the A2UI basic catalog.",
   "tool.error.uncallable": "Tool {name} declares no input schema, so it cannot be called.",
+  "tool.error.unusable-schema": "Tool {name} has an input schema that cannot be checked ({reason}), so it cannot be called.",
   "web.renderer.description": "The web chat: draws a task in the browser with React, shadcn/ui and the A2UI basic catalog.",
   "web.task.new": "New task",
   "web.who.agent": "Agent",

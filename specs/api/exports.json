@@ -33,6 +33,7 @@
     "formatRef",
     "isJsonObject",
     "isOpen",
+    "isUsableSchema",
     "loadConfig",
     "parseConfig",
     "registerEntity",
@@ -257,6 +258,7 @@
     "defineTool",
     "errorResult",
     "executeToolCall",
+    "isUsableSchema",
     "textResult",
     "validateToolArgs"
   ],
