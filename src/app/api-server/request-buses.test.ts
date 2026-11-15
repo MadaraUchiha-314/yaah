@@ -28,3 +28,16 @@ test('cleaning a task up forgets its primary bus', () => {
   expect(manager.getByTaskId('t1')).toBeUndefined();
   expect(manager.createOrGetByTaskId('t1')).not.toBe(primary);
 });
+
+test('a bus lent while idle is released only while no request runs on it', () => {
+  const manager = new RequestBusManager();
+  const lent = manager.createOrGetByTaskId('t1');
+  manager.settleByTaskId('t1', lent);
+  // A request began on the bus meanwhile: it keeps it.
+  expect(manager.createOrGetByTaskId('t1')).toBe(lent);
+  manager.releaseIdle('t1', lent);
+  expect(manager.getByTaskId('t1')).toBe(lent);
+  manager.settleByTaskId('t1', lent);
+  manager.releaseIdle('t1', lent);
+  expect(manager.getByTaskId('t1')).toBeUndefined();
+});

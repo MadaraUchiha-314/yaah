@@ -3,7 +3,14 @@
  * with it. A refused message never creates a task, never reaches the inbox and never
  * reaches a model — the caller gets an A2A error instead of a task.
  */
-import type { AgentCard, Message, SendMessageRequest, StreamResponse, Task } from '@a2a-js/sdk';
+import type {
+  AgentCard,
+  CancelTaskRequest,
+  Message,
+  SendMessageRequest,
+  StreamResponse,
+  Task,
+} from '@a2a-js/sdk';
 import { RequestMalformedError } from '@a2a-js/sdk/errors';
 import type { AgentExecutor, ServerCallContext, TaskStore } from '@a2a-js/sdk/server';
 import { DefaultRequestHandler } from '@a2a-js/sdk/server';
@@ -69,6 +76,7 @@ export class AdmissionGate {
 export class AdmittingRequestHandler extends DefaultRequestHandler {
   readonly #gate: AdmissionGate;
   readonly #card: () => AgentCard;
+  readonly #buses: RequestBusManager;
 
   /**
    * @param card Builds the current card. The SDK keeps the first one for its capability
@@ -81,9 +89,31 @@ export class AdmittingRequestHandler extends DefaultRequestHandler {
     store: TaskStore,
     executor: AgentExecutor,
   ) {
-    super(card(), store, executor, new RequestBusManager());
+    const buses = new RequestBusManager();
+    super(card(), store, executor, buses);
     this.#gate = gate;
     this.#card = card;
+    this.#buses = buses;
+  }
+
+  /**
+   * Cancels a task through the executor whether or not a request for it ran in this
+   * process. The SDK asks the executor only when the task has an event bus, and a task
+   * picked up again after a restart has none until a message is sent to it: without one
+   * the SDK writes the status itself, which is not how a run is stopped.
+   */
+  override async cancelTask(params: CancelTaskRequest, context: ServerCallContext): Promise<Task> {
+    if (this.#buses.getByTaskId(params.id) !== undefined) {
+      return super.cancelTask(params, context);
+    }
+    // An idle primary bus, lent for the cancel: created as for a request, released at once.
+    const lent = this.#buses.createOrGetByTaskId(params.id);
+    this.#buses.settleByTaskId(params.id, lent);
+    try {
+      return await super.cancelTask(params, context);
+    } finally {
+      this.#buses.releaseIdle(params.id, lent);
+    }
   }
 
   /** The card as it is now: plugins that started after the listener are on it. */

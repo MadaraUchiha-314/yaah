@@ -1,5 +1,8 @@
 import { afterEach, describe, expect, test } from 'bun:test';
 import { TaskState } from '@a2a-js/sdk';
+import { mkdtemp, rm } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 
 import { EXT } from '../../src/app/api-server/extensions/index.ts';
 import { ScriptedLlm, say } from '../../src/testing/scripted-llm.ts';
@@ -7,10 +10,12 @@ import type { TestHarness } from '../support/harness.ts';
 import { startHarness } from '../support/harness.ts';
 
 let running: TestHarness | undefined = undefined;
+const dirs: string[] = [];
 
 afterEach(async () => {
   await running?.stop();
   running = undefined;
+  await Promise.all(dirs.splice(0).map((dir) => rm(dir, { recursive: true, force: true })));
 });
 
 const sleep = (ms: number): Promise<void> =>
@@ -75,5 +80,44 @@ describe('self-review findings', () => {
     );
     expect(llm.requests).toHaveLength(1);
     expect(await ctx.persistence.inbox.pending(taskId)).toEqual([]);
+  });
+
+  /**
+   * Feature: Task lifecycle
+   * Scenario: A task can be cancelled after the harness restarted
+   *   Given a long-running task waiting for its next message, on a file-backed store
+   *   And the harness was stopped and started again
+   *   When the client cancels the task without sending it anything first
+   *   Then the task is cancelled and its run has ended
+   * Requirement: docs/specs/issue-3/requirements.md R14.4, R17.3 (self-review 1, core #2)
+   */
+  test('A task can be cancelled after the harness restarted', async () => {
+    const dir = await mkdtemp(join(tmpdir(), 'yaah-self-review-'));
+    dirs.push(dir);
+    const llm = new ScriptedLlm([say('First.')]);
+    running = await startHarness({ dataDir: dir, llm });
+    const first = await running.send('One', { metadata: longRunning });
+    const taskId = first.task?.id ?? '';
+    await running.stop();
+
+    running = await startHarness({ dataDir: dir, llm });
+    const canceled = await running.client.cancelTask({
+      tenant: '',
+      id: taskId,
+      metadata: undefined,
+    });
+    expect(canceled.status?.state).toBe(TaskState.TASK_STATE_CANCELED);
+    const { ctx } = running.harness;
+    expect(ctx.taskRuntime.taskStore.open()).toEqual([]);
+    // A second cancel finds the task cancelled and says so, as before.
+    const again = await running.client.cancelTask({ tenant: '', id: taskId, metadata: undefined });
+    expect(again.status?.state).toBe(TaskState.TASK_STATE_CANCELED);
+    const missing = await running.client
+      .cancelTask({ tenant: '', id: 'no-such-task', metadata: undefined })
+      .then(
+        () => '',
+        (error: unknown) => (error instanceof Error ? error.message : String(error)),
+      );
+    expect(missing).toContain('not found');
   });
 });

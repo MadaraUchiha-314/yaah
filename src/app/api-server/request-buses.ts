@@ -56,6 +56,17 @@ export class RequestBusManager implements ExecutionEventBusManager {
   }
 
   /**
+   * Forgets the task's primary bus if `bus` is it and no request is running on it, so a
+   * bus lent for a moment (a cancel) is not taken from a request that began meanwhile.
+   */
+  releaseIdle(taskId: string, bus: ExecutionEventBus): void {
+    const primary = this.#primary.get(taskId);
+    if (primary?.bus === bus && !primary.busy) {
+      this.cleanupByTaskId(taskId);
+    }
+  }
+
+  /**
    * A request's executor returned. A bus of the request's own is finished here. The
    * primary bus is released for the next request and left to the SDK's usual policy.
    */
