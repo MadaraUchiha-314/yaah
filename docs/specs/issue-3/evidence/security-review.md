@@ -26,6 +26,15 @@ workItem: "github:MadaraUchiha-314/yaah#3"
   | A caller can set `depth` and `parentTasks` in the `task-model` extension and so get past the delegation depth limit | Resource exhaustion; the per-caller open-task and rate limits, the iteration limit and the token budget still bound it | Accepted for this work item; noted for the authentication plugin, which will own caller-supplied task metadata |
   | `resolveInside` reports "missing" before "escape", so a model could probe whether a path outside a skill's root exists | Leaks existence only, never content; reachable only by the model through `read_skill_file` | Accepted |
 
+- **Found after this review, by the critic round, and fixed:** two security-relevant
+  defects the skill did not report. (1) Temporal activity failures carried an
+  unredacted error message, stack and cause into Temporal's history and the worker's
+  log, so a credential inside a provider error left the process — fixed in `8390f68`,
+  with a scenario on embedded Temporal asserting the credential is in neither the
+  history nor the worker's log. (2) A tool could still run after its task was cancelled
+  while a tool hook was deciding — fixed in `25193a4`. Also fixed from the same round:
+  the open-task limit under concurrent requests (`61496c7`) and the part-size limit in
+  bytes (`7c83f56`). See `evidence/critic-review.md`.
 - **What it examined:** the HTTP guards (Host, Origin, caller key, internal headers,
   content types); the web chat and A2UI rendering (no `dangerouslySetInnerHTML`, URL
   scheme allow-lists, the hardened catalog); the terminal output filter; path
