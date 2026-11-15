@@ -16,6 +16,7 @@ import { executeToolCall } from '../tools/execute.ts';
 import { errorResult } from '../tools/types.ts';
 import type { SkillsSection } from './context/builder.ts';
 import { PLAN_SNAPSHOT, buildContext, estimateTokens } from './context/builder.ts';
+import { assertCurrent } from './current-step.ts';
 import type { StepContext, StepHandlers } from './direct-runner.ts';
 import { prepareMedia } from './modalities.ts';
 import type { Persistence } from './persistence.ts';
@@ -234,16 +235,6 @@ function redactResult(deps: StepDeps, result: ToolResult): ToolResult {
     : { ok: true, content, structured: deps.redactor.redact(result.structured) };
 }
 
-/**
- * Stops a step that was abandoned — its turn interrupted or its task cancelled — before
- * it writes. What an abandoned step produced must not appear in the conversation.
- */
-function assertCurrent(ctx: StepContext): void {
-  if (ctx.signal.aborted) {
-    throw ctx.signal.reason instanceof Error ? ctx.signal.reason : new Error('step abandoned');
-  }
-}
-
 /** Answers the turn with `text` instead of calling the model. */
 async function refuse(
   deps: StepDeps,
@@ -295,7 +286,7 @@ async function invokeTool(
         guard: deps.toolGuard,
       });
   const result = redactResult(deps, raw);
-  assertCurrent(ctx);
+  await assertCurrent(deps.tasks, deps.persistence.conversation, ctx);
   if (raw.ok && raw.artifacts !== undefined && raw.artifacts.length > 0) {
     // What a tool made for the person is an artifact of the task, not conversation.
     const artifacts = raw.artifacts.map((part: ContentPart) => redactPart(deps, part));
@@ -330,7 +321,7 @@ export function createStepHandlers(deps: StepDeps): StepHandlers {
       }
       const stream = built.llm.stream(built.request, ctx.signal);
       const result = await consume(deps, ctx, stream, built);
-      assertCurrent(ctx);
+      await assertCurrent(deps.tasks, deps.persistence.conversation, ctx);
       await conversation.put(ctx.taskId, ctx.key, result.events);
       const [first] = result.events;
       if (first?.type === 'message') {
