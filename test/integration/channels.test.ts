@@ -292,8 +292,8 @@ describe('participants and channels', () => {
     await harness.send('Hi', as('ada'));
     const [request] = harness.llm.requests;
     const context = JSON.stringify(request?.messages);
-    expect(context).toContain('- ada (user): reporter');
-    expect(context).toContain('- self (agent): assignee');
+    expect(context).toContain(String.raw`- \"ada\" (user): reporter`);
+    expect(context).toContain(String.raw`- \"self\" (agent): assignee`);
     expect(context).toContain('**watcher** — is kept informed.');
     const tools = new Map(request?.tools.map((tool) => [tool.name, tool.description]));
     expect(tools.get('message_participant')).toContain('create_task_for_participant');
@@ -312,7 +312,8 @@ describe('participants and channels', () => {
     });
     await overridden.send('Hi', creating('ada', [ADA, SELF]));
     const custom = JSON.stringify(overridden.llm.requests[0]?.messages);
-    expect(custom).toContain('WHO IS HERE\\n- ada — Ada (user): reporter');
+    const shown = JSON.stringify('WHO IS HERE\n- "ada" — "Ada" (user): reporter').slice(1, -1);
+    expect(custom).toContain(shown);
     expect(custom).not.toContain('**watcher**');
   });
 });
