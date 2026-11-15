@@ -22,6 +22,7 @@ import { transcriptOf } from '../models/speech/types.ts';
 import { renderPrompt } from '../system-prompt/prompt.ts';
 import type { StepContext } from './direct-runner.ts';
 import type { StateStore } from './persistence.ts';
+import { normaliseMediaType } from './media-type.ts';
 import type { ContentPart, ConversationEvent } from './types.ts';
 
 /** An input modality beyond text. */
@@ -47,10 +48,11 @@ export interface PreparedMedia {
 
 /** The modality of a file part, or null when it is neither an image nor audio. */
 export function modalityOf(part: FilePart): Modality | null {
-  if (part.mediaType.startsWith('image/')) {
+  const mediaType = normaliseMediaType(part.mediaType);
+  if (mediaType.startsWith('image/')) {
     return 'image';
   }
-  return part.mediaType.startsWith('audio/') ? 'audio' : null;
+  return mediaType.startsWith('audio/') ? 'audio' : null;
 }
 
 function isHttps(url: string): boolean {
@@ -122,7 +124,7 @@ function omitted(pass: Pass, modality: Modality | 'file'): ContentPart {
 /** Whether the model takes this file's media type, when it names the types it takes. */
 function takesType(llm: LLM, part: FilePart): boolean {
   const types = llm.capabilities.inputMediaTypes;
-  return types === undefined || types.includes(part.mediaType);
+  return types === undefined || types.includes(normaliseMediaType(part.mediaType));
 }
 
 /** What the model is shown for one part. */
@@ -143,7 +145,9 @@ async function shown(
   }
   const why = obstacle(pass.llm, part, modality);
   if (why === null) {
-    return takesType(pass.llm, part) ? part : omitted(pass, modality);
+    return takesType(pass.llm, part)
+      ? { ...part, mediaType: normaliseMediaType(part.mediaType) }
+      : omitted(pass, modality);
   }
   const stt = pass.deps.stt?.() ?? null;
   if (why === 'modality' && modality === 'audio' && part.source.kind === 'base64' && stt !== null) {

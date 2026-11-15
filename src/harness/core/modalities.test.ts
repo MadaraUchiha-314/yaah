@@ -244,6 +244,24 @@ describe('images and audio on their way to a model', () => {
     ).not.toThrow();
   });
 
+  test('an image with a variant media type reaches an Anthropic model as an image', async () => {
+    const variants = ['image/jpg', 'image/PNG', ' Image/JPEG '];
+    const capabilities = anthropicCapabilities('claude-opus-5-5');
+    const core = await createCore({ turns: [say('A dot.')], capabilities });
+    const parts = variants.map((mediaType): ContentPart => ({ ...image, mediaType }));
+    await core.deliver({ kind: 'message', parts });
+    expect(await core.finished).toEqual({ state: 'completed', subState: null });
+    const request = core.llm.requests[0] ?? { messages: [], tools: [] };
+    const files = userContent(core.llm.requests[0]).filter((part) => part.type === 'file');
+    expect(files.map((part) => (part.type === 'file' ? part.mediaType : ''))).toEqual([
+      'image/jpeg',
+      'image/png',
+      'image/jpeg',
+    ]);
+    const params = buildParams(request, 'claude-opus-5-5', capabilities);
+    expect(JSON.stringify(params.messages)).not.toContain('image content');
+  });
+
   test('an inline file counts as a fixed size in the token estimate', () => {
     const big = { kind: 'base64', data: 'A'.repeat(4_000_000) };
     const estimate = estimateTokens([{ type: 'file', mediaType: 'image/png', source: big }]);

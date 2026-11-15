@@ -6,6 +6,7 @@ import type Anthropic from '@anthropic-ai/sdk';
 
 import { isJsonObject } from '../../../../kernel/json.ts';
 import { t } from '../../../../kernel/strings.ts';
+import { normaliseMediaType } from '../../../core/media-type.ts';
 import type { ContentPart, ProviderOpaque, ToolResult } from '../../../core/types.ts';
 import type { LlmCapabilities, LlmContent, LlmMessage, LlmRequest } from '../types.ts';
 import { LlmError } from '../types.ts';
@@ -74,7 +75,8 @@ function imageBlock(
   part: Extract<ContentPart, { type: 'file' }>,
   model: string,
 ): Anthropic.ImageBlockParam {
-  const { mediaType, source } = part;
+  const { source } = part;
+  const mediaType = normaliseMediaType(part.mediaType);
   if (source.kind === 'url' && mediaType.startsWith('image/')) {
     return { type: 'image', source: { type: 'url', url: source.url } };
   }
