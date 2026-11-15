@@ -389,14 +389,14 @@ suite. `T<n>` refers to a row of the testing plan's matrix.
 
 ### Slice 9 — modalities and builds (P1)
 
-- [ ] 49. Multi-modal input and image output
+- [x] 49. Multi-modal input and image output
   - Image and audio parts through to the model or a clear refusal; `generate_image`;
     image artifacts in both renderers.
   - _Depends on:_ 23, 38
   - _Requirements:_ R24.1, R24.2
   - _Test:_ T2, T4 — an image turn; an unsupported-modality reply; an image artifact
     rendered
-- [ ] 50. Speech and voice
+- [x] 50. Speech and voice
   - `SpeechToText`, `TextToSpeech` and OpenAI implementations; the voice extension;
     microphone button in the web UI; hold-to-talk with a toggle fallback in the TUI;
     streamed audio playback.

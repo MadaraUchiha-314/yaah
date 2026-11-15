@@ -37,6 +37,9 @@ describe('resolveBrowserComposition', () => {
       'llm-anthropic',
       'llm-openai-compatible',
       'system-one-openai',
+      'speech-openai-stt',
+      'speech-openai-tts',
+      'tool-image-openai',
       'runtime',
       'durable',
       'api-server',
@@ -172,7 +175,7 @@ describe('the bundled composition', () => {
 
   test('loads the shipped composition with its plugins and prompts', async () => {
     const composition = await loadBrowserComposition(BROWSER_YML, PROMPTS);
-    expect(composition.entries.length).toBe(17);
+    expect(composition.entries.length).toBe(20);
     expect(composition.entries.every((entry) => typeof entry.plugin.apply === 'function')).toBe(
       true,
     );
