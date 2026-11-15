@@ -9,5 +9,21 @@
   "error.config.credential": "Environment variable {variable} (named by {key} in {file}) is not set.",
   "error.prompt.variable": "Prompt {id} needs a value for \"{variable}\".",
   "error.composition.unknown": "Unknown composition \"{name}\". Use \"cli\", \"server\" or a path to a cordis.yaml.",
-  "error.config.missing": "the file does not exist"
+  "error.config.missing": "the file does not exist",
+  "tool.error.not-found": "No tool named \"{name}\" is available for this task.",
+  "tool.error.invalid-arguments": "The arguments for \"{name}\" are not valid: {reason}",
+  "tool.error.timeout": "\"{name}\" did not answer within {ms} ms.",
+  "tool.error.no-schema": "Tool \"{name}\" has no input schema and cannot be registered.",
+  "tool.ask-user.description": "Ask the person you are working for a question, and wait for the answer. Use it for an input, an opinion or a judgement call only they can give. Ask one question per call.",
+  "tool.ask-user.one-at-a-time": "Ask one question at a time. Your first question was sent; ask this one after it is answered.",
+  "tool.plan-set.description": "Record the plan for this task: a list of steps, each with the names of the steps it depends on. Replaces any earlier plan.",
+  "tool.plan-update.description": "Change the status of one step of the plan, and optionally record its output.",
+  "tool.plan-update.unknown-step": "The plan has no step named \"{name}\".",
+  "tool.plan-update.no-plan": "There is no plan yet. Record one with plan_set first.",
+  "tool.state-get.description": "Read a value you stored for this task.",
+  "tool.state-get.missing": "Nothing is stored under \"{name}\".",
+  "tool.state-set.description": "Store a JSON value for this task under a name, to read back later.",
+  "tool.state-set.reserved": "Names starting with \"yaah.\" are reserved.",
+  "tool.state-set.invalid": "The value for \"{name}\" does not match its schema: {reason}",
+  "tool.state-set.stored": "Stored \"{name}\"."
 }

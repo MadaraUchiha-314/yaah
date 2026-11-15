@@ -397,6 +397,16 @@
       "state": "open",
       "linkedAt": "2026-11-14T18:28:01+00:00",
       "linkedBy": "session"
+    },
+    {
+      "ref": "github:MadaraUchiha-314/yaah#7",
+      "repository": "MadaraUchiha-314/yaah",
+      "number": 7,
+      "url": "https://github.com/MadaraUchiha-314/yaah/issues/7",
+      "stateDir": "pr-loops/MadaraUchiha-314__yaah/pr-7",
+      "state": "open",
+      "linkedAt": "2026-11-14T20:22:34+00:00",
+      "linkedBy": "session"
     }
   ],
   "loop": "pdlc-work-item-loop",

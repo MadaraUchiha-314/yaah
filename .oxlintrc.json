@@ -23,7 +23,12 @@
     "typescript/no-floating-promises": "error",
     "typescript/no-misused-promises": "error",
     "typescript/strict-boolean-expressions": "error",
-    "typescript/switch-exhaustiveness-check": "error",
+    "typescript/switch-exhaustiveness-check": [
+      "error",
+      {
+        "considerDefaultExhaustiveForUnions": true
+      }
+    ],
     "typescript/explicit-function-return-type": "error",
     "typescript/explicit-module-boundary-types": "error",
     "typescript/consistent-type-imports": "error",
@@ -37,28 +42,41 @@
     "unicorn/prefer-node-protocol": "error",
     "no-console": "error",
     "typescript/prefer-readonly-parameter-types": "off",
-    "import/max-dependencies": "off"
+    "import/max-dependencies": "off",
+    "max-classes-per-file": "off",
+    "max-lines-per-function": [
+      "error",
+      {
+        "max": 60,
+        "skipBlankLines": true,
+        "skipComments": true
+      }
+    ],
+    "max-lines": [
+      "error",
+      {
+        "max": 300,
+        "skipBlankLines": true,
+        "skipComments": true
+      }
+    ]
   },
   "overrides": [
     {
       "files": [
         "**/*.test.ts",
         "test/**/*.ts",
+        "scripts/**/*.ts",
+        "src/testing/**/*.ts",
         "build.ts",
-        "commitlint.config.ts",
-        "scripts/**/*.ts"
+        "commitlint.config.ts"
       ],
       "rules": {
         "no-console": "off",
         "max-lines-per-function": "off",
         "max-lines": "off",
-        "max-classes-per-file": "off"
-      }
-    },
-    {
-      "files": ["**/errors.ts"],
-      "rules": {
-        "max-classes-per-file": "off"
+        "oxc/no-map-spread": "off",
+        "unicorn/consistent-function-scoping": "off"
       }
     }
   ]

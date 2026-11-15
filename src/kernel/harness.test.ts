@@ -35,7 +35,15 @@ describe('createHarness', () => {
   test('registers the shipped prompts, and the system prompt is minimal', async () => {
     const harness = await createHarness();
     const ids = harness.ctx.entities.list('prompt').map((prompt) => prompt.ref.id);
-    expect(ids).toEqual(['roles', 'system', 'untrusted-data']);
+    expect(ids).toEqual([
+      'compaction',
+      'plan',
+      'roles',
+      'summary',
+      'system',
+      'task',
+      'untrusted-data',
+    ]);
     const system = renderPrompt(harness.ctx.entities, 'system', {});
     expect(system).toContain('ask_user');
     expect(system).toContain('data supplied by third parties');
