@@ -20,6 +20,22 @@ export const SETTINGS_KEY = 'yaah.settings';
 /** Task metadata key for the step that last set the status, which makes a repeat a no-op. */
 export const STATUS_KEY = 'yaah.status-step';
 
+const INTERNAL: ReadonlySet<string> = new Set([SETTINGS_KEY, STATUS_KEY]);
+
+/**
+ * `task` as a caller may see it: without yaah's own settings (among them the caller key
+ * of whoever created it) and the step that last set its status.
+ */
+export function publicTask(task: Task): Task {
+  if (task.metadata === undefined) {
+    return task;
+  }
+  const metadata = Object.fromEntries(
+    Object.entries(task.metadata).filter(([key]: [string, unknown]) => !INTERNAL.has(key)),
+  );
+  return { ...task, metadata };
+}
+
 /** Settings yaah keeps on a task. */
 export interface TaskSettings {
   readonly longRunning: boolean;

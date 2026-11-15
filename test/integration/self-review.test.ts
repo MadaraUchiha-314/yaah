@@ -157,4 +157,35 @@ describe('self-review findings', () => {
     );
     expect(running.llm.requests).toHaveLength(1);
   });
+  /**
+   * Feature: Tasks
+   * Scenario: A task's internal settings are not shown to callers
+   *   Given a long-running task created by a caller
+   *   When a client reads it with tasks/get and tasks/list, and follows its stream
+   *   Then none of them carries yaah's own settings (among them the caller key) or the
+   *        step that last set its status
+   *   And the task model a client may read is still there
+   * Requirement: docs/specs/issue-3/requirements.md Security considerations
+   *   (self-review 1, core #9)
+   */
+  test("A task's internal settings are not shown to callers", async () => {
+    running = await startHarness({ turns: [say('First.')] });
+    const first = await running.send('One', { metadata: longRunning });
+    const taskId = first.task?.id ?? '';
+    const got = await running.client.getTask({ tenant: '', id: taskId, historyLength: undefined });
+    const listed = await running.client.listTasks({
+      tenant: '',
+      contextId: '',
+      status: TaskState.TASK_STATE_UNSPECIFIED,
+      pageToken: '',
+      statusTimestampAfter: undefined,
+    });
+    const shown = JSON.stringify([first.events, got, listed]);
+    expect(shown).not.toContain('yaah.settings');
+    expect(shown).not.toContain('yaah.status-step');
+    expect(got.metadata?.[EXT.taskModel]).toBeDefined();
+    // The harness itself still knows who created the task.
+    const stored = running.harness.ctx.taskRuntime.taskStore.get(taskId);
+    expect(JSON.stringify(stored?.metadata)).toContain('yaah.settings');
+  });
 });

@@ -25,7 +25,7 @@ import type { DurableExecutionTask } from './extensions/index.ts';
 import { EXT, SCHEMAS, readExtension } from './extensions/index.ts';
 import { isFromDelegate, payloadOf } from './message-payload.ts';
 import type { A2aTaskPort, TaskSettings } from './task-port.ts';
-import { SETTINGS_KEY, STATUS_KEY } from './task-port.ts';
+import { SETTINGS_KEY, STATUS_KEY, publicTask } from './task-port.ts';
 import type { YaahTaskStore } from './task-store.ts';
 
 /** Answers a `/command` without involving the task's run. Provided by the commands plugin. */
@@ -119,7 +119,7 @@ export class HarnessExecutor implements AgentExecutor {
         : (this.#deps.store.get(taskId) ?? request.task);
     // What the client offers for this turn (for example UI catalogs) travels with the task.
     this.#deps.tasks.updateSettings(taskId, { turnMetadata: metadataObject(message.metadata) });
-    bus.publish(AgentEvent.task(task));
+    bus.publish(AgentEvent.task(publicTask(task)));
     const inbox = readExtension(message.metadata, EXT.inboxEvents, SCHEMAS.inboxEventsRequest);
     const id = `${taskId}:${message.messageId}`;
     const payload = payloadOf(message);
