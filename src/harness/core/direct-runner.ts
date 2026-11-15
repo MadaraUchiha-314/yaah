@@ -74,18 +74,29 @@ function sleep(ms: number): Promise<void> {
   });
 }
 
-/** Rejects with `signal.reason` when `signal` aborts. Never resolves. */
-function aborted(signal: AbortSignal): Promise<never> {
-  return new Promise((_resolve: (value: never) => void, reject: (reason: unknown) => void) => {
-    const fail = (): void => {
-      reject(signal.reason instanceof Error ? signal.reason : new TaskCancelledError());
-    };
-    if (signal.aborted) {
-      fail();
-    } else {
-      signal.addEventListener('abort', fail, { once: true });
-    }
-  });
+/**
+ * Settles as `work` does, or rejects with `signal.reason` when `signal` aborts first. The
+ * abort listener is removed either way: the task's signal outlives every step.
+ */
+async function untilAborted<T>(work: Promise<T>, signal: AbortSignal): Promise<T> {
+  let fail = (): void => undefined;
+  const stopped = new Promise<never>(
+    (_resolve: (value: never) => void, reject: (reason: unknown) => void) => {
+      fail = (): void => {
+        reject(signal.reason instanceof Error ? signal.reason : new TaskCancelledError());
+      };
+      if (signal.aborted) {
+        fail();
+      } else {
+        signal.addEventListener('abort', fail, { once: true });
+      }
+    },
+  );
+  try {
+    return await Promise.race([work, stopped]);
+  } finally {
+    signal.removeEventListener('abort', fail);
+  }
 }
 
 /**
@@ -234,7 +245,7 @@ export class DirectRunner implements StepRunner {
       });
       try {
         // oxlint-disable-next-line no-await-in-loop -- attempts are sequential by nature
-        const result = await Promise.race([work, aborted(ctx.signal)]);
+        const result = await untilAborted(work, ctx.signal);
         return result;
       } catch (error) {
         const policy = this.#retry;
@@ -247,7 +258,7 @@ export class DirectRunner implements StepRunner {
           throw error;
         }
         // oxlint-disable-next-line no-await-in-loop -- the wait between attempts
-        await Promise.race([sleep(retryDelay(policy, attempt + 1)), aborted(ctx.signal)]);
+        await untilAborted(sleep(retryDelay(policy, attempt + 1)), ctx.signal);
       }
     }
   }
