@@ -55,8 +55,11 @@ export class AdmissionGate {
     }
   }
 
-  /** Builds the SDK's request handler with this gate in front of it. */
-  handler(card: AgentCard, store: TaskStore, executor: AgentExecutor): DefaultRequestHandler {
+  /**
+   * Builds the SDK's request handler with this gate in front of it. `card` is asked each
+   * time the card is served, so what plugins add after the listener started is listed.
+   */
+  handler(card: () => AgentCard, store: TaskStore, executor: AgentExecutor): DefaultRequestHandler {
     // oxlint-disable-next-line no-use-before-define -- the two classes name each other
     return new AdmittingRequestHandler(this, card, store, executor);
   }
@@ -65,10 +68,27 @@ export class AdmissionGate {
 /** The SDK's request handler with the admission gate in front of both ways to send. */
 export class AdmittingRequestHandler extends DefaultRequestHandler {
   readonly #gate: AdmissionGate;
+  readonly #card: () => AgentCard;
 
-  constructor(gate: AdmissionGate, card: AgentCard, store: TaskStore, executor: AgentExecutor) {
-    super(card, store, executor, new RequestBusManager());
+  /**
+   * @param card Builds the current card. The SDK keeps the first one for its capability
+   *   checks (streaming, push notifications), which do not change while the harness runs;
+   *   extensions and commands do, so the served card is built anew.
+   */
+  constructor(
+    gate: AdmissionGate,
+    card: () => AgentCard,
+    store: TaskStore,
+    executor: AgentExecutor,
+  ) {
+    super(card(), store, executor, new RequestBusManager());
     this.#gate = gate;
+    this.#card = card;
+  }
+
+  /** The card as it is now: plugins that started after the listener are on it. */
+  override getAgentCard(): Promise<AgentCard> {
+    return Promise.resolve(this.#card());
   }
 
   override async sendMessage(

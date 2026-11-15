@@ -188,7 +188,7 @@ export function apply(ctx: Context): void {
     inbox,
     cardFor,
     handlerFor: (baseUrl: string): A2ARequestHandler =>
-      gate.handler(cardFor(baseUrl), handlerFacing(runtime.taskStore), executor),
+      gate.handler(() => cardFor(baseUrl), handlerFacing(runtime.taskStore), executor),
     addAdmission: (check: Admission): (() => void) => gate.add(check),
     openTasks: (caller: string): number =>
       runtime.taskStore.open().filter((task) => readSettings(task).caller === caller).length,

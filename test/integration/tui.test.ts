@@ -104,8 +104,7 @@ describe('terminal UI', () => {
       [callTools(call('c1', 'lookup')), say('Your order is on its way to you today.')],
       5,
     );
-    expect(ui.frame()).toContain(`○ ${t('view.state.idle')}`);
-    expect(ui.frame()).toContain(t('view.input.placeholder'));
+    await ui.shows(`○ ${t('view.state.idle')}`, t('view.input.placeholder'));
     await ui.enter('Where is my order?');
     await ui.shows(
       'Your order is on its way to you today.',
@@ -214,16 +213,15 @@ describe('terminal UI', () => {
   test('A matched command is highlighted and never reaches the model', async () => {
     const ui = await openTui([]);
     await ui.press('/mod');
-    expect(ui.frame()).toContain(t('view.command.list', { names: '' }).trim());
-    expect(ui.frame()).toContain('/model');
-    expect(ui.frame()).toContain('/exit');
+    // Each check waits for the redraw: a fixed pause is not enough on a busy machine.
+    await ui.shows(t('view.command.list', { names: '' }).trim(), '/model', '/exit');
     expect(ui.frame()).not.toContain(t('view.command.hint', { name: '/mod' }));
 
     await ui.press('el');
-    expect(ui.frame()).toContain(t('view.command.hint', { name: '/model' }));
+    await ui.shows(t('view.command.hint', { name: '/model' }));
     expect(ui.frame()).not.toContain(t('view.command.list', { names: '' }).trim());
     await ui.press(' x', KEY.backspace, KEY.backspace);
-    expect(ui.frame()).toContain('> /model▍');
+    await ui.shows('> /model▍');
 
     await ui.press(KEY.enter);
     await ui.shows('scripted/model');
@@ -256,16 +254,16 @@ describe('terminal UI', () => {
     expect(ui.frame()).toContain(t('tui.a2ui.hint'));
 
     await ui.press(KEY.tab);
-    expect(ui.frame()).toContain('> (*) Arrived damaged');
+    await ui.shows('> (*) Arrived damaged');
     await ui.press(KEY.down);
-    expect(ui.frame()).toContain('> ( ) Wrong item');
+    await ui.shows('> ( ) Wrong item');
     await ui.press(KEY.space);
-    expect(ui.frame()).toContain('> (*) Wrong item');
+    await ui.shows('> (*) Wrong item');
     expect(ui.frame()).toContain('  ( ) Arrived damaged');
     await ui.press(KEY.tab, KEY.space);
-    expect(ui.frame()).toContain('> [x] I can send a photo');
+    await ui.shows('> [x] I can send a photo');
     await ui.press(KEY.tab);
-    expect(ui.frame()).toContain('> [ Submit refund ]');
+    await ui.shows('> [ Submit refund ]');
     await ui.press(KEY.enter);
 
     await ui.shows('agent Refund filed.');
