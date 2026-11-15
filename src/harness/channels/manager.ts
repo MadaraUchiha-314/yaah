@@ -73,11 +73,14 @@ export class ChannelManager {
    */
   async addParticipant(channelId: string, participant: Participant): Promise<void> {
     const task = await this.#task(channelId);
-    const { participants } = task.model;
-    if (participants.some((known: Participant) => known.id === participant.id)) {
+    const added = await this.#change(task, (participants) =>
+      participants.some((known: Participant) => known.id === participant.id)
+        ? null
+        : [...participants, participant],
+    );
+    if (!added) {
       throw new ParticipantConflictError(channelId, participant.id);
     }
-    await this.#save(task, [...participants, participant]);
   }
 
   /**
@@ -88,12 +91,13 @@ export class ChannelManager {
    */
   async removeParticipant(channelId: string, participantId: ParticipantId): Promise<void> {
     const task = await this.#task(channelId);
-    const { participants } = task.model;
-    const kept = participants.filter((known: Participant) => known.id !== participantId);
-    if (kept.length === participants.length) {
+    const removed = await this.#change(task, (participants) => {
+      const kept = participants.filter((known: Participant) => known.id !== participantId);
+      return kept.length === participants.length ? null : kept;
+    });
+    if (!removed) {
       throw new NotAParticipantError(channelId, participantId);
     }
-    await this.#save(task, kept);
   }
 
   /**
@@ -125,10 +129,24 @@ export class ChannelManager {
     }
   }
 
-  #save(task: TaskSnapshot, participants: readonly Participant[]): Promise<void> {
+  /**
+   * Changes the participants in one store update, so two changes made at once both
+   * count: `change` sees the list as it is at that moment, and returns the new list or
+   * null to change nothing. Resolves with whether it changed anything.
+   */
+  async #change(
+    task: TaskSnapshot,
+    change: (participants: readonly Participant[]) => readonly Participant[] | null,
+  ): Promise<boolean> {
     this.#changes += 1;
     // Not a step of the task's run: each change is its own write, never a repeat of another.
     const key = `${task.taskId}/-/channels/${String(this.#changes)}-${String(Date.now())}`;
-    return this.#deps.tasks.setModel(task.taskId, key, { ...task.model, participants });
+    let changed = false;
+    await this.#deps.tasks.setModel(task.taskId, key, (current) => {
+      const next = change(current.participants);
+      changed = next !== null;
+      return next === null ? current : { ...current, participants: next };
+    });
+    return changed;
   }
 }

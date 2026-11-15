@@ -182,6 +182,25 @@ describe('ChannelManager', () => {
     expect((await channels.forTask('t1')).participants.at(-1)?.role).toBe('admin');
   });
 
+  test('keeps every change when several are made at once', async () => {
+    const { channels, tasks } = channelFixture();
+    const people = ['grace', 'alan', 'barbara', 'edsger'].map(
+      (id) => ({ id, role: 'watcher', kind: 'user' }) as const,
+    );
+    await Promise.all(people.map((person) => channels.addParticipant('t1', person)));
+    const ids = (await tasks.load('t1')).model.participants.map((known) => known.id);
+    expect(ids).toEqual([...PARTICIPANTS.map((known) => known.id), ...people.map((p) => p.id)]);
+    // Two adds of the same id at once: one wins, the other is told it conflicts.
+    const ada = { id: 'ada2', role: 'watcher', kind: 'user' } as const;
+    const outcomes = await Promise.all([
+      rejection(channels.addParticipant('t1', ada)),
+      rejection(channels.addParticipant('t1', ada)),
+    ]);
+    expect(outcomes.filter((outcome) => outcome instanceof ParticipantConflictError)).toHaveLength(
+      1,
+    );
+  });
+
   test('changes membership only of a task that exists', async () => {
     const { channels } = channelFixture();
     const grace = { id: 'grace', role: 'watcher', kind: 'user' } as const;
