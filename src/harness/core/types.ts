@@ -41,7 +41,7 @@ export interface ToolCall {
 
 /** Why a tool call did not produce a result. */
 export interface ToolError {
-  /** Stable code: `not-found`, `invalid-arguments`, `denied`, `timeout`, `failed`, `unknown-outcome`. */
+  /** Stable code: `not-found`, `invalid-arguments`, `denied`, `timeout`, `failed`, `cancelled`, `unknown-outcome`. */
   readonly code: string;
   readonly message: string;
 }

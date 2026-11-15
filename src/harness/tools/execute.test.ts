@@ -169,4 +169,92 @@ describe('executeToolCall', () => {
     expect(result.ok ? '' : result.error.code).toBe('timeout');
     expect(aborted).toBe(true);
   });
+
+  test('a call cancelled while its guard is answering never starts the tool', async () => {
+    let ran = false;
+    const refund = defineTool({
+      id: 'refund',
+      description: 'x',
+      inputSchema: { type: 'object' },
+      invoke: () => {
+        ran = true;
+        return Promise.resolve(textResult('refunded'));
+      },
+    });
+    const task = new AbortController();
+    let allow = (): void => undefined;
+    const answered = new Promise<null>((resolve) => {
+      allow = (): void => {
+        resolve(null);
+      };
+    });
+    const pending = executeToolCall(
+      registryWith(refund),
+      { id: 'c1', name: 'refund', args: {} },
+      { ...context, signal: task.signal },
+      { guard: () => answered },
+    );
+    task.abort();
+    allow();
+    const result = await pending;
+    expect(result.ok ? '' : result.error.code).toBe('cancelled');
+    expect(ran).toBe(false);
+  });
+
+  test('a call already cancelled asks no guard and starts no tool', async () => {
+    let asked = false;
+    let ran = false;
+    const refund = defineTool({
+      id: 'refund',
+      description: 'x',
+      inputSchema: { type: 'object' },
+      invoke: () => {
+        ran = true;
+        return Promise.resolve(textResult('refunded'));
+      },
+    });
+    const task = new AbortController();
+    task.abort();
+    const result = await executeToolCall(
+      registryWith(refund),
+      { id: 'c1', name: 'refund', args: {} },
+      { ...context, signal: task.signal },
+      {
+        guard: () => {
+          asked = true;
+          return Promise.resolve(null);
+        },
+      },
+    );
+    expect(result.ok ? '' : result.error.code).toBe('cancelled');
+    expect(asked).toBe(false);
+    expect(ran).toBe(false);
+  });
+
+  test('a call cancelled after its guard answered never starts the tool', async () => {
+    let ran = false;
+    const refund = defineTool({
+      id: 'refund',
+      description: 'x',
+      inputSchema: { type: 'object' },
+      invoke: () => {
+        ran = true;
+        return Promise.resolve(textResult('refunded'));
+      },
+    });
+    const task = new AbortController();
+    const result = await executeToolCall(
+      registryWith(refund),
+      { id: 'c1', name: 'refund', args: {} },
+      { ...context, signal: task.signal },
+      {
+        guard: () => {
+          task.abort();
+          return Promise.resolve(null);
+        },
+      },
+    );
+    expect(result.ok ? '' : result.error.code).toBe('cancelled');
+    expect(ran).toBe(false);
+  });
 });

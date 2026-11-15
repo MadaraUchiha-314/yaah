@@ -14,6 +14,7 @@
   "tool.error.not-found": "No tool named \"{name}\" is available for this task.",
   "tool.error.invalid-arguments": "The arguments for \"{name}\" are not valid: {reason}",
   "tool.error.timeout": "\"{name}\" did not answer within {ms} ms.",
+  "tool.error.cancelled": "\"{name}\" was not run: the task was cancelled before it started.",
   "tool.error.no-schema": "Tool \"{name}\" has no input schema and cannot be registered.",
   "tool.ask-user.description": "Ask the person you are working for a question, and wait for the answer. Use it for an input, an opinion or a judgement call only they can give. Ask one question per call.",
   "tool.ask-user.one-at-a-time": "Ask one question at a time. Your first question was sent; ask this one after it is answered.",

@@ -107,12 +107,44 @@ function deadline(ms: number | undefined, onExpire: () => void): Promise<'timeou
   });
 }
 
+/** The result of a call whose task was cancelled before the tool started. */
+function cancelled(name: string): ToolResult {
+  return errorResult('cancelled', t('tool.error.cancelled', { name }));
+}
+
+/**
+ * Asks the guard, but stops waiting when `signal` aborts: resolves `'cancelled'` then.
+ * The abort listener is removed either way.
+ */
+async function askGuard(
+  guard: ToolGuard | undefined,
+  call: ToolCall,
+  ctx: Omit<ToolCallContext, 'callId'>,
+): Promise<ToolError | null | 'cancelled'> {
+  if (guard === undefined) {
+    return null;
+  }
+  let onAbort = (): void => undefined;
+  const aborted = new Promise<'cancelled'>((resolve) => {
+    onAbort = (): void => {
+      resolve('cancelled');
+    };
+    ctx.signal.addEventListener('abort', onAbort, { once: true });
+  });
+  try {
+    return await Promise.race([guard(call, ctx), aborted]);
+  } finally {
+    ctx.signal.removeEventListener('abort', onAbort);
+  }
+}
+
 /**
  * Runs one tool call.
  *
  * The tool runs only if it is registered, allowed for the task, its arguments pass its
  * schema and `options.guard` lets it through. A thrown error, a timeout or a refusal
- * becomes `{ ok: false, error }`.
+ * becomes `{ ok: false, error }`. A call whose signal aborts before the tool starts —
+ * while the guard is still answering, too — never starts it and comes back `cancelled`.
  */
 export async function executeToolCall(
   registry: EntityRegistry,
@@ -128,13 +160,19 @@ export async function executeToolCall(
   if (invalid !== null) {
     return { ok: false, error: invalid };
   }
+  if (ctx.signal.aborted) {
+    return cancelled(call.name);
+  }
   const controller = new AbortController();
   const abort = (): void => {
     controller.abort();
   };
   ctx.signal.addEventListener('abort', abort, { once: true });
   try {
-    const refused = (await options.guard?.(call, ctx)) ?? null;
+    const refused = await askGuard(options.guard, call, ctx);
+    if (refused === 'cancelled' || ctx.signal.aborted) {
+      return cancelled(call.name);
+    }
     if (refused !== null) {
       return { ok: false, error: refused };
     }
