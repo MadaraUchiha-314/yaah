@@ -608,4 +608,57 @@ describe('agent plugins', () => {
       await strict.close();
     }
   });
+
+  /**
+   * Feature: Skills, agent plugins and hooks
+   * Scenario: A plugin whose own server ids clash once normalised is refused whole
+   *   Given a plugin "twin-db" whose mcp.json declares the servers "my.db" and "my_db",
+   *         which would give their tools the same names
+   *   And it has a hook, a skill and a command
+   *   When the harness starts
+   *   Then "twin-db" is refused by name, for the clash
+   *   And nothing of it is registered: no tool, no skill, no command, no hook
+   * Requirement: docs/specs/issue-3/requirements.md R9.3 (self-review 2, #12)
+   */
+  test('A plugin whose own server ids clash once normalised is refused whole', async () => {
+    scratch = await scratchDir('yaah-plugin-');
+    crm = await serveStubHttp(await freePort());
+    const twin = await writePlugin(scratch, {
+      name: 'twin-db',
+      servers: { 'my.db': http(crm.url), my_db: http(crm.url) },
+      hooks: [
+        {
+          event: 'tool.before',
+          match: 'mcp__crm__refund',
+          run: { type: 'mcp-tool', server: 'my.db', tool: 'check' },
+        },
+      ],
+      files: {
+        'skills/twins/SKILL.md': skillMd('twins', 'A skill of the plugin.', 'Body.'),
+        [`${YAAH_DIR}/commands/twins.md`]: 'Say twins.',
+      },
+    });
+    const log = join(scratch, 'yaah.log');
+    running = await startHarness({
+      config: [
+        pluginsConfig(twin),
+        `[o11y]\nlog_level = "warn"\nlog_file = ${JSON.stringify(log)}`,
+      ].join('\n'),
+    });
+    const refused = await logLines(log, 'plugins/refused');
+    expect(refused).toHaveLength(1);
+    expect(refused[0]).toContain('twin-db');
+    expect(refused[0]).toContain('server id clash');
+    expect(ids(running, 'tool').filter((id) => id.startsWith('mcp__'))).toEqual([]);
+    expect(ids(running, 'skill')).toEqual([]);
+    expect(ids(running, 'command')).not.toContain('twins');
+    const verdict = await running.harness.ctx.hooks.dispatch('tool.before', {
+      taskId: 't',
+      key: 'k',
+      callId: 'c',
+      args: {},
+      tool: 'mcp__crm__refund',
+    });
+    expect(verdict).toEqual({ decision: 'allow' });
+  });
 });

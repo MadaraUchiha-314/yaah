@@ -243,6 +243,7 @@
   "plugin.rule.manifest-missing": "plugin.json is missing from the plugin's root or is not JSON.",
   "plugin.rule.manifest-object": "plugin.json must hold a JSON object.",
   "plugin.rule.unsupported-version": "the Agent Plugins version of \"{schema}\" is not supported; this harness supports 1.0.0.",
+  "plugin.rule.server-clash": "the servers \"{server}\" and \"{other}\" would give their tools the same names.",
   "plugin.rule.hook-server": "a hook names the server \"{server}\", which the plugin's mcp.json does not validly declare.",
   "plugin.rule.no-commands": "the commands plugin is not loaded",
   "plugin.notice.unknown-field": "plugin.json: the unknown field \"{field}\" was ignored (§5.2).",

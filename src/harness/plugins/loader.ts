@@ -14,6 +14,7 @@ import type { CommandsService } from '../commands/index.ts';
 import type { Hooks } from '../hooks/service.ts';
 import type { SkillRefusal, SkillsService } from '../skills/index.ts';
 import type { McpService } from '../tools/mcp/index.ts';
+import { serverIdsClash } from '../tools/mcp/naming.ts';
 import { PluginFiles } from './files.ts';
 import type { FileHook, HooksFile } from './hooks-file.ts';
 import { EXTENSION_NAMESPACE, hooksFile } from './hooks-file.ts';
@@ -209,6 +210,38 @@ async function loadSkills(
   return loaded.registered;
 }
 
+/** Refuses a plugin two of whose servers would give their tools the same names. */
+function checkOwnServers(plugin: string, servers: readonly PluginServer[]): void {
+  const ids = servers.map((server: PluginServer) => server.config.id);
+  for (const [index, id] of ids.entries()) {
+    const other = ids.slice(index + 1).find((later: string) => serverIdsClash(id, later));
+    if (other !== undefined) {
+      const detail = t('plugin.rule.server-clash', { server: id, other });
+      throw new AgentPluginError(plugin, `mcp.json ${id}: server id clash`, detail);
+    }
+  }
+}
+
+/**
+ * Adds the plugin's servers. When one cannot be added, those that were are closed and
+ * the error is passed on, so that the caller can undo the rest.
+ */
+async function addServers(
+  service: McpService,
+  servers: readonly PluginServer[],
+): Promise<(() => Promise<void>)[]> {
+  const added = await Promise.allSettled(
+    servers.map((server: PluginServer) => service.addServer(server.config, server.launch)),
+  );
+  const closers = added.flatMap((result) => (result.status === 'fulfilled' ? [result.value] : []));
+  const failed = added.find((result) => result.status === 'rejected');
+  if (failed !== undefined) {
+    await Promise.all(closers.map((close: () => Promise<void>) => close()));
+    throw failed.reason;
+  }
+  return closers;
+}
+
 /** What a plugin declares, read and checked, with nothing registered yet. */
 interface Declared {
   readonly files: PluginFiles;
@@ -247,9 +280,20 @@ async function declare(deps: LoaderDeps, source: AgentPluginSource): Promise<Dec
     const detail = t('mcp.error.server-id', { server: id });
     throw new AgentPluginError(manifest.name, `mcp.json ${id}: server id in use`, detail);
   }
+  checkOwnServers(manifest.name, mcp.servers);
   const hooks = readHooks(rawHooks, manifest.name, mcp.servers);
   const commands = await readCommands(files, source, notices);
   return { files, name: manifest.name, servers: mcp.servers, hooks, commands, notices };
+}
+
+/** Removes what a loaded plugin registered and closes its servers. */
+function disposer(undo: (() => void)[], closers: (() => Promise<void>)[]): () => Promise<void> {
+  return async (): Promise<void> => {
+    for (const remove of undo.splice(0)) {
+      remove();
+    }
+    await Promise.all(closers.splice(0).map((close: () => Promise<void>) => close()));
+  };
 }
 
 /**
@@ -262,7 +306,9 @@ async function declare(deps: LoaderDeps, source: AgentPluginSource): Promise<Dec
  *   or its `plugin.json` is missing, is not JSON, or lies outside the root (§4.1); the
  *   manifest breaks §5 (see `validateManifest`); `hooks.json` breaks its schema, or names
  *   a server the plugin's `mcp.json` does not validly declare; `mcp.json` declares a server
- *   under an id that is already in use.
+ *   under an id that is already in use, or two servers whose tools would bear the same
+ *   names. When a server cannot be added, what was registered is removed and the error
+ *   passed on.
  */
 export async function loadPlugin(
   deps: LoaderDeps,
@@ -276,32 +322,28 @@ export async function loadPlugin(
       run: mcpToolHook(options, hook.event, hook.run),
     }),
   );
-  const skills = await loadSkills(deps, files, notices, undo);
-  const registered = registerCommands(deps, name, commands, notices);
   const { mcp: service } = deps;
   if (service === undefined && servers.length > 0) {
     notices.push(t('plugin.notice.no-mcp'));
   }
-  const closers =
-    service === undefined
-      ? []
-      : await Promise.all(
-          servers.map((server: PluginServer) => service.addServer(server.config, server.launch)),
-        );
-  return {
-    report: {
+  try {
+    const skills = await loadSkills(deps, files, notices, undo);
+    const closers = service === undefined ? [] : await addServers(service, servers);
+    // Last: a registered command cannot be taken back if a step above fails.
+    const registered = registerCommands(deps, name, commands, notices);
+    const report = {
       name,
       skills,
       servers: closers.map((_close: unknown, index: number) => servers[index]?.config.id ?? ''),
       commands: registered,
       hooks: hooks.length,
       notices,
-    },
-    dispose: async (): Promise<void> => {
-      for (const remove of undo.splice(0)) {
-        remove();
-      }
-      await Promise.all(closers.splice(0).map((close: () => Promise<void>) => close()));
-    },
-  };
+    };
+    return { report, dispose: disposer(undo, closers) };
+  } catch (error) {
+    for (const remove of undo.splice(0)) {
+      remove();
+    }
+    throw error;
+  }
 }
