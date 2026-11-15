@@ -32,8 +32,6 @@ export interface GuardDeps {
   readonly allowedOrigins: readonly string[];
   /** Where the listener is bound; undefined until it is. */
   readonly listener?: (() => ListenerAddress | undefined) | undefined;
-  /** Whether to believe `X-Forwarded-For`. */
-  readonly trustProxy: boolean;
   /** How many open tasks `caller` has. */
   readonly openTasks: (caller: string) => number;
   /** The clock, in milliseconds. Tests pass their own. */
@@ -48,27 +46,19 @@ function reject(response: Response, status: number, code: number, message: strin
 
 /** What {@link callerKey} reads of a request. */
 export interface CallerSource {
-  readonly headers: Readonly<Record<string, string | string[] | undefined>>;
+  /** The client's address as Express's `trust proxy` setting works it out. */
+  readonly ip?: string | undefined;
   readonly socket: { readonly remoteAddress?: string | undefined };
 }
 
 /**
  * The key the per-caller limits count against: the remote address, since nobody is
- * identified. Behind a trusted proxy it is the last `X-Forwarded-For` entry — the one
- * the proxy appended for the address it saw. The entries before it are whatever the
- * client chose to send.
+ * identified. Express works it out from the `trust proxy` setting: behind trusted proxies
+ * it is the `X-Forwarded-For` entry the outermost trusted proxy appended, never one the
+ * client wrote.
  */
-export function callerKey(request: CallerSource, trustProxy: boolean): string {
-  const forwarded = request.headers['x-forwarded-for'];
-  const hops = (Array.isArray(forwarded) ? forwarded.join(',') : (forwarded ?? ''))
-    .split(',')
-    .map((hop: string) => hop.trim())
-    .filter((hop: string) => hop !== '');
-  const nearest = hops.at(-1);
-  if (trustProxy && nearest !== undefined) {
-    return nearest;
-  }
-  return request.socket.remoteAddress ?? 'unknown';
+export function callerKey(request: CallerSource): string {
+  return request.ip ?? request.socket.remoteAddress ?? 'unknown';
 }
 
 /**
@@ -244,7 +234,7 @@ export function limitGuard(deps: GuardDeps): RequestHandler {
   const now = deps.now ?? Date.now;
   const rate = new RequestRate();
   return (request: Request, response: Response, next: NextFunction): void => {
-    const caller = callerKey(request, deps.trustProxy);
+    const caller = callerKey(request);
     // Overwrites whatever the client sent: only this layer names the caller.
     request.headers[CALLER_HEADER] = caller;
     if (!rate.hit(caller, now(), limits.maxRequestsPerMinute)) {

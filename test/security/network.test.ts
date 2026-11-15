@@ -289,6 +289,46 @@ describe('behind a proxy', () => {
   });
 });
 
+describe('behind two proxies', () => {
+  /**
+   * Feature: Security
+   * Scenario: Behind two proxies each caller has a key of its own, and still cannot choose it
+   *   Given a harness behind two proxies, told so by a hop count or by the proxies' addresses,
+   *        with a small rate limit
+   *   When five callers send one request each, the outer proxy naming each, the inner one
+   *        naming the outer
+   *   Then none is refused
+   *   When one caller sends many requests, each naming a different client first
+   *   Then they are counted against the address the outer proxy saw, and refused with 429
+   * Requirement: docs/specs/issue-3/requirements.md abuse case 8 (self-review 2, #14)
+   */
+  test('Behind two proxies each caller has a key of its own, and still cannot choose it', async () => {
+    for (const trust of ['2', '["127.0.0.1", "::1", "203.0.113.7"]']) {
+      // oxlint-disable-next-line no-await-in-loop -- one harness at a time
+      const harness = await start({
+        config: `[server]\nport = 0\ntrust_proxy = ${trust}\n[limits]\nmax_requests_per_minute = 3`,
+      });
+      const send = (forwarded: string) =>
+        rpc(harness, message([text('x')], { taskId: 'none' }), { 'x-forwarded-for': forwarded });
+      const callers: number[] = [];
+      const one: number[] = [];
+      for (let index = 0; index < 5; index += 1) {
+        // oxlint-disable-next-line no-await-in-loop -- requests are counted in order
+        callers.push((await send(`198.51.100.${String(index)}, 203.0.113.7`)).status);
+      }
+      for (let index = 0; index < 5; index += 1) {
+        // oxlint-disable-next-line no-await-in-loop -- requests are counted in order
+        one.push((await send(`192.0.2.${String(index)}, 198.51.100.9, 203.0.113.7`)).status);
+      }
+      expect(callers).not.toContain(429);
+      expect(one.at(-1)).toBe(429);
+      // oxlint-disable-next-line no-await-in-loop -- one harness at a time
+      await harness.stop();
+      running = undefined;
+    }
+  });
+});
+
 describe('fail closed: a wider bind', () => {
   /**
    * Feature: Security

@@ -5,16 +5,11 @@ import { RequestRate, callerKey, knownHost } from './guards.ts';
 
 const socket = { remoteAddress: '10.0.0.2' };
 
-test('behind a trusted proxy the caller is the address the proxy appended, not the first', () => {
-  const headers = { 'x-forwarded-for': '198.51.100.1, 203.0.113.7 ' };
-  expect(callerKey({ headers, socket }, true)).toBe('203.0.113.7');
-  expect(callerKey({ headers: { 'x-forwarded-for': ['1.1.1.1', '2.2.2.2'] }, socket }, true)).toBe(
-    '2.2.2.2',
-  );
-  // Not trusted, or nothing forwarded: the socket's own address.
-  expect(callerKey({ headers, socket }, false)).toBe('10.0.0.2');
-  expect(callerKey({ headers: { 'x-forwarded-for': ' , ' }, socket }, true)).toBe('10.0.0.2');
-  expect(callerKey({ headers: {}, socket: {} }, false)).toBe('unknown');
+test('the caller is the address Express worked out, else the socket address', () => {
+  // Express sets `ip` from its `trust proxy` setting; the guard does not read headers itself.
+  expect(callerKey({ ip: '203.0.113.7', socket })).toBe('203.0.113.7');
+  expect(callerKey({ socket })).toBe('10.0.0.2');
+  expect(callerKey({ socket: {} })).toBe('unknown');
 });
 
 test('a caller whose requests have all left the minute is forgotten', () => {
@@ -49,7 +44,6 @@ test('a Host without a port names port 80, in any case (self-review 2, #7)', () 
     limits: { maxParts: 1, maxPartBytes: 1, maxOpenTasksPerCaller: 1, maxRequestsPerMinute: 1 },
     allowedOrigins,
     listener: () => ({ host, port }),
-    trustProxy: false,
     openTasks: () => 0,
   });
   expect(knownHost('localhost', deps('127.0.0.1', 80))).toBe(true);

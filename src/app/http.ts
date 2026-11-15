@@ -67,17 +67,28 @@ function close(server: Server): Promise<void> {
   });
 }
 
+/**
+ * Express's `trust proxy` value for `server.trust_proxy`. `true` means the nearest proxy
+ * only: Express's own `true` trusts every hop and takes the left-most entry, which the
+ * client writes.
+ */
+function trustSetting(trust: boolean | number | readonly string[]): boolean | number | string[] {
+  if (trust === true) {
+    return 1;
+  }
+  return typeof trust === 'object' ? [...trust] : trust;
+}
+
 /** Starts the listener. */
 export async function apply(ctx: Context): Promise<void> {
   const { server: settings, limits } = ctx.config;
   const app = express();
   app.disable('x-powered-by');
-  app.set('trust proxy', settings.trustProxy);
+  app.set('trust proxy', trustSetting(settings.trustProxy));
   let bound: ListenerAddress | undefined = undefined;
   const guards = {
     limits,
     allowedOrigins: settings.allowedOrigins,
-    trustProxy: settings.trustProxy,
     listener: (): ListenerAddress | undefined => bound,
     openTasks: (caller: string): number => ctx.a2a.openTasks(caller),
   };

@@ -25,7 +25,8 @@ const fileSchema = z.strictObject({
       host: z.string().default('127.0.0.1'),
       port: z.int().min(0).max(65_535).default(7420),
       allowed_origins: z.array(z.string()).default([]),
-      trust_proxy: z.boolean().default(false),
+      // true (one proxy), a hop count, or the proxies' addresses and subnets.
+      trust_proxy: z.union([z.boolean(), z.int().min(0), z.array(z.string())]).default(false),
     })
     .prefault({}),
   providers: z

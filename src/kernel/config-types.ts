@@ -53,7 +53,11 @@ export interface YaahConfig {
     readonly host: string;
     readonly port: number;
     readonly allowedOrigins: readonly string[];
-    readonly trustProxy: boolean;
+    /**
+     * Which proxies in front of the listener to believe about the client's address: none
+     * (false), the nearest one (true), that many hops, or those addresses and subnets.
+     */
+    readonly trustProxy: boolean | number | readonly string[];
   };
   readonly providers: {
     readonly openai: {
