@@ -38,6 +38,8 @@ export interface RecorderOptions {
   readonly platform?: string | undefined;
   /** The most audio kept, in bytes; the recording ends itself when it is reached. */
   readonly maxBytes?: number | undefined;
+  /** How long a stopped recorder may take to exit before it is killed outright. */
+  readonly stopTimeoutMs?: number | undefined;
 }
 
 /** How a recording started, or why it did not. */
@@ -50,6 +52,8 @@ const SAMPLE_RATE = 16_000;
 const WAV_HEADER_BYTES = 44;
 /** About two and a half minutes of 16 kHz mono 16-bit audio. */
 const DEFAULT_MAX_BYTES = 5_000_000;
+/** A recorder asked to stop that has not exited by then is killed. */
+const DEFAULT_STOP_TIMEOUT_MS = 2000;
 
 /** The recorders tried, in order, with the arguments each needs. */
 export function recorderCommands(platform: string): readonly RecorderCommand[] {
@@ -143,8 +147,13 @@ export class VoiceRecorder {
     return this.#process !== null;
   }
 
-  /** Starts recording with the first recorder found. Resolves once it runs, or cannot. */
-  async start(): Promise<StartOutcome> {
+  /**
+   * Starts recording with the first recorder found. Resolves once it runs, or cannot.
+   *
+   * @param onLimit Called when the recording ends itself at its size limit; the caller
+   *   then stops it as if the user had, to collect what was kept.
+   */
+  async start(onLimit?: () => void): Promise<StartOutcome> {
     const available = this.#options.available ?? onPath;
     const found = recorderCommands(this.#options.platform ?? process.platform).find((recorder) =>
       available(recorder.command),
@@ -154,7 +163,7 @@ export class VoiceRecorder {
     }
     try {
       const child = (this.#options.spawn ?? systemSpawn)(found.command, found.args);
-      const outcome = await this.#watch(child);
+      const outcome = await this.#watch(child, onLimit);
       this.#process = outcome.ok ? child : null;
       return outcome;
     } catch (error) {
@@ -170,7 +179,16 @@ export class VoiceRecorder {
       return null;
     }
     child.kill('SIGTERM');
-    await this.#closed;
+    const timeoutMs = this.#options.stopTimeoutMs ?? DEFAULT_STOP_TIMEOUT_MS;
+    let timer: ReturnType<typeof setTimeout> | undefined = undefined;
+    const late = new Promise<'late'>((resolve: (value: 'late') => void) => {
+      timer = setTimeout(resolve, timeoutMs, 'late');
+    });
+    if ((await Promise.race([this.#closed, late])) === 'late') {
+      // It did not exit when asked: it is killed, and what it wrote is the recording.
+      child.kill('SIGKILL');
+    }
+    clearTimeout(timer);
     const captured = new Uint8Array(this.#bytes);
     let offset = 0;
     for (const chunk of this.#chunks) {
@@ -186,15 +204,20 @@ export class VoiceRecorder {
   }
 
   /** Collects what `child` writes, and resolves when it is running or has failed to start. */
-  #watch(child: RecorderProcess): Promise<StartOutcome> {
+  #watch(child: RecorderProcess, onLimit: (() => void) | undefined): Promise<StartOutcome> {
     this.#chunks = [];
     this.#bytes = 0;
     const limit = this.#options.maxBytes ?? DEFAULT_MAX_BYTES;
+    let full = false;
     child.stdout?.on('data', (chunk: Uint8Array) => {
       const room = limit - this.#bytes;
       if (room <= 0) {
-        // The size limit is reached: stop the recorder; what is kept is the recording.
-        child.kill('SIGTERM');
+        if (!full) {
+          // The size limit is reached: stop the recorder; what is kept is the recording.
+          full = true;
+          child.kill('SIGTERM');
+          onLimit?.();
+        }
         return;
       }
       const kept = chunk.subarray(0, room);

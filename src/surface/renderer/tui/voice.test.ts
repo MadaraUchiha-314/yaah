@@ -62,6 +62,16 @@ class FakeProcess implements RecorderProcess {
   }
 }
 
+/** A recorder process that exits only when it is killed outright. */
+class StubbornProcess extends FakeProcess {
+  override kill(signal?: string): void {
+    this.killed.push(signal ?? '');
+    if (signal === 'SIGKILL') {
+      this.emit('close');
+    }
+  }
+}
+
 /** A recorder over fake processes: every spawn is recorded and starts at once. */
 function recorderWith(options: { has?: readonly string[]; fail?: Error; maxBytes?: number } = {}) {
   const spawned: { command: string; args: readonly string[]; process: FakeProcess }[] = [];
@@ -159,6 +169,39 @@ describe('voice recorder', () => {
     const silent = recorderWith();
     await silent.recorder.start();
     expect(await silent.recorder.stop()).toBeNull();
+  });
+
+  test('says when it reaches its limit, once', async () => {
+    const { recorder, spawned } = recorderWith({ maxBytes: 2 });
+    let limits = 0;
+    await recorder.start(() => {
+      limits += 1;
+    });
+    spawned[0]?.process.write(1, 2);
+    expect(limits).toBe(0);
+    spawned[0]?.process.write(3);
+    spawned[0]?.process.write(4);
+    expect(limits).toBe(1);
+    expect(spawned[0]?.process.killed).toEqual(['SIGTERM']);
+  });
+
+  test('kills a recorder that does not exit when asked to stop', async () => {
+    const stubborn = new StubbornProcess();
+    const recorder = new VoiceRecorder({
+      available: () => true,
+      stopTimeoutMs: 10,
+      spawn: () => {
+        queueMicrotask(() => {
+          stubborn.emit('spawn');
+        });
+        return stubborn;
+      },
+    });
+    await recorder.start();
+    stubborn.write(5, 0);
+    const file = await recorder.stop();
+    expect(stubborn.killed).toEqual(['SIGTERM', 'SIGKILL']);
+    expect([...(file?.data.subarray(44) ?? [])]).toEqual([5, 0]);
   });
 
   test('reads the samples after a WAV header when the recorder wrote one', () => {
@@ -422,6 +465,31 @@ describe('terminal UI: voice', () => {
     expect(running.calls).toEqual(['start', 'stop']);
     await leaving.startVoice(false);
     expect(running.calls).toEqual(['start', 'stop']);
+  });
+
+  test('leaving while the recorder is starting stops it once it runs', async () => {
+    const starting = fakeRecorder();
+    starting.recorder.holdStart = true;
+    const controller = new TuiController(fakeSession(), starting.recorder);
+    const started = controller.startVoice(false);
+    controller.exit();
+    starting.release();
+    await started;
+    expect(starting.calls).toEqual(['start', 'stop']);
+  });
+
+  test('a recording that reaches its limit ends itself and is sent', async () => {
+    const session = fakeSession();
+    const { recorder, spawned } = recorderWith({ maxBytes: 2 });
+    const controller = new TuiController(session, recorder);
+    await controller.startVoice(false);
+    expect(controller.getState().recording).toBe('toggle');
+    spawned[0]?.process.write(1, 0);
+    spawned[0]?.process.write(2, 0);
+    await settle();
+    expect(controller.getState().recording).toBe('off');
+    expect(session.sent).toHaveLength(1);
+    expect([...(session.sent[0]?.files?.[0]?.data.subarray(44) ?? [])]).toEqual([1, 0]);
   });
 
   test('the key hints offer the voice key, and the input line says how a held recording ends', () => {

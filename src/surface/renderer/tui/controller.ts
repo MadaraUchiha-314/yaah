@@ -133,9 +133,17 @@ export class TuiController {
       return;
     }
     this.#starting = { stop: false, send: true };
-    const outcome = await this.#recorder.start();
+    // At its size limit the recording ends itself, and is sent as if the user stopped it.
+    const outcome = await this.#recorder.start(() => {
+      void this.stopVoice();
+    });
     const asked = this.#starting;
     this.#starting = null;
+    if (outcome.ok && this.#state.exited) {
+      // The user left while the recorder was starting: it must not outlive the interface.
+      void this.#recorder.stop();
+      return;
+    }
     if (!outcome.ok) {
       this.note(
         outcome.reason === 'no-recorder'
