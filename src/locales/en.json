@@ -224,6 +224,7 @@
   "skill.tool.load.description": "Returns the instructions of a skill, by its name. Call it before doing work the skill is for.",
   "skill.tool.read.description": "Returns a text file of a skill, by the skill's name and the file's path relative to the skill's directory. Files are read, never run.",
   "hooks.error.threw": "a hook failed: {reason}",
+  "hooks.error.malformed": "a hook gave a malformed answer, neither allow nor deny: {answer}",
   "hooks.tool.denied": "The call to {name} was denied by a hook and did not run: {reason}",
   "hooks.message.denied": "Your message was not accepted: {reason}",
   "hooks.mcp.unavailable": "the policy tool {tool} is not available",

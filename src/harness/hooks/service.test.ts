@@ -154,4 +154,32 @@ describe('Hooks', () => {
     const verdict = await hooks.dispatch('agent.before', { ...call, agent: 'a' });
     expect(verdict).toEqual({ decision: 'deny', reason: 'a hook failed: boom' });
   });
+
+  test('at a blocking point an answer that is neither allow nor a deny denies', async () => {
+    const nonsense: unknown[] = [
+      { decision: 'DENY' },
+      'deny',
+      { allow: false },
+      false,
+      null,
+      { decision: 'deny' },
+    ];
+    for (const answer of nonsense) {
+      const hooks = new Hooks();
+      // What a plugin written without types could register.
+      const hook = { run: (): undefined => undefined };
+      Reflect.set(hook, 'run', () => answer);
+      hooks.register('tool.before', hook);
+      // oxlint-disable-next-line no-await-in-loop -- one answer at a time
+      const verdict = await hooks.dispatch('tool.before', { ...call, tool: 'refund' });
+      expect(verdict.decision).toBe('deny');
+      expect(verdict.decision === 'deny' ? verdict.reason : '').toContain('malformed');
+    }
+    const hooks = new Hooks();
+    hooks.register('tool.before', { run: () => ({ decision: 'allow' }) });
+    hooks.register('tool.before', { run: () => undefined });
+    expect(await hooks.dispatch('tool.before', { ...call, tool: 'refund' })).toEqual({
+      decision: 'allow',
+    });
+  });
 });

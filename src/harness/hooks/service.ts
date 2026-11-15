@@ -99,6 +99,37 @@ export type HookFailureListener = (event: HookName, error: unknown) => void;
 
 const ALLOW: HookDecision = { decision: 'allow' };
 
+/** The longest piece of a malformed answer quoted in the reason. */
+const MAX_QUOTED = 100;
+
+function quote(answer: unknown): string {
+  try {
+    return (JSON.stringify(answer) ?? String(answer)).slice(0, MAX_QUOTED);
+  } catch {
+    return typeof answer;
+  }
+}
+
+/**
+ * What a hook's answer at a blocking point decides. Only nothing or `{ decision: 'allow' }`
+ * allows; a deny keeps its reason; anything else — a hook written without types may answer
+ * anything — denies, saying the answer was malformed.
+ */
+function verdictOf(answer: unknown): HookDecision {
+  if (answer === undefined) {
+    return ALLOW;
+  }
+  if (typeof answer === 'object' && answer !== null && 'decision' in answer) {
+    if (answer.decision === 'allow') {
+      return ALLOW;
+    }
+    if (answer.decision === 'deny' && 'reason' in answer && typeof answer.reason === 'string') {
+      return { decision: 'deny', reason: answer.reason };
+    }
+  }
+  return { decision: 'deny', reason: t('hooks.error.malformed', { answer: quote(answer) }) };
+}
+
 /** Compiles a glob into an expression that must match the whole subject. */
 export function globToRegExp(glob: string): RegExp {
   const source = glob
@@ -171,9 +202,10 @@ export class Hooks {
       }
       try {
         // oxlint-disable-next-line no-await-in-loop -- hooks run in order; the first deny ends it
-        const result = await hook.run(payload);
-        if (blocking && result?.decision === 'deny') {
-          return result;
+        const result: unknown = await hook.run(payload);
+        const decision = blocking ? verdictOf(result) : ALLOW;
+        if (decision.decision === 'deny') {
+          return decision;
         }
       } catch (error) {
         this.#onFailure(event, error);
