@@ -3,7 +3,8 @@
  * context outgrows the model's window.
  *
  * What is never compacted: the system prompt, the task and the plan (they are not part
- * of the conversation at all), a tool call that has no result yet, and a pinned message.
+ * of the conversation at all), a tool call of the newest model turn that has no result
+ * yet, and a pinned message.
  * A model turn is never split from its tool results.
  */
 import type { EntityRegistry } from '../../../kernel/registry.ts';
@@ -23,8 +24,8 @@ export interface CompactionStrategy {
   /**
    * Chooses the span to replace with a summary, as a range of sequence numbers.
    *
-   * MUST NOT include a pinned message or a tool call without a result, and MUST NOT end
-   * inside a model turn.
+   * MUST NOT include a pinned message or a tool call of the newest model turn without a
+   * result, and MUST NOT end inside a model turn.
    *
    * @param keepTokens The most recent part of the conversation to leave untouched.
    * @returns null when nothing can be replaced.
@@ -53,17 +54,33 @@ function startsTurn(event: ConversationEvent): boolean {
   );
 }
 
-/** The index of the first event that must not be compacted, or the list length. */
+/** Whether the model wrote `event`: its reply, a tool call or its reasoning. */
+function fromModel(event: ConversationEvent): boolean {
+  return (
+    event.type === 'tool-call' ||
+    event.type === 'reasoning' ||
+    (event.type === 'message' && event.role === 'agent')
+  );
+}
+
+/**
+ * The index of the first event that must not be compacted, or the list length.
+ *
+ * Only a call of the newest model turn can still be waiting for its result. A call of an
+ * older turn without one was abandoned — an interrupt took its turn — and no result will
+ * ever come; protecting it would stop compaction for the rest of the task.
+ */
 function firstProtected(events: readonly ConversationEvent[]): number {
   const answered = new Set(
     events.flatMap((event: ConversationEvent) =>
       event.type === 'tool-result' ? [event.callId] : [],
     ),
   );
+  const newest = events.findLast((event: ConversationEvent) => fromModel(event))?.key;
   const index = events.findIndex(
     (event: ConversationEvent) =>
       (event.type === 'message' && event.pinned === true) ||
-      (event.type === 'tool-call' && !answered.has(event.call.id)),
+      (event.type === 'tool-call' && event.key === newest && !answered.has(event.call.id)),
   );
   return index === -1 ? events.length : index;
 }
