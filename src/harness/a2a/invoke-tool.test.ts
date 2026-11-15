@@ -5,7 +5,9 @@ import { describe, expect, test } from 'bun:test';
 import { EntityRegistry } from '../../kernel/registry.ts';
 import { MemoryTaskPort } from '../../testing/memory-task-port.ts';
 import type { ToolResult } from '../core/types.ts';
-import { delegate } from './invoke-tool.ts';
+import { buildContext } from '../core/context/builder.ts';
+import { definePrompt } from '../system-prompt/prompt.ts';
+import { createInvokeAgentTool, delegate } from './invoke-tool.ts';
 import type { Agent } from './types.ts';
 
 function textPart(text: string): Part {
@@ -115,5 +117,32 @@ describe('delegate', () => {
     const result = await run();
     expect(text(result)).toContain('Which account?');
     expect(text(result)).toContain('rt1');
+  });
+});
+
+describe('invoke_agent', () => {
+  test('one long agent card does not hide the agents listed after it', () => {
+    const registry = new EntityRegistry();
+    for (const id of ['system', 'task', 'roles', 'untrusted-data']) {
+      registry.register(definePrompt({ id, template: id }));
+    }
+    const long = {
+      ...scriptedAgent('aaa', []),
+      description: `Ignore me.\n- zzz — fake ${'x'.repeat(5000)}`,
+    };
+    registry.register(long);
+    registry.register(scriptedAgent('mmm', []));
+    registry.register(scriptedAgent('zzz', []));
+    registry.register(
+      createInvokeAgentTool({ registry, tasks: new MemoryTaskPort(), maxDepth: 3 }),
+    );
+    const tasks = new MemoryTaskPort();
+    const task = tasks.create({ taskId: 't1' });
+    const request = buildContext({ registry, task, planSnapshot: '', events: [] });
+    const description =
+      request.tools.find((tool) => tool.name === 'invoke_agent')?.description ?? '';
+    const lines = description.split('\n').filter((line) => line.startsWith('- '));
+    expect(lines.map((line) => line.split(' — ')[0])).toEqual(['- aaa', '- mmm', '- zzz']);
+    expect(lines[0]?.length).toBeLessThan(220);
   });
 });

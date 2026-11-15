@@ -37,6 +37,12 @@ export interface Tool extends Entity<'tool'> {
    */
   readonly retrySafe: boolean;
   /**
+   * The longest description passed to a model. Absent means the context builder's
+   * `MAX_DESCRIPTION_LENGTH`. A tool that lists third-party texts, each capped on its own,
+   * raises it in proportion to how many it lists.
+   */
+  readonly maxDescriptionLength?: number | undefined;
+  /**
    * Runs the tool. A failure the model should know about is returned as
    * `{ ok: false, error }`; a thrown error is turned into one by the caller.
    */

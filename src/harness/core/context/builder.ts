@@ -43,19 +43,17 @@ export interface ContextInputs {
  * Makes third-party text safe to show a model as a description: control characters are
  * removed and the text is capped. It is still data — the system prompt says so.
  */
-export function sanitizeDescription(text: string): string {
+export function sanitizeDescription(text: string, max: number = MAX_DESCRIPTION_LENGTH): string {
   // oxlint-disable-next-line no-control-regex -- removing control characters is the point
   const cleaned = text.replaceAll(/[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F-\u009F]/gu, '');
-  return cleaned.length > MAX_DESCRIPTION_LENGTH
-    ? cleaned.slice(0, MAX_DESCRIPTION_LENGTH)
-    : cleaned;
+  return cleaned.length > max ? cleaned.slice(0, max) : cleaned;
 }
 
 function declare(tool: Tool): ToolDeclaration {
   const schema: JsonObject = tool.inputSchema;
   return {
     name: tool.ref.id,
-    description: sanitizeDescription(tool.description),
+    description: sanitizeDescription(tool.description, tool.maxDescriptionLength),
     inputSchema: schema,
   };
 }

@@ -13,7 +13,7 @@ import type { Json } from '../../kernel/json.ts';
 import { isJsonObject } from '../../kernel/json.ts';
 import type { EntityRegistry } from '../../kernel/registry.ts';
 import { t } from '../../kernel/strings.ts';
-import { sanitizeDescription } from '../core/context/builder.ts';
+import { MAX_DESCRIPTION_LENGTH, sanitizeDescription } from '../core/context/builder.ts';
 import type { TaskPort } from '../core/task-port.ts';
 import type { TaskRef, ToolResult } from '../core/types.ts';
 import type { Tool, ToolCallContext } from '../tools/types.ts';
@@ -122,11 +122,16 @@ function toResult(outcome: Outcome, request: Delegation): ToolResult {
     : errorResult(ended, t('agent.invoke.ended', { state: ended, text }));
 }
 
+/** The most of an agent's card shown in the list: one agent cannot crowd out the rest. */
+const MAX_AGENT_LINE = 200;
+
+/** One line per agent: its id, then what its card says, on one line and capped. */
 function agentsList(registry: EntityRegistry): string {
   const lines = registry.list('agent').map((agent: Agent) => {
     const skills = agent.skills.map((skill) => skill.name).join(', ');
-    const about = sanitizeDescription(`${agent.name}: ${agent.description}`);
-    return `- ${agent.ref.id} — ${about}${skills === '' ? '' : ` (skills: ${sanitizeDescription(skills)})`}`;
+    const card = `${agent.name}: ${agent.description}${skills === '' ? '' : ` (skills: ${skills})`}`;
+    const about = sanitizeDescription(card.replaceAll(/\s+/gu, ' '), MAX_AGENT_LINE);
+    return `- ${agent.ref.id} — ${about}`;
   });
   return lines.length === 0
     ? t('agent.invoke.none')
@@ -239,6 +244,15 @@ export function createInvokeAgentTool(deps: InvokeAgentDeps): Tool {
     locality: { type: 'local' },
     get description(): string {
       return `${t('agent.invoke.description')}\n\n${agentsList(deps.registry)}`;
+    },
+    // Each line is capped on its own; the whole grows with the list, so none is cut off.
+    get maxDescriptionLength(): number {
+      return deps.registry
+        .list('agent')
+        .reduce(
+          (total: number, agent: Agent) => total + agent.ref.id.length + MAX_AGENT_LINE + 5,
+          MAX_DESCRIPTION_LENGTH,
+        );
     },
     inputSchema: {
       type: 'object',
