@@ -25,8 +25,8 @@ export interface Terminal {
    * together as one keypress, and a person's keys arrive apart.
    */
   type(keys: string): Promise<void>;
-  /** The screen as text, once it shows `expected`. */
-  screen(page: Page, expected: string | RegExp): Promise<string>;
+  /** The screen as text, once it shows every one of `expected` at the same time. */
+  screen(page: Page, ...expected: readonly (string | RegExp)[]): Promise<string>;
   /** Saves a picture of the screen as it is now. */
   picture(page: Page, path: string): Promise<void>;
   /** Resolves with the exit code once the chat has left. */
@@ -84,9 +84,11 @@ export function startTerminal(
       await render(page, output);
       await page.locator('#terminal').screenshot({ path });
     },
-    screen: async (page: Page, expected: string | RegExp): Promise<string> => {
+    screen: async (page: Page, ...expected: readonly (string | RegExp)[]): Promise<string> => {
       const matches = (text: string): boolean =>
-        typeof expected === 'string' ? text.includes(expected) : expected.test(text);
+        expected.every((wanted) =>
+          typeof wanted === 'string' ? text.includes(wanted) : wanted.test(text),
+        );
       const deadline = Date.now() + 15_000;
       let text = '';
       for (;;) {

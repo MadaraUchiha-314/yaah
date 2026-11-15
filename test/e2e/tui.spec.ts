@@ -49,7 +49,8 @@ test('A whole conversation on a real terminal', async ({ page }) => {
 
   await terminal.type('please look up my order');
   await terminal.type(KEY.enter);
-  const tools = await terminal.screen(page, 'Waiting for you');
+  // Each wait includes the resting state: a key pressed mid-turn may be ignored.
+  const tools = await terminal.screen(page, 'I found the order', 'Waiting for you');
   expect(tools).toContain('lookup_order');
   expect(tools).toMatch(/refund_rules.*failed|✗ refund_rules/u);
   expect(tools).toContain('I found the order');
@@ -57,17 +58,19 @@ test('A whole conversation on a real terminal', async ({ page }) => {
 
   await terminal.type('ask me something');
   await terminal.type(KEY.enter);
-  const ask = await terminal.screen(page, 'Refund or store credit?');
+  const ask = await terminal.screen(page, 'Refund or store credit?', 'Needs your input');
   expect(ask).toContain('Needs your input');
   await snap('ask');
 
   await terminal.type('a refund');
   await terminal.type(KEY.enter);
-  expect(await terminal.screen(page, 'A supervisor will approve')).toContain('Waiting for you');
+  expect(await terminal.screen(page, 'A supervisor will approve', 'Waiting for you')).toContain(
+    'Waiting for you',
+  );
 
   await terminal.type('show me the refund form');
   await terminal.type(KEY.enter);
-  const form = await terminal.screen(page, 'Submit refund');
+  const form = await terminal.screen(page, 'Submit refund', 'Waiting for you');
   expect(form).toContain('What happened?');
   expect(form).toContain('I can send a photo');
   await snap('form');
@@ -79,7 +82,9 @@ test('A whole conversation on a real terminal', async ({ page }) => {
   await terminal.type(KEY.space);
   await terminal.type(KEY.tab);
   await terminal.type(KEY.enter);
-  expect(await terminal.screen(page, 'The refund is filed')).toContain('The refund is filed');
+  expect(await terminal.screen(page, 'The refund is filed', 'Waiting for you')).toContain(
+    'The refund is filed',
+  );
 
   await terminal.type(KEY.tab);
   await terminal.type(KEY.ctrlD);

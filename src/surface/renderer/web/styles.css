@@ -176,3 +176,16 @@
   outline: 2px solid var(--ring) !important;
   outline-offset: 2px;
 }
+
+/*
+ * A person who asked for reduced motion gets no transitions anywhere: colours and
+ * opacity change at once, so nothing is ever seen (or checked) half-way.
+ */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    transition-duration: 0s !important;
+    transition-delay: 0s !important;
+  }
+}
