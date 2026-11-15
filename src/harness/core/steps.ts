@@ -18,6 +18,7 @@ import type { SkillsSection } from './context/builder.ts';
 import { PLAN_SNAPSHOT, buildContext, estimateTokens } from './context/builder.ts';
 import { assertCurrent } from './current-step.ts';
 import type { StepContext, StepHandlers } from './direct-runner.ts';
+import type { FilePart } from './modalities.ts';
 import { prepareMedia } from './modalities.ts';
 import type { Persistence } from './persistence.ts';
 import { formatPlan } from './plan.ts';
@@ -212,15 +213,26 @@ async function statusMessage(
   return [];
 }
 
-/** A part with every registered secret replaced in its text or data. File bytes are kept. */
+/**
+ * A part with every registered secret replaced in its text, data, or a file's name, media
+ * type and URL. File bytes are kept.
+ */
 function redactPart(deps: StepDeps, part: ContentPart): ContentPart {
+  const clean = (value: string): string => deps.redactor.redactString(value);
   if (part.type === 'text') {
-    return { type: 'text', text: deps.redactor.redactString(part.text) };
+    return { type: 'text', text: clean(part.text) };
   }
   if (part.type === 'data') {
-    return { type: 'data', mediaType: part.mediaType, data: deps.redactor.redact(part.data) };
+    return {
+      type: 'data',
+      mediaType: clean(part.mediaType),
+      data: deps.redactor.redact(part.data),
+    };
   }
-  return part;
+  const source: FilePart['source'] =
+    part.source.kind === 'url' ? { kind: 'url', url: clean(part.source.url) } : part.source;
+  const file: FilePart = { type: 'file', mediaType: clean(part.mediaType), source };
+  return part.name === undefined ? file : { ...file, name: clean(part.name) };
 }
 
 function redactResult(deps: StepDeps, result: ToolResult): ToolResult {
