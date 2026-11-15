@@ -4,11 +4,12 @@
  * When a client says, on a message, which A2UI catalogs it can render, the model is
  * taught the A2UI output format for that turn, and what it writes between `<a2ui>` tags
  * is compiled and validated against the catalog by the official A2UI agent SDK. Only
- * validated UI messages leave the harness; a block that fails validation is dropped.
+ * validated UI messages leave the harness; a block that fails validation is dropped. An
+ * `<a2ui>` tag that is never closed, and yields no surface, stays text.
  */
 import { fileURLToPath } from 'node:url';
 
-import type { StreamPart } from '@a2ui/agent';
+import type { A2uiRequestProcessor, StreamPart } from '@a2ui/agent';
 import { A2uiGenerator, CatalogConfig } from '@a2ui/agent';
 import type { Context } from 'cordis';
 import { z } from 'zod';
@@ -58,6 +59,65 @@ function toJson(value: unknown): Json {
   return JSON.parse(JSON.stringify(value)) as Json;
 }
 
+const OPEN_TAG = '<a2ui>';
+const CLOSE_TAG = '</a2ui>';
+
+/**
+ * The text of a reply from its last `<a2ui>` tag on — with the white space before it —
+ * when no `</a2ui>` follows: a tag the model only mentioned, or a block cut off. Empty
+ * otherwise.
+ */
+function unclosedTail(raw: string): string {
+  const at = raw.lastIndexOf(OPEN_TAG);
+  if (at === -1 || raw.includes(CLOSE_TAG, at)) {
+    return '';
+  }
+  return raw.slice(raw.slice(0, at).trimEnd().length);
+}
+
+/**
+ * Reads one reply through the A2UI stream. A block that fails validation is dropped and
+ * reported. An `<a2ui>` tag never closed that yielded no surface — a tag the model only
+ * mentioned, or a block cut off before any of it was valid — is kept as text, from the
+ * tag on; a cut-off block that did yield a surface keeps that surface.
+ */
+function replyStream(
+  processor: A2uiRequestProcessor,
+  rejected: (reason: string) => void,
+): ReplyStream {
+  const stream = processor.openStream({ afterRejectedBlock: 'continue' });
+  let raw = '';
+  let lastWasUi = false;
+  const pieces = (parts: Iterable<StreamPart>): ReplyPiece[] => {
+    const out: ReplyPiece[] = [];
+    for (const part of parts) {
+      if (part.type === 'text') {
+        lastWasUi = false;
+        out.push({ type: 'text', text: part.text });
+      } else if (part.type === 'a2ui') {
+        lastWasUi = true;
+        out.push({ type: 'data', mediaType: A2UI_MEDIA_TYPE, data: toJson(part.a2ui) });
+      } else {
+        rejected(part.error.message);
+      }
+    }
+    return out;
+  };
+  return {
+    feed: (chunk: string): ReplyPiece[] => {
+      raw += chunk;
+      return pieces(stream.feed(chunk));
+    },
+    close: (): ReplyPiece[] => {
+      const parts = [...stream.close()];
+      const out = pieces(parts);
+      const failed = parts.some((part: StreamPart) => part.type === 'error');
+      const tail = failed && !lastWasUi ? unclosedTail(raw) : '';
+      return tail === '' ? out : [...out, { type: 'text', text: tail }];
+    },
+  };
+}
+
 /** Starts the A2UI plugin. */
 export function apply(ctx: Context): void {
   const generator = new A2uiGenerator([CatalogConfig.fromPath(basicCatalogPath())]);
@@ -69,28 +129,12 @@ export function apply(ctx: Context): void {
     }
     try {
       const processor = generator.createProcessor(offered.data);
-      const pieces = (parts: Iterable<StreamPart>): ReplyPiece[] => {
-        const out: ReplyPiece[] = [];
-        for (const part of parts) {
-          if (part.type === 'text') {
-            out.push({ type: 'text', text: part.text });
-          } else if (part.type === 'a2ui') {
-            out.push({ type: 'data', mediaType: A2UI_MEDIA_TYPE, data: toJson(part.a2ui) });
-          } else {
-            ctx.emit('a2ui/rejected', task.taskId, part.error.message);
-          }
-        }
-        return out;
-      };
       return {
         promptSection: processor.promptSnippet,
-        openReply: (): ReplyStream => {
-          const stream = processor.openStream({ afterRejectedBlock: 'continue' });
-          return {
-            feed: (chunk: string): ReplyPiece[] => pieces(stream.feed(chunk)),
-            close: (): ReplyPiece[] => pieces(stream.close()),
-          };
-        },
+        openReply: (): ReplyStream =>
+          replyStream(processor, (reason: string) => {
+            ctx.emit('a2ui/rejected', task.taskId, reason);
+          }),
       };
     } catch (error) {
       // What the client offered matches no catalog this harness has.
