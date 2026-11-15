@@ -67,7 +67,8 @@ export function resolveComposition(composition: string, cwd: string = process.cw
  * Builds a running harness from a configuration — the one entry point the CLI and an
  * embedding application share.
  *
- * @throws PluginLoadError when a plugin of the composition does not come up.
+ * @throws PluginLoadError when a plugin of the composition does not come up; whatever
+ *   `setup` or a `harness/ready` handler throws, once every plugin has been stopped.
  */
 export async function createHarness(options: CreateHarnessOptions = {}): Promise<Harness> {
   const config = options.config ?? defaultConfig();
@@ -80,8 +81,14 @@ export async function createHarness(options: CreateHarnessOptions = {}): Promise
       redactor: new Redactor(),
     },
   });
-  // Run on the root context, which may read every service the composition provided.
-  await options.setup?.(harness.ctx);
-  await harness.ctx.parallel('harness/ready');
+  try {
+    // Run on the root context, which may read every service the composition provided.
+    await options.setup?.(harness.ctx);
+    await harness.ctx.parallel('harness/ready');
+  } catch (error) {
+    // The caller gets no harness to dispose: stop every plugin that came up.
+    await harness.dispose();
+    throw error;
+  }
   return harness;
 }
