@@ -1,3 +1,5 @@
+import { request as httpRequest } from 'node:http';
+
 import { afterEach, describe, expect, test } from 'bun:test';
 import { TaskState } from '@a2a-js/sdk';
 
@@ -24,6 +26,50 @@ function rpc(harness: TestHarness, message: unknown, headers: Record<string, str
     method: 'POST',
     headers: { 'content-type': 'application/json', 'a2a-version': '1.0', ...headers },
     body: JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'SendMessage', params: { message } }),
+  });
+}
+
+/**
+ * A request with a `Host` of the caller's choosing. `fetch` may not set that header
+ * (Node's drops it), so this goes through `node:http`.
+ */
+function withHost(
+  url: string,
+  host: string,
+  options: { readonly path: string; readonly headers?: Record<string, string>; body?: string },
+): Promise<{ status: number; allowOrigin: string | undefined }> {
+  const { hostname, port } = new URL(url);
+  return new Promise((resolve, reject) => {
+    const outgoing = httpRequest(
+      {
+        hostname,
+        port,
+        path: options.path,
+        method: options.body === undefined ? 'GET' : 'POST',
+        headers: { ...options.headers, host },
+      },
+      (response) => {
+        response.resume();
+        const allowed = response.headers['access-control-allow-origin'];
+        resolve({ status: response.statusCode ?? 0, allowOrigin: allowed });
+      },
+    );
+    outgoing.on('error', reject);
+    outgoing.end(options.body);
+  });
+}
+
+/** The JSON-RPC send of {@link rpc}, with a `Host` and an `Origin` of the caller's choosing. */
+function rpcAs(harness: TestHarness, host: string, origin: string, body: unknown) {
+  return withHost(harness.url, host, {
+    path: '/a2a',
+    headers: { 'content-type': 'application/json', 'a2a-version': '1.0', origin },
+    body: JSON.stringify({
+      jsonrpc: '2.0',
+      id: 1,
+      method: 'SendMessage',
+      params: { message: body },
+    }),
   });
 }
 
@@ -122,25 +168,17 @@ describe('network boundary', () => {
     const harness = await start({ turns: [say('one'), say('two'), say('never')] });
     const { port } = new URL(harness.url);
     const evil = `evil.example:${port}`;
-    const rebound = await rpc(harness, message([text('hi')]), {
-      host: evil,
-      origin: `http://${evil}`,
-    });
+    const rebound = await rpcAs(harness, evil, `http://${evil}`, message([text('hi')]));
     expect(rebound.status).toBe(403);
-    expect(rebound.headers.get('access-control-allow-origin')).toBeNull();
+    expect(rebound.allowOrigin).toBeUndefined();
     // A same-origin page sends no Origin on a GET: the Host alone must be refused.
-    const card = await fetch(`${harness.url}/.well-known/agent-card.json`, {
-      headers: { host: evil },
-    });
+    const card = await withHost(harness.url, evil, { path: '/.well-known/agent-card.json' });
     expect(card.status).toBe(403);
     expect(await taskCount(harness)).toBe(0);
     expect(harness.llm.requests.length).toBe(0);
 
     const local = `localhost:${port}`;
-    const byName = await rpc(harness, message([text('hi')]), {
-      host: local,
-      origin: `http://${local}`,
-    });
+    const byName = await rpcAs(harness, local, `http://${local}`, message([text('hi')]));
     expect(byName.status).toBe(200);
     const byAddress = await rpc(harness, message([text('hi')]), { origin: harness.url });
     expect(byAddress.status).toBe(200);
@@ -250,8 +288,8 @@ describe('fail closed: a wider bind', () => {
       expect(written.join('')).toContain(wide.url);
       // A wildcard bind is reached by any of the machine's addresses, never by a name.
       const { port } = new URL(wide.url);
-      const card = (host: string): Promise<Response> =>
-        fetch(`${wide.url}/.well-known/agent-card.json`, { headers: { host } });
+      const card = (host: string) =>
+        withHost(wide.url, host, { path: '/.well-known/agent-card.json' });
       expect((await card(`127.0.0.1:${port}`)).status).toBe(200);
       expect((await card(`evil.example:${port}`)).status).toBe(403);
       await wide.stop();
