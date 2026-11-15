@@ -3,7 +3,7 @@ import type { Message } from '@a2a-js/sdk';
 import { Role } from '@a2a-js/sdk';
 import { RequestMalformedError } from '@a2a-js/sdk/errors';
 
-import { channelFixture } from '../../../test/support/channels.ts';
+import { PARTICIPANTS, channelFixture } from '../../../test/support/channels.ts';
 import type { Channel } from '../../harness/channels/types.ts';
 import { ChannelNotFoundError, NotAParticipantError } from '../../harness/channels/types.ts';
 import { AdmissionGate } from '../api-server/admission.ts';
@@ -25,6 +25,22 @@ function message(taskId: string, metadata?: Record<string, unknown>): Message {
 
 function from(id: string, channel?: string): Record<string, unknown> {
   return { [EXT.channels]: channel === undefined ? { from: id } : { from: id, channel } };
+}
+
+/** A registered channel that is not a task, with these members. */
+function room(members: readonly string[]): Channel {
+  return {
+    ref: { kind: 'channel', id: 'ops-room', version: null },
+    description: 'A channel that is not a task.',
+    locality: { type: 'local' },
+    participants: members.map((id: string) => ({ id, role: 'admin', kind: 'user' })),
+    routeOf: () => 'direct',
+    send: () => Promise.resolve({ route: 'conversation' }),
+    receive: (sender: string) =>
+      members.includes(sender)
+        ? Promise.resolve()
+        : Promise.reject(new NotAParticipantError('ops-room', sender)),
+  };
 }
 
 async function rejection(promise: Promise<unknown>): Promise<unknown> {
@@ -67,25 +83,24 @@ describe('the admission check of the channels API', () => {
   });
 
   test('checks a registered channel against its own participants', async () => {
-    const fixture = channelFixture();
-    const room: Channel = {
-      ref: { kind: 'channel', id: 'ops-room', version: null },
-      description: 'A channel that is not a task.',
-      locality: { type: 'local' },
-      participants: [{ id: 'grace', role: 'admin', kind: 'user' }],
-      routeOf: () => 'direct',
-      send: () => Promise.resolve({ route: 'conversation' }),
-      receive: (sender: string) =>
-        sender === 'grace'
-          ? Promise.resolve()
-          : Promise.reject(new NotAParticipantError('ops-room', sender)),
-    };
-    fixture.registry.register(room);
+    const grace = { id: 'grace', role: 'admin', kind: 'user' } as const;
+    const fixture = channelFixture([...PARTICIPANTS, grace]);
+    fixture.registry.register(room(['grace']));
     const admit = createChannelAdmission(fixture.channels);
     expect(await rejection(admit(message('t1', from('grace', 'ops-room'))))).toBeUndefined();
     expect(await rejection(admit(message('t1', from('ada', 'ops-room'))))).toBeInstanceOf(
       NotAParticipantError,
     );
+  });
+
+  test('does not let a registered channel open a task its sender is not on', async () => {
+    const fixture = channelFixture();
+    fixture.registry.register(room(['mallory']));
+    const admit = createChannelAdmission(fixture.channels);
+    const error = await rejection(admit(message('t1', from('mallory', 'ops-room'))));
+    expect(error).toBeInstanceOf(NotAParticipantError);
+    expect(error instanceof NotAParticipantError ? error.channelId : '').toBe('t1');
+    expect(await rejection(admit(message('gone', from('mallory', 'ops-room'))))).toBeUndefined();
   });
 
   test('lets a message for a task that does not exist through to the A2A layer', async () => {

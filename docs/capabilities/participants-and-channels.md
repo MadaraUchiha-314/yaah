@@ -12,7 +12,7 @@ A task has participants, each with a role. A channel is how the harness and a pa
 - The system SHALL offer the model `message_participant`, for a quick question whose reply comes back as the tool result, and `create_task_for_participant`, for work an agent participant must do, tracked as a sub-task. Creating a task for a person is refused, pointing at `message_participant`.
 - WHEN `message_participant` addresses a person THEN the system SHALL suspend the turn exactly as `ask_user` does and use their reply as the result.
 - The system SHALL change a channel's participants only through the harness's `ChannelManager`; nothing a caller sends changes membership.
-- IF a message declares (through the `channels` extension) a sender who is not a participant of the task's channel THEN the system SHALL reject it before it reaches the inbox or a model. A message that declares no sender is taken as the task's user.
+- IF a message declares (through the `channels` extension) a sender who is not a participant of the task's channel THEN the system SHALL reject it before it reaches the inbox or a model. A message that declares no sender is taken as the task's user. A sender who declares another registered channel for a task SHALL be a participant of both that channel and the task's own.
 - The declared sender is trusted: there is no authentication yet.
 
 ## Design
