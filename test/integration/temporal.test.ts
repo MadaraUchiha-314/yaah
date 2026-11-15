@@ -4,7 +4,10 @@ import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
+import { Client, Connection } from '@temporalio/client';
+
 import { EXT, SCHEMAS, readExtension } from '../../src/app/api-server/extensions/index.ts';
+import { LlmError } from '../../src/harness/models/llm/types.ts';
 import { defineTool, textResult } from '../../src/harness/tools/types.ts';
 import { ScriptedLlm, call, callTools, say } from '../../src/testing/scripted-llm.ts';
 import type { TestHarness } from '../support/harness.ts';
@@ -14,6 +17,7 @@ import { freePort } from '../support/ports.ts';
 let harness: TestHarness | undefined = undefined;
 let dir = '';
 let uiPort = 0;
+let temporalPort = 0;
 const printed: string[] = [];
 const llm = new ScriptedLlm([]);
 /** A tool that takes its time and does not stop when asked: the step must not write. */
@@ -40,6 +44,7 @@ function running(): TestHarness {
 beforeAll(async () => {
   dir = await mkdtemp(join(tmpdir(), 'yaah-temporal-it-'));
   uiPort = await freePort();
+  temporalPort = await freePort();
   const write = process.stderr.write.bind(process.stderr);
   process.stderr.write = (chunk: string | Uint8Array, ...rest: never[]): boolean => {
     printed.push(String(chunk));
@@ -54,7 +59,7 @@ beforeAll(async () => {
         '[durable]',
         'mode = "temporal-embedded"',
         '[durable.temporal]',
-        `port = ${String(await freePort())}`,
+        `port = ${String(temporalPort)}`,
         `ui_port = ${String(uiPort)}`,
         `task_queue = "it-${String(Date.now())}"`,
       ].join('\n'),
@@ -232,6 +237,60 @@ describe('durable execution on embedded Temporal', () => {
     );
     const stored = await running().client.getTask({ tenant: '', id: taskId });
     expect(statusText(stored)).toBe('Stopped.');
+  }, 60_000);
+
+  /**
+   * Feature: Security
+   * Scenario: A credential in a failing step reaches neither Temporal's history nor its log
+   *   Given a harness on embedded Temporal that knows a credential
+   *   And a model whose failure message and cause quote that credential
+   *   When a task's model step fails
+   *   Then the task fails
+   *   And the credential is absent from the workflow's history and from what the worker logged
+   * Requirement: docs/specs/issue-3/requirements.md R18.4 (critic 1, #2)
+   */
+  test('A credential in a failing step reaches neither the history nor the log', async () => {
+    const secret = 'sk-synthetic-temporal-0123456789';
+    expect(llm.remaining).toBe(0);
+    const { ctx } = running().harness;
+    ctx.redactor.add(secret);
+    llm.push({
+      error: new LlmError(
+        'scripted',
+        'scripted',
+        false,
+        `rejected key ${secret}`,
+        new Error(`upstream echoed ${secret}`),
+      ),
+    });
+    const logged: string[] = [];
+    const write = process.stderr.write.bind(process.stderr);
+    process.stderr.write = (chunk: string | Uint8Array, ...rest: never[]): boolean => {
+      logged.push(String(chunk));
+      return write(chunk, ...rest);
+    };
+    let history = '';
+    try {
+      const failed = await running().send('Fail');
+      expect(failed.task?.status?.state).toBe(TaskState.TASK_STATE_FAILED);
+      const connection = await Connection.connect({ address: `127.0.0.1:${String(temporalPort)}` });
+      try {
+        const client = new Client({ connection });
+        const handle = client.workflow.getHandle(`yaah-${failed.task?.id ?? ''}`);
+        const events = await handle.fetchHistory();
+        history = JSON.stringify(events, (_key, value: unknown) =>
+          value instanceof Uint8Array ? new TextDecoder().decode(value) : value,
+        );
+      } finally {
+        await connection.close();
+      }
+    } finally {
+      process.stderr.write = write;
+    }
+    expect(history).toContain('[redacted]');
+    expect(history).not.toContain(secret);
+    expect(logged.join('')).toContain('Activity failed');
+    expect(logged.join('')).not.toContain(secret);
   }, 60_000);
 
   /**
