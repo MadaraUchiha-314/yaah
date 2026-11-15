@@ -65,6 +65,9 @@ async function attempt(servers: readonly string[], refuse: readonly string[] = [
     commands: {
       register: (name: string) => {
         commands.push(name);
+        return (): void => {
+          commands.splice(commands.indexOf(name), 1);
+        };
       },
     },
     dataDir: await mkdtemp(join(tmpdir(), 'yaah-loader-')),

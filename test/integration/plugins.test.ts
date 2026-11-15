@@ -9,6 +9,8 @@ import { TaskState } from '@a2a-js/sdk';
 import type { ToolResult } from '../../src/harness/core/types.ts';
 import type { LlmRequest } from '../../src/harness/models/llm/types.ts';
 import { loadAgentPlugin } from '../../src/harness/plugins/index.ts';
+import { loadPlugin } from '../../src/harness/plugins/loader.ts';
+import { readPluginSchemas } from '../../src/harness/plugins/manifest.ts';
 import { call, callTools, say } from '../../src/testing/scripted-llm.ts';
 import type { PolicyServer } from '../fixtures/mcp/policy-server.ts';
 import { servePolicy } from '../fixtures/mcp/policy-server.ts';
@@ -660,5 +662,44 @@ describe('agent plugins', () => {
       tool: 'mcp__crm__refund',
     });
     expect(verdict).toEqual({ decision: 'allow' });
+  });
+
+  /**
+   * Feature: Skills, agent plugins and hooks
+   * Scenario: Disposing a plugin removes its commands
+   *   Given a loaded plugin with the prompt command "/hello"
+   *   And "/hello" sends the model the command's text
+   *   When the plugin is disposed
+   *   Then "hello" is no longer a registered command
+   *   And "/hello" no longer sends the model the command's text
+   * Requirement: docs/specs/issue-3/requirements.md R9.3 (critic 1, #6)
+   */
+  test('Disposing a plugin removes its commands', async () => {
+    scratch = await scratchDir('yaah-plugin-');
+    running = await startHarness({ turns: [say('Hello!'), say('Which command?')] });
+    const { ctx } = running.harness;
+    const loaded = await loadPlugin(
+      {
+        registry: ctx.entities,
+        schemas: await readPluginSchemas(),
+        skills: ctx.skills,
+        hooks: ctx.hooks,
+        mcp: ctx.get('mcp'),
+        commands: ctx.get('commands'),
+        dataDir: scratch,
+        hookTimeoutMs: 1000,
+      },
+      { manifest: { $schema: PLUGIN_SCHEMA, name: 'greeter' }, commands: { hello: 'Say hello.' } },
+    );
+    expect(ids(running, 'command')).toContain('hello');
+    await running.send('/hello');
+    expect(lastUserText(running.llm.requests.at(-1))).toBe('Say hello.');
+
+    await loaded.dispose();
+    expect(ids(running, 'command')).not.toContain('hello');
+    const calls = running.llm.requests.length;
+    await running.send('/hello');
+    const asked = running.llm.requests.slice(calls).map((request) => lastUserText(request));
+    expect(asked).not.toContain('Say hello.');
   });
 });

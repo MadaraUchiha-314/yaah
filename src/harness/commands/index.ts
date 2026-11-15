@@ -23,10 +23,10 @@ export type { Command, CommandContext, CommandFunction, CommandResult } from './
 /** The commands service. */
 export interface CommandsService {
   /**
-   * Registers a command as a name and a function. It is removed when the registering
-   * plugin is disposed.
+   * Registers a command as a name and a function. It is removed when the function this
+   * returns is called, or at the latest when the commands plugin is disposed.
    */
-  register(name: string, run: CommandFunction, description?: string): void;
+  register(name: string, run: CommandFunction, description?: string): () => void;
 }
 
 declare module 'cordis' {
@@ -154,8 +154,11 @@ async function run(
 /** Starts the commands plugin. */
 export function apply(ctx: Context): void {
   const selections = new Map<string, Selection>();
-  const register = (command: Command): void => {
-    ctx.effect(() => ctx.entities.register(command));
+  const register = (command: Command): (() => void) => {
+    const dispose = ctx.effect(() => ctx.entities.register(command));
+    return (): void => {
+      void dispose();
+    };
   };
   for (const command of selectionCommands(ctx, selections)) {
     register(command);
@@ -169,9 +172,8 @@ export function apply(ctx: Context): void {
     }),
   );
   ctx.provide('commands', {
-    register: (commandName: string, fn: CommandFunction, description = ''): void => {
-      register(defineCommand({ name: commandName, description, run: fn }));
-    },
+    register: (commandName: string, fn: CommandFunction, description = ''): (() => void) =>
+      register(defineCommand({ name: commandName, description, run: fn })),
   });
   const dispatch = async (request: RequestContext): Promise<Message | null> => {
     const parsed = parseCommand(messageText(request.userMessage));

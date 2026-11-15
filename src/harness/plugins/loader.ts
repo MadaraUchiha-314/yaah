@@ -151,11 +151,12 @@ async function readCommands(
   return commands;
 }
 
+/** Registers the plugin's prompt commands, adding the removal of each to `undo`. */
 function registerCommands(
   deps: LoaderDeps,
   plugin: string,
   commands: ReadonlyMap<string, string>,
-  notices: string[],
+  out: { readonly notices: string[]; readonly undo: (() => void)[] },
 ): string[] {
   const registered: string[] = [];
   for (const [command, text] of commands) {
@@ -163,7 +164,7 @@ function registerCommands(
       if (deps.commands === undefined) {
         throw new Error(t('plugin.rule.no-commands'));
       }
-      deps.commands.register(
+      const remove = deps.commands.register(
         command,
         (args: string) =>
           Promise.resolve({
@@ -172,10 +173,11 @@ function registerCommands(
           }),
         t('plugin.command.description', { plugin }),
       );
+      out.undo.push(remove);
       registered.push(command);
     } catch (error) {
       const reason = error instanceof Error ? error.message : String(error);
-      notices.push(t('plugin.notice.command-skipped', { command, reason }));
+      out.notices.push(t('plugin.notice.command-skipped', { command, reason }));
     }
   }
   return registered;
@@ -329,8 +331,8 @@ export async function loadPlugin(
   try {
     const skills = await loadSkills(deps, files, notices, undo);
     const closers = service === undefined ? [] : await addServers(service, servers);
-    // Last: a registered command cannot be taken back if a step above fails.
-    const registered = registerCommands(deps, name, commands, notices);
+    // Last, so a plugin refused by a step above has registered no command.
+    const registered = registerCommands(deps, name, commands, { notices, undo });
     const report = {
       name,
       skills,
