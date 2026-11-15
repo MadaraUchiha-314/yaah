@@ -260,6 +260,7 @@
   "browser.error.config": "Cannot read {file}: {reason}",
   "media.modality.image": "image",
   "media.modality.audio": "audio",
+  "media.modality.file": "file",
   "media.refused.modality": "The selected model ({model}) does not accept {modality} input, so nothing was sent to it. Choose another model with /model, or send your message as text.",
   "media.refused.link": "The selected model ({model}) cannot take {modality} input as a link, and this harness does not download links. Nothing was sent to the model. Attach the file itself.",
   "tool.generate-image.description": "Create an image from a description and deliver it to the person you are working for. Describe what the image should show in the prompt. The image is shown to them directly; you receive only a confirmation.",

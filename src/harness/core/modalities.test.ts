@@ -4,6 +4,8 @@ import { createCore, last } from '../../../test/support/core.ts';
 import { PNG_1X1, WAV_STUB } from '../../../test/support/media.ts';
 import { call, callTools, say } from '../../testing/scripted-llm.ts';
 import { ScriptedSpeechToText } from '../../testing/scripted-speech.ts';
+import { anthropicCapabilities } from '../models/llm/anthropic/provider.ts';
+import { buildParams } from '../models/llm/anthropic/request.ts';
 import type { LlmContent, LlmRequest } from '../models/llm/types.ts';
 import { SpeechError } from '../models/speech/types.ts';
 import { defineTool } from '../tools/types.ts';
@@ -206,6 +208,40 @@ describe('images and audio on their way to a model', () => {
     expect(stored).toContain('The drawing was delivered.');
     expect(stored).not.toContain(PNG_1X1);
     expect(JSON.stringify(core.llm.requests[1]?.messages)).not.toContain(PNG_1X1);
+  });
+
+  test('a tool result with a file no model takes reaches an Anthropic model as a note', async () => {
+    const files: ContentPart[] = [
+      {
+        type: 'file',
+        mediaType: 'application/octet-stream',
+        source: { kind: 'base64', data: 'AA==' },
+      },
+      { type: 'file', mediaType: 'application/pdf', source: { kind: 'base64', data: 'AA==' } },
+      { type: 'file', mediaType: 'image/svg+xml', source: { kind: 'base64', data: 'AA==' } },
+    ];
+    const fetchFile = defineTool({
+      id: 'fetch_file',
+      description: 'Fetch a file.',
+      inputSchema: { type: 'object' },
+      invoke: () => Promise.resolve({ ok: true, content: [text('Here it is.'), ...files] }),
+    });
+    const capabilities = anthropicCapabilities('claude-opus-5-5');
+    const core = await createCore({
+      turns: [callTools(call('c1', 'fetch_file')), say('I cannot open it.')],
+      tools: [fetchFile],
+      capabilities,
+    });
+    await core.send('Read the file.');
+    expect(await core.finished).toEqual({ state: 'completed', subState: null });
+    const request = core.llm.requests[1];
+    const shown = JSON.stringify(request?.messages);
+    expect(shown).not.toContain('"type":"file"');
+    expect(shown).toContain('file content');
+    expect(shown).toContain('image content');
+    expect(() =>
+      buildParams(request ?? { messages: [], tools: [] }, 'claude-opus-5-5', capabilities),
+    ).not.toThrow();
   });
 
   test('an inline file counts as a fixed size in the token estimate', () => {

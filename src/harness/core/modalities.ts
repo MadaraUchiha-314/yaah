@@ -10,7 +10,9 @@
  * - anything else, in the turn being worked — the turn is answered without calling the
  *   model, saying which model does not accept which modality;
  * - anything else, in an earlier turn — a short note stands in its place, so a
- *   conversation is not stuck on a file an earlier model could not read.
+ *   conversation is not stuck on a file an earlier model could not read;
+ * - a file that is neither an image nor audio, or of a media type the model does not name
+ *   among those it takes — the note stands in its place, in any turn.
  */
 import type { EntityRegistry } from '../../kernel/registry.ts';
 import { t } from '../../kernel/strings.ts';
@@ -109,6 +111,20 @@ async function transcript(
   return text;
 }
 
+/** The note that stands in for a file the model is not shown. */
+function omitted(pass: Pass, modality: Modality | 'file'): ContentPart {
+  const note = renderPrompt(pass.deps.registry, 'media-omitted', {
+    modality: t(`media.modality.${modality}`),
+  });
+  return { type: 'text', text: note };
+}
+
+/** Whether the model takes this file's media type, when it names the types it takes. */
+function takesType(llm: LLM, part: FilePart): boolean {
+  const types = llm.capabilities.inputMediaTypes;
+  return types === undefined || types.includes(part.mediaType);
+}
+
 /** What the model is shown for one part. */
 async function shown(
   pass: Pass,
@@ -116,13 +132,18 @@ async function shown(
   seq: number,
   index: number,
 ): Promise<ContentPart> {
-  const modality = part.type === 'file' ? modalityOf(part) : null;
-  if (part.type !== 'file' || modality === null) {
+  if (part.type !== 'file') {
     return part;
+  }
+  // No model takes a file that is neither an image nor audio, nor a media type it does
+  // not name: the note stands in for it, and the turn goes on.
+  const modality = modalityOf(part);
+  if (modality === null) {
+    return omitted(pass, 'file');
   }
   const why = obstacle(pass.llm, part, modality);
   if (why === null) {
-    return part;
+    return takesType(pass.llm, part) ? part : omitted(pass, modality);
   }
   const stt = pass.deps.stt?.() ?? null;
   if (why === 'modality' && modality === 'audio' && part.source.kind === 'base64' && stt !== null) {
@@ -131,10 +152,7 @@ async function shown(
   if (seq > pass.turnStart) {
     pass.refusal ??= refusalText(pass.llm, modality, why);
   }
-  const note = renderPrompt(pass.deps.registry, 'media-omitted', {
-    modality: t(`media.modality.${modality}`),
-  });
-  return { type: 'text', text: note };
+  return omitted(pass, modality);
 }
 
 function partsOf(event: ConversationEvent): readonly ContentPart[] {
@@ -154,9 +172,7 @@ function withParts(event: ConversationEvent, parts: readonly ContentPart[]): Con
 }
 
 function hasMedia(event: ConversationEvent): boolean {
-  return partsOf(event).some(
-    (part: ContentPart) => part.type === 'file' && modalityOf(part) !== null,
-  );
+  return partsOf(event).some((part: ContentPart) => part.type === 'file');
 }
 
 /**

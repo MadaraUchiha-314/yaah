@@ -13,6 +13,14 @@ import { LlmError } from '../types.ts';
 /** The provider name carried by errors and by opaque reasoning blocks. */
 export const PROVIDER = 'anthropic';
 
+/** The image media types the API takes inline. */
+export const IMAGE_MEDIA_TYPES: readonly string[] = [
+  'image/jpeg',
+  'image/png',
+  'image/gif',
+  'image/webp',
+];
+
 /** The most cache breakpoints one request may carry. */
 const MAX_BREAKPOINTS = 4;
 

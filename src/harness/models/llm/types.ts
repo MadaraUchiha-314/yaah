@@ -33,6 +33,11 @@ export interface LlmCapabilities {
    * itself. Absent means none: content must be sent inline.
    */
   readonly inputUrls?: readonly ('image' | 'audio')[] | undefined;
+  /**
+   * The media types of `input` the model takes, when it takes only some (e.g. not SVG).
+   * Absent means every media type of those modalities.
+   */
+  readonly inputMediaTypes?: readonly string[] | undefined;
   /** Reasoning-effort levels the model accepts; empty when it has none. */
   readonly efforts: readonly string[];
 }

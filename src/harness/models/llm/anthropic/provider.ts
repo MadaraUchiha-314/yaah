@@ -9,7 +9,7 @@ import type { Locality } from '../../../../kernel/entity.ts';
 import { t } from '../../../../kernel/strings.ts';
 import type { LLM, LlmCapabilities, LlmEvent, LlmRequest } from '../types.ts';
 import { ResponseAccumulator, abortedError, incompleteError, toLlmError } from './events.ts';
-import { PROVIDER, buildParams } from './request.ts';
+import { IMAGE_MEDIA_TYPES, PROVIDER, buildParams } from './request.ts';
 
 /** The `fetch` the SDK calls; tests pass one that replays recorded responses. */
 export type AnthropicFetch = NonNullable<ClientOptions['fetch']>;
@@ -22,6 +22,7 @@ const CLAUDE_5: LlmCapabilities = {
   maxOutput: 128_000,
   input: ['image'],
   inputUrls: ['image'],
+  inputMediaTypes: IMAGE_MEDIA_TYPES,
   efforts: ['low', 'medium', 'high', 'xhigh', 'max'],
 };
 
@@ -30,6 +31,7 @@ const UNKNOWN: LlmCapabilities = {
   maxOutput: 16_384,
   input: ['image'],
   inputUrls: ['image'],
+  inputMediaTypes: IMAGE_MEDIA_TYPES,
   efforts: [],
 };
 

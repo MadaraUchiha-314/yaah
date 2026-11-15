@@ -9,6 +9,7 @@ A message may carry an image or an audio recording. What happens to it depends o
 ## Current behaviour
 
 - WHEN a message carries an image or audio part and the selected model accepts that modality THEN the system SHALL pass it to the model; otherwise it SHALL reply, without calling the model, that the model does not accept it, naming both.
+- WHEN a message or a tool result carries a file that is neither an image nor audio, or an image of a media type the model does not take (Anthropic: anything but JPEG, PNG, GIF, WebP), THEN the system SHALL show the model a short note in its place and SHALL NOT fail the turn.
 - WHEN an audio part arrives for a model that does not accept audio and `speech.stt` is configured THEN the system SHALL transcribe it once and show the model the transcript.
 - The system SHALL NOT download a link it is given: an `https:` image link is passed on only to a provider that accepts links, and any other link is refused.
 - IF a binary part exceeds `limits.max_part_bytes` THEN the system SHALL refuse the message before a task exists.
