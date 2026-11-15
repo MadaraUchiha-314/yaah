@@ -253,6 +253,19 @@ function mergedItems(
   return [...mine, ...stored.filter((item) => !shown(item))];
 }
 
+/**
+ * Adds what a follower learned about the task to what a surface shows. The follower's
+ * state and task win; items stay where the surface has them, an item the follower also
+ * holds takes the follower's newer form, and an item it alone holds is added after. An
+ * answer keeps the id it was first shown under, so a form drawn in it is not remounted.
+ */
+export function mergeView(shown: TaskView, learned: TaskView): TaskView {
+  const key = (item: TranscriptItem): string => `${item.kind}:${item.id}`;
+  const newer = new Map(learned.items.map((item) => [key(item), item]));
+  const kept = shown.items.map((item) => newer.get(key(item)) ?? item);
+  return { ...learned, items: mergedItems(kept, learned.items) };
+}
+
 /** Applies one A2A stream event to the view. */
 export function foldEvent(view: TaskView, event: StreamResponse): TaskView {
   const { payload } = event;

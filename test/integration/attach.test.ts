@@ -109,6 +109,37 @@ describe('two surfaces on one task', () => {
 
   /**
    * Feature: Surfaces and renderers
+   * Scenario: News from another surface is added to what a surface shows
+   *   Given a terminal that asked a question, was answered, and ran two commands
+   *   When another surface sends a message on the same task and is answered
+   *   Then the terminal shows that message and its answer after what it showed before
+   *   And its own answer keeps the id it was first shown under, and the commands' replies stay
+   * Requirement: docs/specs/issue-3/requirements.md R19.1, R27.4
+   */
+  test('News from another surface is added to what a surface shows', async () => {
+    running = await startHarness({ turns: [say('Hello.'), say('Bye.')] });
+    const terminal = new Surface(
+      await HarnessSession.connect(running.url, { longRunning: true }),
+      false,
+    );
+    await terminal.send('hi');
+    await terminal.send('/effort high');
+    await terminal.send('/effort low');
+    const before = terminal.view.items;
+    const answer = before.find((item) => item.kind === 'agent');
+    expect(answer?.id.startsWith('response-')).toBe(true);
+    expect(before.filter((item) => item.kind === 'note')).toHaveLength(2);
+
+    const web = new Surface(await HarnessSession.connect(running.url), false);
+    web.view = { ...terminal.view, items: [] };
+    await web.send('thanks');
+    await until(() => texts(terminal.view).includes('Bye.'));
+    expect(terminal.view.items.slice(0, before.length)).toEqual([...before]);
+    expect(texts(terminal.view).endsWith('thanks | Bye.')).toBe(true);
+  });
+
+  /**
+   * Feature: Surfaces and renderers
    * Scenario: A surface does not take up another's task unless asked to
    *   Given an open task on the harness
    *   When a surface attaches without asking to take it up

@@ -35,6 +35,7 @@
     "isOpen",
     "isUsableSchema",
     "loadConfig",
+    "mergeView",
     "parseConfig",
     "registerEntity",
     "renderPrompt",
@@ -316,6 +317,7 @@
     "HarnessSession",
     "foldEvent",
     "isOpen",
+    "mergeView",
     "viewOfTask",
     "withUserMessage"
   ],

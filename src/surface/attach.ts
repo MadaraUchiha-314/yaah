@@ -3,13 +3,14 @@
  * adopt the task that is already open on the harness, and from then on it shows what
  * happens on the surface's current task while the surface itself is not in a turn.
  *
- * It only ever replaces the view with news — a different task, a new state, more items —
- * so a form the user is filling in is not redrawn under their hands.
+ * It only ever shows news — a different task, a new state, more items — and adds it to
+ * what the surface shows rather than replacing it, so a form the user is filling in is
+ * not redrawn under their hands.
  */
 import type { Task } from '@a2a-js/sdk';
 
 import type { TaskView } from './view.ts';
-import { isOpen, viewOfTask } from './view.ts';
+import { isOpen, mergeView, viewOfTask } from './view.ts';
 
 /** The part of `HarnessSession` this needs. */
 export interface Followable {
@@ -71,12 +72,15 @@ async function followOne(
   hooks: AttachHooks,
   signal: AbortSignal,
 ): Promise<void> {
-  for await (const view of session.follow(taskId, signal)) {
+  for await (const learned of session.follow(taskId, signal)) {
     const shown = hooks.current();
     if (shown.taskId !== null && shown.taskId !== taskId) {
       // The user has moved on to another task.
       return;
     }
+    // What the follower learned is added to what is shown; notes, tool lines and the ids
+    // things were shown under stay.
+    const view = shown.taskId === null ? learned : mergeView(shown, learned);
     if (!hooks.busy() && isNews(view, shown)) {
       hooks.show(view);
     }
