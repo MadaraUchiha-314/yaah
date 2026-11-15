@@ -15,6 +15,18 @@
 import type { ExecutionEventBus, ExecutionEventBusManager } from '@a2a-js/sdk/server';
 import { DefaultExecutionEventBus } from '@a2a-js/sdk/server';
 
+/** The buses made for one request alone. */
+const OWN = new WeakSet<ExecutionEventBus>();
+
+/**
+ * Whether `bus` is a bus of a request's own. Nothing but that request listens on it, so
+ * forwarding to it stops when the request's client goes away; the primary bus is also
+ * what resubscribers listen on, so forwarding to it goes on until the task rests.
+ */
+export function isOwnBus(bus: ExecutionEventBus): boolean {
+  return OWN.has(bus);
+}
+
 interface Primary {
   readonly bus: ExecutionEventBus;
   /** Whether a request is running on the bus right now. */
@@ -38,7 +50,9 @@ export class RequestBusManager implements ExecutionEventBusManager {
       return bus;
     }
     if (primary.busy) {
-      return new DefaultExecutionEventBus();
+      const own = new DefaultExecutionEventBus();
+      OWN.add(own);
+      return own;
     }
     primary.busy = true;
     return primary.bus;

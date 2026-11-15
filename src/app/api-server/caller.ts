@@ -1,8 +1,10 @@
 /**
  * The caller of one HTTP request, as the SDK's request handler sees it. Nobody is
  * authenticated; what the caller carries is a signal that aborts when its connection
- * closes, so the executor stops forwarding a stream nobody reads any more. The SDK has no
- * such signal of its own: it writes to a closed response until the executor finishes.
+ * closes, so the executor stops forwarding to a request's own bus nobody reads any more (the
+ * task's primary bus is also read by resubscribers, so it is served until the task rests).
+ * The SDK has no such signal of its own: it writes to a closed response until the executor
+ * finishes.
  */
 import type { RequestContext, User } from '@a2a-js/sdk/server';
 

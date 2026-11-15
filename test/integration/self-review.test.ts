@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, test } from 'bun:test';
+import type { StreamResponse } from '@a2a-js/sdk';
 import { TaskState } from '@a2a-js/sdk';
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
@@ -232,5 +233,45 @@ describe('self-review findings', () => {
     remove();
     const again = await running.send('Three', { taskId });
     expect(again.streamed).toBe('Second.');
+  });
+
+  /**
+   * Feature: Tasks
+   * Scenario: A client that sent without waiting and then subscribes sees the whole turn
+   *   Given a client sends a message with returnImmediately and gets the task back at once
+   *   When the client subscribes to the task while the turn runs
+   *   Then the subscription carries the answer's text and ends with the task completed
+   * Requirement: docs/specs/issue-3/requirements.md R14.2 (self-review 2, #1)
+   */
+  test('A client that sent without waiting and then subscribes sees the whole turn', async () => {
+    running = await startHarness({ turns: [say('one two three four five six')], llmDelayMs: 60 });
+    const sent = await running.client.sendMessage({
+      tenant: '',
+      message: running.message('One'),
+      configuration: {
+        acceptedOutputModes: [],
+        taskPushNotificationConfig: undefined,
+        returnImmediately: true,
+      },
+      metadata: undefined,
+    });
+    const taskId = 'id' in sent ? sent.id : '';
+    const seen: StreamResponse[] = [];
+    for await (const event of running.client.resubscribeTask({ tenant: '', id: taskId })) {
+      seen.push(event);
+    }
+    const text = seen
+      .flatMap((event) =>
+        event.payload?.$case === 'artifactUpdate'
+          ? (event.payload.value.artifact?.parts ?? [])
+          : [],
+      )
+      .map((part) => (part.content?.$case === 'text' ? part.content.value : ''))
+      .join('');
+    expect(text).toContain('six');
+    const last = seen.at(-1)?.payload;
+    expect(last?.$case === 'statusUpdate' ? last.value.status?.state : last?.$case).toBe(
+      TaskState.TASK_STATE_COMPLETED,
+    );
   });
 });

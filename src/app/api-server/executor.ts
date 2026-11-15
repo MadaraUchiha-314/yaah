@@ -20,6 +20,7 @@ import type { Triage } from '../inbox/triage.ts';
 import type { StreamHub } from '../stream-hub.ts';
 import { callerClosed } from './caller.ts';
 import { messageText, metadataObject } from './convert.ts';
+import { isOwnBus } from './request-buses.ts';
 import { recordFailure } from './request-failure.ts';
 import { activityEvent, artifactEvent } from './executor-events.ts';
 import type { DurableExecutionTask } from './extensions/index.ts';
@@ -148,7 +149,9 @@ export class HarnessExecutor implements AgentExecutor {
       this.#publishStatus(current, bus);
       return;
     }
-    await this.#forward(task, cursor, before, bus, callerClosed(request));
+    // Only a bus of the request's own has nobody else to serve once its client is gone.
+    const closed = isOwnBus(bus) ? callerClosed(request) : undefined;
+    await this.#forward(task, cursor, before, bus, closed);
   }
 
   /** What triage, when there is one, says about a message for a task that is working. */
@@ -253,7 +256,8 @@ export class HarnessExecutor implements AgentExecutor {
 
   /**
    * Forwards what the task's run publishes, from `cursor` on, until the task rests —
-   * finished or waiting for input — or `closed` aborts: the caller went away.
+   * finished or waiting for input — or `closed` aborts: the caller of a request with a
+   * bus of its own went away.
    */
   async #forward(
     task: Task,

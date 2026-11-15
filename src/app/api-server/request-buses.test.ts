@@ -1,6 +1,6 @@
 import { expect, test } from 'bun:test';
 
-import { RequestBusManager } from './request-buses.ts';
+import { RequestBusManager, isOwnBus } from './request-buses.ts';
 
 test('a request overlapping another on the same task gets a bus of its own', () => {
   const manager = new RequestBusManager();
@@ -8,6 +8,8 @@ test('a request overlapping another on the same task gets a bus of its own', () 
   const overlapping = manager.createOrGetByTaskId('t1');
   expect(overlapping).not.toBe(primary);
   expect(manager.getByTaskId('t1')).toBe(primary);
+  expect(isOwnBus(overlapping)).toBe(true);
+  expect(isOwnBus(primary)).toBe(false);
   let finished = 0;
   overlapping.on('finished', () => {
     finished += 1;

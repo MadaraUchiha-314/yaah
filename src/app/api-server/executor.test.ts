@@ -10,8 +10,16 @@ import { createMemoryPersistence } from '../../harness/core/memory-persistence.t
 import { StreamHub } from '../stream-hub.ts';
 import { ConnectedCaller } from './caller.ts';
 import { HarnessExecutor } from './executor.ts';
+import { RequestBusManager } from './request-buses.ts';
 import { A2aTaskPort } from './task-port.ts';
 import { MemoryTaskStore } from './task-store.ts';
+
+/** A bus of a request's own: the one an overlapping request gets. */
+function ownBus(): ExecutionEventBus {
+  const buses = new RequestBusManager();
+  buses.createOrGetByTaskId('t1');
+  return buses.createOrGetByTaskId('t1');
+}
 
 function collect(bus: ExecutionEventBus): {
   events: AgentExecutionEvent[];
@@ -164,11 +172,11 @@ describe('HarnessExecutor', () => {
     expect(seen.finished()).toBe(true);
   });
 
-  test('stops forwarding when the caller goes away', async () => {
+  test('stops forwarding to a bus of its own when the caller goes away', async () => {
     // The run never says anything more, and the store never changes.
     const { executor } = setup(() => undefined, 60_000);
     const closed = new AbortController();
-    const bus = new DefaultExecutionEventBus();
+    const bus = ownBus();
     const seen = collect(bus);
     const done = executor.execute(request('t1', undefined, closed.signal), bus);
     setTimeout(() => {
@@ -179,7 +187,7 @@ describe('HarnessExecutor', () => {
     // A caller gone before forwarding begins is not waited for either.
     const gone = new AbortController();
     gone.abort();
-    await executor.execute(request('t1', undefined, gone.signal), new DefaultExecutionEventBus());
+    await executor.execute(request('t1', undefined, gone.signal), ownBus());
   });
 
   test('cancelTask on an unknown task finishes quietly', async () => {
