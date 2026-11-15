@@ -16,6 +16,7 @@ import type { Admission } from './admission.ts';
 import { AdmissionGate } from './admission.ts';
 import { buildAgentCard } from './agent-card.ts';
 import type { CommandDispatcher } from './executor.ts';
+import { partSizeAdmission } from './part-limit.ts';
 import { HarnessExecutor } from './executor.ts';
 import type { CommandInfo } from './extensions/index.ts';
 import { CALLER_HEADER } from './guards.ts';
@@ -146,6 +147,7 @@ export function apply(ctx: Context): void {
   const inbox = new Inbox(ctx.persistence.inbox, durable);
   const extensions = new Set<AgentExtension>();
   const gate = new AdmissionGate();
+  gate.add(partSizeAdmission(ctx.config.limits.maxPartBytes));
   let commands: { dispatch: CommandDispatcher; list: () => readonly CommandInfo[] } | null = null;
   let contextSettings: ContextSettings | null = null;
   const interceptors = new Set<CommandDispatcher>();

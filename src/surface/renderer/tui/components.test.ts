@@ -158,14 +158,14 @@ describe('terminal UI components', () => {
     expect(frame).not.toContain(t('tui.a2ui.hint'));
   });
 
-  test('the entities describe a text surface that draws the basic catalog', () => {
+  test('the entities describe a text and voice surface that draws the basic catalog', () => {
     expect(tuiRenderer.ref).toEqual({ kind: 'renderer', id: 'tui', version: null });
     expect(tuiRenderer.a2uiCatalogs).toEqual([
       'https://a2ui.org/specification/v1_0/catalogs/basic/catalog.json',
     ]);
     expect(tuiSurface.ref).toEqual({ kind: 'surface', id: 'tui', version: null });
     expect(tuiSurface.renderer).toBe(tuiRenderer);
-    expect(tuiSurface.modalities).toEqual(['text']);
+    expect(tuiSurface.modalities).toEqual(['text', 'audio']);
   });
 
   test('plain mode is chosen without a terminal or with NO_COLOR', () => {

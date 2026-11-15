@@ -96,11 +96,23 @@ describe('transcript blocks', () => {
 });
 
 describe('Buffer stand-in for the A2A client in a browser', () => {
-  test('nothing is a Buffer, and bytes decode to a Uint8Array', () => {
+  test('bytes go in and out of base64, and only its own bytes are a Buffer', () => {
     expect(bufferShim.isBuffer(new Uint8Array(1))).toBe(false);
-    expect([...bufferShim.from('aGk=', 'base64')]).toEqual([104, 105]);
+    expect(bufferShim.isBuffer({ a: 1 })).toBe(false);
+    const decoded = bufferShim.from('aGk=', 'base64');
+    expect(bufferShim.isBuffer(decoded)).toBe(true);
+    expect([...decoded]).toEqual([104, 105]);
     expect([...bufferShim.from('hi')]).toEqual([104, 105]);
     expect([...bufferShim.from([1, 2])]).toEqual([1, 2]);
+    expect(bufferShim.from(Uint8Array.from([104, 105])).toString('base64')).toBe('aGk=');
+    expect(bufferShim.from('aGk=', 'base64').toString()).toBe('hi');
+  });
+
+  test('carries a large image through base64 unchanged', () => {
+    const bytes = Uint8Array.from({ length: 200_000 }, (_, index) => index % 251);
+    const encoded = bufferShim.from(bytes).toString('base64');
+    expect(encoded).toBe(Buffer.from(bytes).toString('base64'));
+    expect(Buffer.from(bufferShim.from(encoded, 'base64')).equals(Buffer.from(bytes))).toBe(true);
   });
 
   test('is installed only where there is no Buffer', () => {

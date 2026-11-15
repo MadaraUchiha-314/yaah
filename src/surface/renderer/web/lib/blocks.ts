@@ -10,11 +10,11 @@ export type ToolItem = Extract<TranscriptItem, { kind: 'tool' }>;
 /** One piece of an agent's turn. */
 export type TurnPart =
   | { readonly kind: 'tools'; readonly id: string; readonly calls: readonly ToolItem[] }
-  | Extract<TranscriptItem, { kind: 'agent' | 'ask' }>;
+  | Extract<TranscriptItem, { kind: 'agent' | 'ask' | 'file' }>;
 
 /** One block of the conversation, top to bottom. */
 export type Block =
-  | Extract<TranscriptItem, { kind: 'user' | 'note' }>
+  | Extract<TranscriptItem, { kind: 'user' | 'note' | 'file' }>
   | { readonly kind: 'turn'; readonly id: string; readonly parts: readonly TurnPart[] };
 
 function withPart(parts: readonly TurnPart[], item: TurnPart | ToolItem): TurnPart[] {
@@ -32,7 +32,9 @@ function withPart(parts: readonly TurnPart[], item: TurnPart | ToolItem): TurnPa
 export function toBlocks(items: readonly TranscriptItem[]): Block[] {
   const blocks: Block[] = [];
   for (const item of items) {
-    if (item.kind === 'user' || item.kind === 'note') {
+    // What the user sent stands on its own; what the agent made is part of its turn.
+    const own = item.kind === 'file' && item.from === 'user';
+    if (item.kind === 'user' || item.kind === 'note' || own) {
       blocks.push(item);
     } else {
       const last = blocks.at(-1);

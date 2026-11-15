@@ -61,6 +61,7 @@ describe('anthropic entity', () => {
         contextWindow: 1_000_000,
         maxOutput: 128_000,
         input: ['image'],
+        inputUrls: ['image'],
         efforts: ['low', 'medium', 'high', 'xhigh', 'max'],
       });
     }
@@ -68,6 +69,7 @@ describe('anthropic entity', () => {
       contextWindow: 200_000,
       maxOutput: 16_384,
       input: ['image'],
+      inputUrls: ['image'],
       efforts: [],
     });
     const custom = { contextWindow: 1, maxOutput: 2, input: [], efforts: [] };

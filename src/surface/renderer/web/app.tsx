@@ -3,12 +3,14 @@ import { useEffect, useState } from 'react';
 
 import { t } from '../../../kernel/strings.ts';
 import { ChatScreen } from './chat.tsx';
-import type { ChatSession } from './use-chat.ts';
+import type { ChatSession, SpeechPlayer } from './use-chat.ts';
 
 /** Props of {@link App}. */
 export interface AppProps {
   /** Opens the session with the harness that serves this page. */
   readonly connect: () => Promise<ChatSession>;
+  /** Plays spoken answers; without one the chat is silent. */
+  readonly player?: SpeechPlayer | undefined;
 }
 
 type Connection =
@@ -17,7 +19,7 @@ type Connection =
   | { readonly status: 'failed'; readonly reason: string };
 
 /** The application: connects once, then shows the chat — or says why it cannot. */
-export function App({ connect }: AppProps): ReactNode {
+export function App({ connect, player }: AppProps): ReactNode {
   const [connection, setConnection] = useState<Connection>({ status: 'connecting' });
   useEffect(() => {
     let current = true;
@@ -40,7 +42,7 @@ export function App({ connect }: AppProps): ReactNode {
     };
   }, [connect]);
   if (connection.status === 'ready') {
-    return <ChatScreen session={connection.session} />;
+    return <ChatScreen session={connection.session} player={player} />;
   }
   return (
     <main className="grid h-dvh place-items-center p-6 text-center text-sm text-muted-foreground">

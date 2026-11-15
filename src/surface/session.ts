@@ -3,7 +3,7 @@
  * else on the wire; on top of it, this class turns "send this, follow that task" into a
  * stream of {@link TaskView}s for a renderer to draw.
  */
-import type { AgentCard, Message, StreamResponse, Task } from '@a2a-js/sdk';
+import type { AgentCard, Message, Part, StreamResponse, Task } from '@a2a-js/sdk';
 import { Role, TaskState } from '@a2a-js/sdk';
 import type { Client } from '@a2a-js/sdk/client';
 import { ClientFactory, ServiceParameters, withA2AExtensions } from '@a2a-js/sdk/client';
@@ -11,6 +11,8 @@ import { ClientFactory, ServiceParameters, withA2AExtensions } from '@a2a-js/sdk
 import type { CommandInfo } from '../app/api-server/extensions/index.ts';
 import type { HarnessTarget } from '../app/harness-target.ts';
 import { EXT, SCHEMAS } from '../app/api-server/extensions/index.ts';
+import type { SpeechChunk } from './view-files.ts';
+import { fileItems, speechChunk } from './view-files.ts';
 import type { TaskView } from './view.ts';
 import {
   A2UI_MEDIA_TYPE,
@@ -30,6 +32,19 @@ export interface SessionOptions {
   readonly a2uiCatalogs?: readonly string[];
   /** Keep a task this session creates open after each response. Defaults to true. */
   readonly longRunning?: boolean;
+  /**
+   * Receives the spoken form of an answer, piece by piece, as it arrives. Without it the
+   * session never asks for speech.
+   */
+  readonly onSpeech?: (chunk: SpeechChunk) => void;
+}
+
+/** A file sent with a turn: an image, a voice recording. */
+export interface TurnFile {
+  /** `image/png`, `audio/webm`, … */
+  readonly mediaType: string;
+  readonly name?: string | undefined;
+  readonly data: Uint8Array;
 }
 
 /** What one turn sends. */
@@ -37,6 +52,18 @@ export interface TurnInput {
   readonly text: string;
   /** A user's action on an A2UI surface, as an A2UI message. */
   readonly a2uiAction?: unknown;
+  /** Files sent with the text, each as a `raw` part. */
+  readonly files?: readonly TurnFile[] | undefined;
+  /** Ask for the answer to be spoken as well. Needs {@link SessionOptions.onSpeech}. */
+  readonly speak?: boolean | undefined;
+}
+
+/** What the harness says it can do with voice, from its agent card. */
+export interface VoiceSupport {
+  /** Audio is transcribed for a model that does not accept it. */
+  readonly transcription: boolean;
+  /** An answer can be spoken. */
+  readonly output: boolean;
 }
 
 function extensionParams(card: AgentCard, uri: string): unknown {
@@ -51,6 +78,8 @@ export class HarnessSession {
   readonly commands: readonly CommandInfo[];
   /** The Temporal Web UI of the harness, or null when it does not run on Temporal. */
   readonly dashboardUrl: string | null;
+  /** What the harness is configured to do with voice. */
+  readonly voice: VoiceSupport;
   readonly #client: Client;
   readonly #options: SessionOptions;
   #contextId = '';
@@ -66,6 +95,8 @@ export class HarnessSession {
       extensionParams(card, EXT.durableExecution),
     );
     this.dashboardUrl = durable.success ? durable.data.dashboardUrl : null;
+    const voice = SCHEMAS.voiceParams.safeParse(extensionParams(card, EXT.voice));
+    this.voice = voice.success ? voice.data : { transcription: false, output: false };
   }
 
   /**
@@ -91,9 +122,14 @@ export class HarnessSession {
    */
   async *send(input: TurnInput, view: TaskView = EMPTY_VIEW): AsyncIterable<TaskView> {
     const message = this.#message(input, isOpen(view) ? view.taskId : null);
-    let current = input.text === '' ? view : withUserMessage(view, message.messageId, input.text);
+    const files = fileItems(message.parts, message.messageId, 'user');
+    let current =
+      input.text === '' && files.length === 0
+        ? view
+        : withUserMessage(view, message.messageId, input.text, files);
     yield current;
     for await (const event of this.#stream(message)) {
+      this.#hear(event);
       current = foldEvent(current, event);
       this.#contextId = current.contextId ?? this.#contextId;
       yield current;
@@ -172,6 +208,35 @@ export class HarnessSession {
     }
   }
 
+  /** Hands a piece of a spoken answer to the surface. */
+  #hear(event: StreamResponse): void {
+    const { payload } = event;
+    if (payload?.$case === 'artifactUpdate') {
+      const chunk = speechChunk(payload.value.artifact, payload.value.lastChunk);
+      if (chunk !== null) {
+        this.#options.onSpeech?.(chunk);
+      }
+    }
+  }
+
+  /** The parts of a turn: its text, or its A2UI action, then its files. */
+  #parts(input: TurnInput): Part[] {
+    const blank = { metadata: undefined, filename: '' };
+    const files = (input.files ?? []).map((file): Part => ({
+      metadata: undefined,
+      filename: file.name ?? '',
+      mediaType: file.mediaType,
+      // The SDK encodes whatever `Buffer.from` gives it; in a browser that is the shim's.
+      content: { $case: 'raw', value: Buffer.from(file.data) },
+    }));
+    if (input.a2uiAction !== undefined) {
+      const content = { $case: 'data', value: [input.a2uiAction] } as const;
+      return [{ ...blank, content, mediaType: A2UI_MEDIA_TYPE }];
+    }
+    const text: Part = { ...blank, content: { $case: 'text', value: input.text }, mediaType: '' };
+    return input.text === '' && files.length > 0 ? files : [text, ...files];
+  }
+
   /** Builds a user message, carrying what this surface offers for the turn. */
   #message(input: TurnInput, taskId: string | null): Message {
     this.#counter += 1;
@@ -183,22 +248,15 @@ export class HarnessSession {
     if (taskId === null && this.#options.longRunning !== false) {
       metadata[EXT.taskLifecycle] = { longRunning: true };
     }
-    const blank = { metadata: undefined, filename: '' };
+    if (input.speak === true && this.#options.onSpeech !== undefined) {
+      metadata[EXT.voice] = { output: true };
+    }
     return {
       messageId: `${String(Date.now())}-${String(this.#counter)}-${Math.random().toString(36).slice(2, 8)}`,
       contextId: this.#contextId,
       taskId: taskId ?? '',
       role: Role.ROLE_USER,
-      parts:
-        input.a2uiAction === undefined
-          ? [{ ...blank, content: { $case: 'text', value: input.text }, mediaType: '' }]
-          : [
-              {
-                ...blank,
-                content: { $case: 'data', value: [input.a2uiAction] },
-                mediaType: A2UI_MEDIA_TYPE,
-              },
-            ],
+      parts: this.#parts(input),
       metadata,
       extensions: [],
       referenceTaskIds: [],
@@ -206,7 +264,13 @@ export class HarnessSession {
   }
 
   #stream(message: Message): AsyncIterable<StreamResponse> {
-    const extensions = [EXT.taskLifecycle, EXT.activity, EXT.commands, EXT.durableExecution];
+    const extensions = [
+      EXT.taskLifecycle,
+      EXT.activity,
+      EXT.commands,
+      EXT.durableExecution,
+      EXT.voice,
+    ];
     if ((this.#options.a2uiCatalogs ?? []).length > 0) {
       extensions.push(A2UI_EXTENSION);
     }

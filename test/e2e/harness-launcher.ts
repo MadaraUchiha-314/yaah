@@ -14,6 +14,12 @@ import { createHarness } from '../../src/kernel/harness.ts';
 import { registerEntity } from '../../src/kernel/registry.ts';
 import * as webUi from '../../src/surface/renderer/web/server.ts';
 import { ScriptedLlm, call, callTools, say } from '../../src/testing/scripted-llm.ts';
+import {
+  ScriptedSpeechToText,
+  ScriptedTextToSpeech,
+  silencePerWord,
+} from '../../src/testing/scripted-speech.ts';
+import { solidPng } from '../support/png.ts';
 
 const A2UI_MEDIA_TYPE = 'application/a2ui+json';
 const BASIC = 'https://a2ui.org/specification/v1_0/catalogs/basic/catalog.json';
@@ -85,9 +91,47 @@ const tool = (id: string, ok: boolean) =>
     },
   });
 
+/** What the scripted speech-to-text model hears in every recording. */
+const HEARD = 'Where is my order, asked by voice?';
+
+/** A tool that makes a picture: an orange square, delivered as an artifact. */
+const makeImage = defineTool({
+  id: 'make_image',
+  description: 'make_image',
+  inputSchema: { type: 'object' },
+  invoke: () =>
+    Promise.resolve({
+      ok: true,
+      content: [{ type: 'text', text: 'The image was delivered.' }],
+      artifacts: [
+        {
+          type: 'file',
+          mediaType: 'image/png',
+          name: 'lamp.png',
+          source: { kind: 'base64', data: solidPng(96, [230, 120, 40]).toString('base64') },
+        },
+      ],
+    }),
+});
+
 function respond(request: LlmRequest): readonly LlmEvent[] {
   const last = request.messages.at(-1);
   const shown = JSON.stringify(last);
+  if (
+    last?.content.some((block) => block.type === 'tool-result') === true &&
+    shown.includes('The image was delivered')
+  ) {
+    return say('Here is the lamp you asked for.');
+  }
+  if (last?.content.some((block) => block.type === 'file') === true) {
+    return say('I can see the image you attached.');
+  }
+  if (shown.includes('asked by voice')) {
+    return say('I heard you. It ships today. The carrier collects at four.');
+  }
+  if (shown.includes('draw a lamp')) {
+    return callTools(call('i1', 'make_image'));
+  }
   if (last?.content.some((block) => block.type === 'tool-result') === true) {
     return shown.includes('lookup_order')
       ? say('I found the order: a ceramic lamp, delivered on 9 November.')
@@ -120,13 +164,16 @@ const config = parseConfig(
     'model = { llm = "scripted/model", effort = "medium" }',
     '[server]\nport = 0',
     '[limits]\nmax_open_tasks_per_caller = 1000\nmax_requests_per_minute = 100000',
+    // Small enough that a test can exceed it, large enough for every other attachment.
+    'max_part_bytes = 300000',
+    '[speech]\nstt = "scripted/stt"\ntts = "scripted/tts"',
   ].join('\n'),
   'e2e.toml',
 );
 
 const llm = new ScriptedLlm(
   Array.from({ length: 5000 }, () => respond),
-  { delayMs: 25 },
+  { delayMs: 25, capabilities: { input: ['image'] } },
 );
 
 const harness = await createHarness({
@@ -141,6 +188,10 @@ const harness = await createHarness({
       const seen = llm.requests.filter((call_) => JSON.stringify(call_).includes(containing));
       response.json({ count: seen.length });
     });
+    registerEntity(ctx, makeImage);
+    registerEntity(ctx, new ScriptedSpeechToText([HEARD]));
+    // A tenth of a second of silence per word, a few milliseconds apart.
+    registerEntity(ctx, new ScriptedTextToSpeech([silencePerWord(4800)], { delayMs: 15 }));
     registerEntity(ctx, tool('lookup_order', true));
     registerEntity(ctx, tool('refund_rules', false));
     ctx.taskRuntime.addTurnExtension(() => hostileExtension);

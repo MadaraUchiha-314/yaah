@@ -1,0 +1,7 @@
+{"type":"session.created","event_id":"event_001","session":{"type":"realtime","object":"realtime.session","id":"sess_001","model":"gpt-realtime-2.1-mini","output_modalities":["audio"]}}
+{"type":"session.updated","event_id":"event_002","session":{"type":"realtime","object":"realtime.session","id":"sess_001","model":"gpt-realtime-2.1-mini","output_modalities":["audio"],"audio":{"output":{"format":{"type":"audio/pcm","rate":24000},"voice":"marin"}}}}
+{"type":"response.created","event_id":"event_003","response":{"object":"realtime.response","id":"resp_001","status":"in_progress","output":[]}}
+{"type":"response.output_audio.delta","event_id":"event_004","response_id":"resp_001","item_id":"item_001","output_index":0,"content_index":0,"delta":"AAABAAIAAwA="}
+{"type":"response.output_audio.delta","event_id":"event_005","response_id":"resp_001","item_id":"item_001","output_index":0,"content_index":0,"delta":"BAAFAA=="}
+{"type":"response.output_audio.done","event_id":"event_006","response_id":"resp_001","item_id":"item_001","output_index":0,"content_index":0}
+{"type":"response.done","event_id":"event_007","response":{"object":"realtime.response","id":"resp_001","status":"completed","output_modalities":["audio"],"output":[]}}

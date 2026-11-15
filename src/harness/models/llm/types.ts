@@ -28,6 +28,11 @@ export interface LlmCapabilities {
   readonly maxOutput: number;
   /** Input modalities beyond text. */
   readonly input: readonly ('image' | 'audio')[];
+  /**
+   * The modalities of `input` the provider also takes as an `https:` URL it fetches
+   * itself. Absent means none: content must be sent inline.
+   */
+  readonly inputUrls?: readonly ('image' | 'audio')[] | undefined;
   /** Reasoning-effort levels the model accepts; empty when it has none. */
   readonly efforts: readonly string[];
 }

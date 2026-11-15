@@ -2,11 +2,11 @@
  * The state of the chat screen: one task's view, driven through a session. The hook owns
  * no protocol knowledge — it calls the session and shows the views it yields.
  */
-import { useCallback, useRef, useState } from 'react';
+import { useCallback, useRef, useState, useSyncExternalStore } from 'react';
 
 import type { CommandInfo } from '../../../app/api-server/extensions/index.ts';
 import { t } from '../../../kernel/strings.ts';
-import type { TurnInput } from '../../session.ts';
+import type { TurnFile, TurnInput, VoiceSupport } from '../../session.ts';
 import type { TaskView } from '../../view.ts';
 import { EMPTY_VIEW } from '../../view.ts';
 import type { ActionMessage } from './a2ui/stage.ts';
@@ -15,6 +15,8 @@ import type { ActionMessage } from './a2ui/stage.ts';
 export interface ChatSession {
   readonly commands: readonly CommandInfo[];
   readonly dashboardUrl: string | null;
+  /** What the harness can do with voice; absent means nothing. */
+  readonly voice?: VoiceSupport | undefined;
   send(input: TurnInput, view?: TaskView): AsyncIterable<TaskView>;
   complete(view: TaskView): Promise<TaskView>;
   cancel(view: TaskView): Promise<TaskView>;
@@ -27,7 +29,11 @@ export interface Chat {
   readonly busy: boolean;
   /** Why the last request did not complete, in words, or null. */
   readonly error: string | null;
-  readonly send: (text: string) => void;
+  readonly send: (text: string, files?: readonly TurnFile[]) => void;
+  /** Spoken answers: on or off, or null when the harness does not offer them. */
+  readonly speak: { readonly on: boolean; readonly onToggle: () => void } | null;
+  /** True while a spoken answer is playing. */
+  readonly speaking: boolean;
   /** Sends a user's action on an A2UI surface. */
   readonly act: (message: ActionMessage) => void;
   readonly complete: () => void;
@@ -115,8 +121,47 @@ function useRunner({ latest, show }: Shown): Runner {
   return { busy, error, fail, run };
 }
 
+/** What plays a spoken answer; the chat only turns it on and off. */
+export interface SpeechPlayer {
+  readonly enable: () => void;
+  readonly stop: () => void;
+  readonly subscribe: (listener: () => void) => () => void;
+  readonly getState: () => { readonly speaking: boolean; readonly chunks: number };
+}
+
+const SILENT: SpeechPlayer = {
+  enable: () => undefined,
+  stop: () => undefined,
+  subscribe: () => () => undefined,
+  getState: () => NOT_SPEAKING,
+};
+const NOT_SPEAKING = { speaking: false, chunks: 0 };
+
+/** Whether answers are spoken, and the switch that changes it. */
+function useSpeak(
+  session: ChatSession,
+  player: SpeechPlayer,
+): { on: boolean; speaking: boolean; control: Chat['speak'] } {
+  const [on, setOn] = useState(false);
+  const { speaking } = useSyncExternalStore(player.subscribe, player.getState);
+  const latest = useRef(false);
+  const onToggle = useCallback((): void => {
+    latest.current = !latest.current;
+    // Turning it on is the user's gesture that lets the page make sound.
+    if (latest.current) {
+      player.enable();
+    } else {
+      player.stop();
+    }
+    setOn(latest.current);
+  }, [player]);
+  const offered = session.voice?.output === true;
+  return { on: on && offered, speaking, control: offered ? { on, onToggle } : null };
+}
+
 /** Drives one conversation through `session`. */
-export function useChat(session: ChatSession): Chat {
+export function useChat(session: ChatSession, player: SpeechPlayer = SILENT): Chat {
+  const speak = useSpeak(session, player);
   const shown = useShown();
   const { view, latest, show, close } = shown;
   const { busy, error, fail, run } = useRunner(shown);
@@ -132,10 +177,10 @@ export function useChat(session: ChatSession): Chat {
     [run, session, show],
   );
   const send = useCallback(
-    (text: string): void => {
-      turn({ text });
+    (text: string, files: readonly TurnFile[] = []): void => {
+      turn({ text, files, speak: speak.on });
     },
-    [turn],
+    [speak.on, turn],
   );
   const act = useCallback(
     (message: ActionMessage): void => {
@@ -164,5 +209,15 @@ export function useChat(session: ChatSession): Chat {
     void request();
   }, [close, fail, latest, session, show]);
 
-  return { view, busy, error, send, act, complete, cancel };
+  return {
+    view,
+    busy,
+    error,
+    send,
+    act,
+    complete,
+    cancel,
+    speak: speak.control,
+    speaking: speak.speaking,
+  };
 }

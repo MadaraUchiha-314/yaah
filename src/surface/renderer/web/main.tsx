@@ -12,21 +12,25 @@ import { HarnessSession } from '../../session.ts';
 import { App } from './app.tsx';
 import { BASIC_CATALOG_ID } from './index.ts';
 import { installBufferShim } from './lib/buffer-shim.ts';
+import { PcmPlayer } from './lib/pcm-player.ts';
 import type { ChatSession } from './use-chat.ts';
 
 installBufferShim();
+
+const player = new PcmPlayer();
 
 const connect = (): Promise<ChatSession> =>
   HarnessSession.connect(window.location.origin, {
     a2uiCatalogs: [BASIC_CATALOG_ID],
     longRunning: true,
+    onSpeech: player.play,
   });
 
 const root = document.querySelector('#root');
 if (root !== null) {
   createRoot(root).render(
     <StrictMode>
-      <App connect={connect} />
+      <App connect={connect} player={player} />
     </StrictMode>,
   );
 }

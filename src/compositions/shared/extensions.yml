@@ -16,3 +16,5 @@
   name: ../../harness/hooks/index.ts
 - id: agent-plugins
   name: ../../harness/plugins/index.ts
+- id: voice
+  name: ../../harness/voice/index.ts

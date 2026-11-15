@@ -32,6 +32,7 @@ const FLAGSHIP: LlmCapabilities = {
   contextWindow: 1_050_000,
   maxOutput: 128_000,
   input: ['image'],
+  inputUrls: ['image'],
   efforts: ['low', 'medium', 'high', 'xhigh', 'max'],
 };
 const UNKNOWN_MODEL: LlmCapabilities = {

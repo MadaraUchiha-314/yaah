@@ -11,6 +11,10 @@ export type RenderToText = (view: TaskView) => Promise<string>;
 
 const BASIC = 'https://a2ui.org/specification/v1_0/catalogs/basic/catalog.json';
 
+/** A 1x1 PNG as a `data:` URL: an image a renderer can draw without a network. */
+export const SAMPLE_IMAGE: string =
+  'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==';
+
 /** A2UI messages that draw a small form with the basic catalog. */
 export function sampleSurface(): unknown[] {
   return [
@@ -104,6 +108,61 @@ export function rendererContract(api: ContractApi, name: string, render: RenderT
       expect(text).toContain('lookup_order');
       expect(text).toContain('refund');
       expect(text).toContain(t('view.tool.failed'));
+    });
+
+    test('shows an image the agent delivered: a label and its name', async () => {
+      const text = await render(
+        view('awaiting-next-interaction', agent('Here is your lamp.'), {
+          kind: 'file',
+          id: 'artifact-1/0',
+          from: 'agent',
+          mediaType: 'image/png',
+          name: 'lamp.png',
+          url: SAMPLE_IMAGE,
+        }),
+      );
+      expect(text).toContain('Here is your lamp.');
+      expect(text).toContain(t('view.file.image'));
+      expect(text).toContain('lamp.png');
+      // The bytes of the image are never part of what a person reads.
+      expect(text).not.toContain(SAMPLE_IMAGE.slice(-24));
+    });
+
+    test('names a voice message the user sent', async () => {
+      const text = await render(
+        view('working', {
+          kind: 'file',
+          id: 'm1/0',
+          from: 'user',
+          mediaType: 'audio/webm',
+          name: 'voice-message.webm',
+          url: null,
+        }),
+      );
+      expect(text).toContain(t('view.file.voice'));
+    });
+
+    test('never uses an image address that is not https or inline image data', async () => {
+      const hostile = (url: string, id: string): TranscriptItem => ({
+        kind: 'file',
+        id,
+        from: 'agent',
+        mediaType: 'image/png',
+        name: 'x.png',
+        url,
+      });
+      const text = await render(
+        view(
+          'awaiting-next-interaction',
+          hostile('javascript:alert(3)', 'h/0'),
+          hostile('data:text/html;base64,PHNjcmlwdD4=', 'h/1'),
+          agent('After.'),
+        ),
+      );
+      expect(text).toContain('x.png');
+      expect(text).toContain('After.');
+      expect(text).not.toContain('javascript:');
+      expect(text).not.toContain('PHNjcmlwdD4=');
     });
 
     test('shows the reply of a command', async () => {

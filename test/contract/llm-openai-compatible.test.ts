@@ -6,6 +6,8 @@
  */
 import { describe, expect, test } from 'bun:test';
 
+import type { ContentPart } from '../../src/harness/core/types.ts';
+
 import { createCompatibleLlm } from '../../src/harness/models/llm/openai-compatible/provider.ts';
 import type { LLM, LlmRequest } from '../../src/harness/models/llm/types.ts';
 import { LlmError } from '../../src/harness/models/llm/types.ts';
@@ -166,6 +168,43 @@ describe('openai-compatible provider: request mapping', () => {
           { type: 'image_url', image_url: { url: 'data:image/png;base64,aGk=' } },
           { type: 'image_url', image_url: { url: 'https://img.example/a.jpg' } },
           { type: 'text', text: '{"total":3}' },
+        ],
+      },
+    ]);
+  });
+
+  test('sends inline WAV and MP3 audio as input_audio parts, and no other audio', async () => {
+    const http = replay(TEXT);
+    const audio = (mediaType: string): ContentPart => ({
+      type: 'file',
+      mediaType,
+      source: { kind: 'base64', data: 'UklGRg==' },
+    });
+    const linked: ContentPart = {
+      type: 'file',
+      mediaType: 'audio/wav',
+      source: { kind: 'url', url: 'https://audio.example/a.wav' },
+    };
+    await collect(llm(http), {
+      messages: [
+        {
+          role: 'user',
+          content: [
+            audio('audio/wav'),
+            audio('audio/mpeg; rate=44100'),
+            audio('audio/webm'),
+            linked,
+          ],
+        },
+      ],
+      tools: [],
+    });
+    expect(http.requests[0]?.body['messages']).toEqual([
+      {
+        role: 'user',
+        content: [
+          { type: 'input_audio', input_audio: { data: 'UklGRg==', format: 'wav' } },
+          { type: 'input_audio', input_audio: { data: 'UklGRg==', format: 'mp3' } },
         ],
       },
     ]);

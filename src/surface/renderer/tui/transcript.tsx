@@ -6,6 +6,8 @@ import { Box, Text } from 'ink';
 import type { ReactNode } from 'react';
 
 import { t } from '../../../kernel/strings.ts';
+import type { FileItem } from '../../view-files.ts';
+import { fileLabel, fileLocation } from '../../view-files.ts';
 import type { TaskView, TranscriptItem } from '../../view.ts';
 import type { A2uiFocus } from './a2ui.tsx';
 import { A2uiSurfaces } from './a2ui.tsx';
@@ -101,6 +103,12 @@ function Agent(props: {
   );
 }
 
+/** A file as the terminal can show it: what it is, its name, and where it is. */
+export function describeFile(item: FileItem): string {
+  const name = item.name === '' ? '' : ` ${item.name}`;
+  return `[${fileLabel(item)}]${name} — ${fileLocation(item)}`;
+}
+
 function Item(props: {
   readonly item: TranscriptItem;
   readonly models: ModelLookup;
@@ -121,6 +129,13 @@ function Item(props: {
     return (
       <Line label="">
         <Tool item={item} />
+      </Line>
+    );
+  }
+  if (item.kind === 'file') {
+    return (
+      <Line label={t(item.from === 'user' ? 'tui.label.user' : 'tui.label.agent')}>
+        <Text>{describeFile(item)}</Text>
       </Line>
     );
   }

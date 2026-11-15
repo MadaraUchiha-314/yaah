@@ -98,6 +98,19 @@ export function replyArtifactId(key: StepKey): string {
   return `response-${key}`;
 }
 
+/** The id of the artifact holding what a tool made for the person in step `key`. */
+export function toolArtifactId(key: StepKey): string {
+  return `artifact-${key}`;
+}
+
+/** The id of the artifact that carries the spoken form of the answer of step `key`. */
+export function speechArtifactId(key: StepKey): string {
+  return `speech-${key}`;
+}
+
+/** The name of an artifact a tool made, as opposed to `response`, the model's own words. */
+export const TOOL_ARTIFACT_NAME = 'attachment';
+
 /** A {@link TaskPort} backed by an A2A task store and a stream hub. */
 export class A2aTaskPort implements TaskPort {
   readonly #store: YaahTaskStore;
@@ -176,6 +189,19 @@ export class A2aTaskPort implements TaskPort {
       ],
     }));
     this.#hub.publish(taskId, { type: 'artifact', artifactId, parts });
+    return Promise.resolve();
+  }
+
+  addArtifact(taskId: TaskId, key: StepKey, parts: readonly ContentPart[]): Promise<void> {
+    const artifactId = toolArtifactId(key);
+    this.#change(taskId, (task: Task): Task => ({
+      ...task,
+      artifacts: [
+        ...task.artifacts.filter((artifact) => artifact.artifactId !== artifactId),
+        resultArtifact(artifactId, parts, TOOL_ARTIFACT_NAME),
+      ],
+    }));
+    this.#hub.publish(taskId, { type: 'artifact', artifactId, parts, name: TOOL_ARTIFACT_NAME });
     return Promise.resolve();
   }
 

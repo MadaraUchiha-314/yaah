@@ -14,6 +14,7 @@ import { toBlocks } from '../lib/blocks.ts';
 import { readCommand, splitCommand } from '../lib/command.ts';
 import { plainText } from '../lib/text.ts';
 import { A2uiBlock } from './a2ui-block.tsx';
+import { FileBlock } from './file-block.tsx';
 import { ToolGroup } from './tool-group.tsx';
 import { Bubble, BubbleContent } from './ui/bubble.tsx';
 import {
@@ -104,6 +105,9 @@ function Part({ part, onAction }: { part: TurnPart } & Pick<Handlers, 'onAction'
   if (part.kind === 'tools') {
     return <ToolGroup calls={part.calls} />;
   }
+  if (part.kind === 'file') {
+    return <FileBlock item={part} />;
+  }
   return part.kind === 'ask' ? (
     <AskBlock text={part.text} />
   ) : (
@@ -114,6 +118,9 @@ function Part({ part, onAction }: { part: TurnPart } & Pick<Handlers, 'onAction'
 function BlockView({ block, commands, onAction }: { block: Block } & Handlers): ReactNode {
   if (block.kind === 'user') {
     return <UserMessage text={block.text} commands={commands} />;
+  }
+  if (block.kind === 'file') {
+    return <FileBlock item={block} />;
   }
   if (block.kind === 'note') {
     return (

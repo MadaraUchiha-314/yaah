@@ -179,6 +179,25 @@
     "inject",
     "name"
   ],
+  "./harness/models/speech": [
+    "SpeechError",
+    "transcriptOf"
+  ],
+  "./harness/models/speech/openai-stt": [
+    "OPENAI_STT_MODEL",
+    "apply",
+    "createOpenAiSpeechToText",
+    "inject",
+    "name"
+  ],
+  "./harness/models/speech/openai-tts": [
+    "OPENAI_TTS_MODEL",
+    "OPENAI_TTS_VOICE",
+    "apply",
+    "createOpenAiTextToSpeech",
+    "inject",
+    "name"
+  ],
   "./harness/models/system-one": [
     "SystemOneError"
   ],
@@ -241,10 +260,24 @@
     "textResult",
     "validateToolArgs"
   ],
+  "./harness/tools/image-openai": [
+    "GENERATE_IMAGE",
+    "OPENAI_IMAGE_MODEL",
+    "apply",
+    "createGenerateImageTool",
+    "inject",
+    "name"
+  ],
   "./harness/tools/mcp": [
     "apply",
     "inject",
     "name"
+  ],
+  "./harness/voice": [
+    "apply",
+    "inject",
+    "name",
+    "wantsSpeech"
   ],
   "./kernel": [
     "ConfigError",
@@ -299,10 +332,15 @@
   ],
   "./testing": [
     "MemoryTaskPort",
+    "SAMPLE_IMAGE",
+    "SPEECH_CONTRACT_AUDIO",
+    "SPEECH_CONTRACT_TEXT",
     "SYSTEM_ONE_CONTRACT_INPUT",
     "SYSTEM_ONE_CONTRACT_QUESTIONS",
     "ScriptedLlm",
+    "ScriptedSpeechToText",
     "ScriptedSystemOne",
+    "ScriptedTextToSpeech",
     "answerAll",
     "blankTaskModel",
     "call",
@@ -313,6 +351,9 @@
     "rendererContract",
     "sampleSurface",
     "say",
-    "systemOneContract"
+    "silencePerWord",
+    "speechToTextContract",
+    "systemOneContract",
+    "textToSpeechContract"
   ]
 }

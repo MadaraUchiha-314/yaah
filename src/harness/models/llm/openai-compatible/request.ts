@@ -2,9 +2,9 @@
  * Renders an {@link LlmRequest} as a Chat Completions request — the dialect every
  * OpenAI-compatible endpoint speaks.
  *
- * Only what the dialect reliably carries is sent: text, images, tool calls and tool
- * results. Reasoning blocks, non-image files, `effort` and `cacheKey` have no portable
- * representation and are left out.
+ * Only what the dialect reliably carries is sent: text, images, inline WAV or MP3 audio,
+ * tool calls and tool results. Reasoning blocks, other files, `effort` and `cacheKey` have
+ * no portable representation and are left out.
  */
 import type {
   ChatCompletionAssistantMessageParam,
@@ -17,7 +17,7 @@ import type {
 
 import type { ContentPart } from '../../../core/types.ts';
 import type { LlmContent, LlmMessage, LlmRequest, ToolDeclaration } from '../types.ts';
-import type { ToolResultBlock } from '../openai/content.ts';
+import type { FilePart, ToolResultBlock } from '../openai/content.ts';
 import {
   fileUrl,
   isImage,
@@ -31,11 +31,30 @@ function isContentPart(block: LlmContent): block is ContentPart {
   return block.type === 'text' || block.type === 'file' || block.type === 'data';
 }
 
+/** The two audio formats the dialect names, by media type. */
+const AUDIO_FORMATS: Readonly<Record<string, 'wav' | 'mp3'>> = {
+  'audio/wav': 'wav',
+  'audio/x-wav': 'wav',
+  'audio/wave': 'wav',
+  'audio/mpeg': 'mp3',
+  'audio/mp3': 'mp3',
+};
+
+/** Inline WAV or MP3 audio as an `input_audio` part; nothing for any other file. */
+function audioPart(part: FilePart): ChatCompletionContentPart[] {
+  const format = AUDIO_FORMATS[(part.mediaType.split(';')[0] ?? '').trim().toLowerCase()];
+  return format === undefined || part.source.kind !== 'base64'
+    ? []
+    : [{ type: 'input_audio', input_audio: { data: part.source.data, format } }];
+}
+
 function userPart(part: ContentPart): ChatCompletionContentPart[] {
   if (part.type !== 'file') {
     return [{ type: 'text', text: partText(part) ?? '' }];
   }
-  return isImage(part) ? [{ type: 'image_url', image_url: { url: fileUrl(part) } }] : [];
+  return isImage(part)
+    ? [{ type: 'image_url', image_url: { url: fileUrl(part) } }]
+    : audioPart(part);
 }
 
 /** A user message: plain text when it is only text, content parts otherwise. */

@@ -60,8 +60,26 @@ export interface TaskPort {
    * with the same `key` replaces the earlier content.
    */
   setReply(taskId: TaskId, key: StepKey, parts: readonly ContentPart[]): Promise<void>;
+  /**
+   * Stores `parts` as an artifact of the task, produced by step `key`, and tells the
+   * clients following the task. Repeating the call with the same `key` replaces it.
+   */
+  addArtifact(taskId: TaskId, key: StepKey, parts: readonly ContentPart[]): Promise<void>;
   /** Replaces the task model. Repeating the call with the same `key` has no further effect. */
   setModel(taskId: TaskId, key: StepKey, model: TaskModel): Promise<void>;
+}
+
+/** A piece of synthesised speech, as step `key` produces it. */
+export interface StreamedAudio {
+  /** `audio/pcm`: signed 16-bit little-endian samples. */
+  readonly mediaType: string;
+  /** Samples per second. */
+  readonly sampleRate: number;
+  readonly channels: number;
+  /** The samples, base64-encoded. */
+  readonly data: string;
+  /** True on the last piece of the step's speech. */
+  readonly last: boolean;
 }
 
 /** Where a running step sends what a client should see before the step finishes. */
@@ -72,6 +90,11 @@ export interface StreamSink {
   reset(taskId: TaskId, key: StepKey): void;
   /** The agent started or finished something worth showing. Never stored. */
   activity(taskId: TaskId, activity: Activity): void;
+  /**
+   * A piece of the spoken form of the answer of step `key`. Never stored. A sink that
+   * cannot carry audio leaves this out.
+   */
+  audio?(taskId: TaskId, key: StepKey, chunk: StreamedAudio): void;
 }
 
 /** A sink that drops everything. */

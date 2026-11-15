@@ -1,0 +1,3 @@
+event: transcript.text.delta
+data: {"type":"transcript.text.delta","delta":"Where "}
+

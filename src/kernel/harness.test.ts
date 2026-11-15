@@ -45,9 +45,11 @@ describe('createHarness', () => {
     expect(ids).toEqual([
       'compaction',
       'inbox-triage',
+      'media-omitted',
       'plan',
       'roles',
       'skills',
+      'speech',
       'summary',
       'system',
       'task',

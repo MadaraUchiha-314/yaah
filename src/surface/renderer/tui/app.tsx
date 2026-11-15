@@ -78,6 +78,7 @@ export function App(props: AppProps): ReactNode {
       focus={focused}
       text={text}
       focused={focused === null}
+      recording={state.recording}
       commands={controller.session.commands}
       state={state.view.state}
       dashboardUrl={controller.session.dashboardUrl}

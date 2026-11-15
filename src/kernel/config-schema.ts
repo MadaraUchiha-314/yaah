@@ -36,6 +36,10 @@ const fileSchema = z.strictObject({
           base_url: z.string().optional(),
           models: z.array(z.string()).default(['gpt-6.1-sol', 'gpt-6.1-terra', 'gpt-6-astra']),
           system_one_model: z.string().default('gpt-6-luna'),
+          stt_model: z.string().default('gpt-transcribe'),
+          tts_model: z.string().default('gpt-realtime-2.1-mini'),
+          tts_voice: z.string().default('marin'),
+          image_model: z.string().default('gpt-image-2.5-flare'),
         })
         .prefault({}),
       anthropic: z
@@ -60,6 +64,7 @@ const fileSchema = z.strictObject({
             models: z.array(z.string()).default([]),
             context_window: z.int().min(1).default(128_000),
             max_output: z.int().min(1).default(8192),
+            input: z.array(z.enum(['image', 'audio'])).default([]),
           }),
         )
         .default([]),
@@ -135,6 +140,7 @@ const fileSchema = z.strictObject({
       triage_model: z.string().optional(),
     })
     .prefault({}),
+  speech: z.strictObject({ stt: z.string().default(''), tts: z.string().default('') }).prefault({}),
   a2a: z.strictObject({ allowed_hosts: z.array(z.string()).default([]) }).prefault({}),
   mcp: z
     .strictObject({
@@ -176,6 +182,10 @@ function toProviders(file: FileConfig): YaahConfig['providers'] {
       baseUrl: file.providers.openai.base_url,
       models: file.providers.openai.models,
       systemOneModel: file.providers.openai.system_one_model,
+      sttModel: file.providers.openai.stt_model,
+      ttsModel: file.providers.openai.tts_model,
+      ttsVoice: file.providers.openai.tts_voice,
+      imageModel: file.providers.openai.image_model,
     },
     anthropic: {
       apiKeyEnv: file.providers.anthropic.api_key_env,
@@ -188,6 +198,7 @@ function toProviders(file: FileConfig): YaahConfig['providers'] {
       models: provider.models,
       contextWindow: provider.context_window,
       maxOutput: provider.max_output,
+      input: provider.input,
     })),
   };
 }
@@ -272,6 +283,7 @@ function toConfig(file: FileConfig): YaahConfig {
     },
     o11y: toO11y(file.o11y),
     inbox: toInbox(file.inbox, file.providers.openai.system_one_model),
+    speech: file.speech,
     ...toExtensions(file),
   };
 }

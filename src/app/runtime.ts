@@ -16,6 +16,7 @@ import type { RunLimits } from '../harness/core/step-runner.ts';
 import type { TurnExtension } from '../harness/core/steps.ts';
 import { createStepHandlers } from '../harness/core/steps.ts';
 import type { TaskSnapshot } from '../harness/core/task-port.ts';
+import type { SpeechDeps } from '../harness/core/voice.ts';
 import type { ToolCall, ToolError } from '../harness/core/types.ts';
 import type { ToolGuard } from '../harness/tools/execute.ts';
 import type { ToolCallContext } from '../harness/tools/types.ts';
@@ -57,6 +58,11 @@ export interface RuntimeService {
    * does not run and the model is shown the error. Returns a function that removes it.
    */
   addToolGuard(guard: ToolGuard): () => void;
+  /**
+   * Sets the speech models: the one that transcribes audio turns and the one that speaks
+   * answers. Returns a function that takes them away again.
+   */
+  setSpeech(speech: SpeechDeps): () => void;
 }
 
 /** Decides, per task and turn, whether a turn extension applies. */
@@ -105,6 +111,24 @@ function adderTo<T>(set: Set<T>): (item: T) => () => void {
   };
 }
 
+/** The speech models in use, settable after the steps were built around them. */
+function speechHolder(): { deps: SpeechDeps; set: (speech: SpeechDeps) => () => void } {
+  let current: SpeechDeps | null = null;
+  return {
+    deps: {
+      stt: () => current?.stt() ?? null,
+      tts: (task: TaskSnapshot) => current?.tts(task) ?? null,
+      onError: (taskId: string, error: unknown): void => current?.onError?.(taskId, error),
+    },
+    set: (speech: SpeechDeps): (() => void) => {
+      current = speech;
+      return (): void => {
+        current = current === speech ? null : current;
+      };
+    },
+  };
+}
+
 /** Builds the runtime. */
 export function apply(ctx: Context): void {
   const { config, persistence } = ctx;
@@ -120,6 +144,7 @@ export function apply(ctx: Context): void {
   const askRoutes = new Set<AskRoute>();
   const guards = new Set<ToolGuard>();
   let skills: SkillsSection | null = null;
+  const speech = speechHolder();
   const steps = createStepHandlers({
     ...shared,
     turnExtensions: (task: TaskSnapshot): TurnExtension[] =>
@@ -130,6 +155,7 @@ export function apply(ctx: Context): void {
     toolGuard: (call: ToolCall, about: Omit<ToolCallContext, 'callId'>) =>
       firstRefusal(guards, call, about),
     sink: hub,
+    speech: speech.deps,
     redactor: ctx.redactor,
     defaultEffort: config.model.effort,
     compactionThreshold: config.compaction.threshold,
@@ -156,6 +182,7 @@ export function apply(ctx: Context): void {
       };
     },
     addToolGuard: adderTo(guards),
+    setSpeech: speech.set,
     addTurnExtension: adderTo(providers),
     limits: {
       maxIterations: config.limits.maxIterations,

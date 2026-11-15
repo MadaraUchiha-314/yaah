@@ -34,6 +34,8 @@ export class MemoryTaskPort implements TaskPort {
   readonly history: (TaskStatusUpdate & { readonly taskId: TaskId })[] = [];
   /** Model output stored per step, by `<taskId>/<stepKey>`. */
   readonly replies: Map<string, readonly ContentPart[]> = new Map();
+  /** Artifacts stored per step, by `<taskId>/<stepKey>`. */
+  readonly artifacts: Map<string, readonly ContentPart[]> = new Map();
   readonly #tasks = new Map<TaskId, TaskSnapshot>();
   readonly #applied = new Set<StepKey>();
 
@@ -73,6 +75,11 @@ export class MemoryTaskPort implements TaskPort {
 
   setReply(taskId: TaskId, key: StepKey, parts: readonly ContentPart[]): Promise<void> {
     this.replies.set(`${taskId}/${key}`, parts);
+    return Promise.resolve();
+  }
+
+  addArtifact(taskId: TaskId, key: StepKey, parts: readonly ContentPart[]): Promise<void> {
+    this.artifacts.set(`${taskId}/${key}`, parts);
     return Promise.resolve();
   }
 

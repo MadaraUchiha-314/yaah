@@ -24,6 +24,7 @@ export const EXT: {
   readonly durableExecution: string;
   readonly activity: string;
   readonly channels: string;
+  readonly voice: string;
 } = {
   taskLifecycle: `${EXTENSION_BASE}/task-lifecycle/v1`,
   taskModel: `${EXTENSION_BASE}/task-model/v1`,
@@ -32,6 +33,7 @@ export const EXT: {
   durableExecution: `${EXTENSION_BASE}/durable-execution/v1`,
   activity: `${EXTENSION_BASE}/activity/v1`,
   channels: `${EXTENSION_BASE}/channels/v1`,
+  voice: `${EXTENSION_BASE}/voice/v1`,
 };
 
 /** The media type of a part that carries an A2A event as inbox input. */
@@ -113,6 +115,32 @@ export interface ChannelsMessage {
   readonly channel?: string | undefined;
 }
 
+/** Voice data a client puts on a message. */
+export interface VoiceRequest {
+  /** Speak the answer to this message: stream it as audio alongside the text. */
+  readonly output?: boolean | undefined;
+}
+
+/**
+ * Voice data on a `speech` artifact: how to play the raw audio its parts carry. Every
+ * chunk of the artifact is `audio/pcm` in this one format.
+ */
+export interface VoiceAudio {
+  /** Samples per second. */
+  readonly sampleRate: number;
+  readonly channels: number;
+  /** Signed 16-bit little-endian samples. */
+  readonly encoding: 's16le';
+}
+
+/** Voice parameters in the agent card: what this harness is configured to do. */
+export interface VoiceParams {
+  /** A speech-to-text model is configured: audio is transcribed for a text-only model. */
+  readonly transcription: boolean;
+  /** A text-to-speech model is configured: an answer can be spoken. */
+  readonly output: boolean;
+}
+
 /** Durable-execution parameters in the agent card. */
 export interface DurableExecutionParams {
   readonly mode: 'none' | 'temporal-embedded' | 'temporal-remote';
@@ -154,6 +182,9 @@ export interface ExtensionSchemas {
   readonly durableExecutionTask: z.ZodType<DurableExecutionTask>;
   readonly activityStatus: z.ZodType<ActivityStatus>;
   readonly channelsMessage: z.ZodType<ChannelsMessage>;
+  readonly voiceRequest: z.ZodType<VoiceRequest>;
+  readonly voiceAudio: z.ZodType<VoiceAudio>;
+  readonly voiceParams: z.ZodType<VoiceParams>;
 }
 
 /** The schema of each extension payload, by where it rides. */
@@ -225,6 +256,13 @@ export const SCHEMAS: ExtensionSchemas = {
     from: z.string().min(1),
     channel: z.string().min(1).optional(),
   }),
+  voiceRequest: z.strictObject({ output: z.boolean().optional() }),
+  voiceAudio: z.strictObject({
+    sampleRate: z.int().min(1),
+    channels: z.int().min(1),
+    encoding: z.literal('s16le'),
+  }),
+  voiceParams: z.strictObject({ transcription: z.boolean(), output: z.boolean() }),
 };
 
 /** A payload under an extension URI did not match the extension's schema. */
@@ -289,6 +327,11 @@ export function extensionJsonSchemas(): Readonly<Record<string, Json>> {
     }),
     [file('channels.v1')]: schema(EXT.channels, {
       messageMetadata: SCHEMAS.channelsMessage,
+    }),
+    [file('voice.v1')]: schema(EXT.voice, {
+      agentCardParams: SCHEMAS.voiceParams,
+      messageMetadata: SCHEMAS.voiceRequest,
+      artifactMetadata: SCHEMAS.voiceAudio,
     }),
     [file('durable-execution.v1')]: schema(EXT.durableExecution, {
       agentCardParams: SCHEMAS.durableExecutionParams,

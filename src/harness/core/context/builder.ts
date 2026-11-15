@@ -136,7 +136,21 @@ export function buildContext(inputs: ContextInputs): LlmRequest {
   };
 }
 
+/** What an inline file is counted as, in characters: about a thousand tokens. */
+const FILE_ESTIMATE = 'x'.repeat(4096);
+
+/** Counts an inline file as a fixed size: its base64 length says nothing about its tokens. */
+function withoutFileData(_key: string, value: unknown): unknown {
+  const inline =
+    typeof value === 'object' &&
+    value !== null &&
+    'kind' in value &&
+    value.kind === 'base64' &&
+    'data' in value;
+  return inline ? { kind: 'base64', data: FILE_ESTIMATE } : value;
+}
+
 /** A rough token count for a request: four characters per token. */
 export function estimateTokens(value: unknown): number {
-  return Math.ceil(JSON.stringify(value).length / 4);
+  return Math.ceil(JSON.stringify(value, withoutFileData).length / 4);
 }

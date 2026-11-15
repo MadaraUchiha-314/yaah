@@ -66,6 +66,15 @@ function sanitizeItem(item: TranscriptItem): TranscriptItem {
   if (item.kind === 'tool') {
     return { ...item, name: sanitize(item.name) };
   }
+  if (item.kind === 'file') {
+    return {
+      ...item,
+      id: sanitize(item.id),
+      name: sanitize(item.name),
+      mediaType: sanitize(item.mediaType),
+      url: item.url === null ? null : sanitize(item.url),
+    };
+  }
   return { ...item, text: sanitize(item.text) };
 }
 

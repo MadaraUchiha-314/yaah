@@ -7,7 +7,7 @@
  * task store before they are published here, so a subscriber that finds the log gone
  * reads the task instead.
  */
-import type { Activity, StreamSink } from '../harness/core/task-port.ts';
+import type { Activity, StreamSink, StreamedAudio } from '../harness/core/task-port.ts';
 import type { TaskState, TaskSubState } from '../harness/core/step-runner.ts';
 import type { ContentPart, StepKey, TaskId } from '../harness/core/types.ts';
 
@@ -26,13 +26,17 @@ export type HubEvent =
       readonly type: 'artifact';
       readonly artifactId: string;
       readonly parts: readonly ContentPart[];
+      /** The artifact's name; `response` when absent. */
+      readonly name?: string | undefined;
     }
   /** A piece of the model's answer, as step `key` produces it. */
   | { readonly type: 'delta'; readonly key: StepKey; readonly text: string }
   /** Everything step `key` streamed so far is void: the step is being attempted again. */
   | { readonly type: 'reset'; readonly key: StepKey }
   /** The agent started or finished something worth showing. */
-  | { readonly type: 'activity'; readonly activity: Activity };
+  | { readonly type: 'activity'; readonly activity: Activity }
+  /** A piece of the spoken form of the answer of step `key`. */
+  | { readonly type: 'audio'; readonly key: StepKey; readonly chunk: StreamedAudio };
 
 /** A hub event with its position in the task's log. */
 export interface SequencedHubEvent {
@@ -126,6 +130,10 @@ export class StreamHub implements StreamSink {
 
   activity(taskId: TaskId, activity: Activity): void {
     this.publish(taskId, { type: 'activity', activity });
+  }
+
+  audio(taskId: TaskId, key: StepKey, chunk: StreamedAudio): void {
+    this.publish(taskId, { type: 'audio', key, chunk });
   }
 
   #log(taskId: TaskId): TaskLog {

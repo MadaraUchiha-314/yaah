@@ -37,6 +37,8 @@ export interface CompatibleProviderConfig {
   readonly contextWindow: number;
   /** Maximum output assumed for this endpoint's models. */
   readonly maxOutput: number;
+  /** Input modalities beyond text the endpoint's models accept. */
+  readonly input: readonly ('image' | 'audio')[];
 }
 
 /** The validated configuration, with every default applied. */
@@ -61,6 +63,14 @@ export interface YaahConfig {
       readonly models: readonly string[];
       /** The decisions model registered as the `system-one` entity `openai/<model>`. */
       readonly systemOneModel: string;
+      /** The transcription model registered as the `speech-to-text` entity `openai/<model>`. */
+      readonly sttModel: string;
+      /** The Realtime model registered as the `text-to-speech` entity `openai/<model>`. */
+      readonly ttsModel: string;
+      /** The voice the text-to-speech model speaks with. */
+      readonly ttsVoice: string;
+      /** The image model behind the `generate_image` tool. */
+      readonly imageModel: string;
     };
     readonly anthropic: {
       readonly apiKeyEnv: string;
@@ -129,6 +139,15 @@ export interface YaahConfig {
     readonly triage: 'off' | 'system-one';
     /** The id of the `system-one` entity triage asks. Defaults to OpenAI's. */
     readonly triageModel: string;
+  };
+  readonly speech: {
+    /**
+     * The id of the `speech-to-text` entity that transcribes audio for a model that does
+     * not accept it. Empty means none: such a turn is answered with a refusal.
+     */
+    readonly stt: string;
+    /** The id of the `text-to-speech` entity that speaks answers. Empty means none. */
+    readonly tts: string;
   };
   readonly a2a: { readonly allowedHosts: readonly string[] };
   readonly mcp: { readonly servers: readonly McpServerConfig[] };

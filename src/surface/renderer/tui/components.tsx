@@ -40,6 +40,8 @@ export interface InputLineProps {
   readonly state: ViewState;
   /** Whether the keyboard is on the input line (and not on an A2UI control). */
   readonly focused: boolean;
+  /** Whether a voice message is being recorded, and how it ends. */
+  readonly recording?: 'off' | 'hold' | 'toggle' | undefined;
 }
 
 /** Properties of {@link Screen}. */
@@ -102,6 +104,7 @@ export function KeyHints(props: { readonly view: TaskView; readonly busy: boolea
   const { view, busy } = props;
   const open = view.taskId !== null && isOpen(view);
   const hints = [
+    busy ? '' : t('tui.hint.voice'),
     open && !busy ? t('tui.hint.complete') : '',
     open ? t('tui.hint.cancel') : '',
     open ? '' : t('tui.hint.new'),
@@ -111,7 +114,10 @@ export function KeyHints(props: { readonly view: TaskView; readonly busy: boolea
   return <Text dimColor>{hints.join(SEPARATOR)}</Text>;
 }
 
-function placeholder(state: ViewState): string {
+function placeholder(state: ViewState, recording: InputLineProps['recording']): string {
+  if (recording === 'hold' || recording === 'toggle') {
+    return t(`tui.voice.recording.${recording}`);
+  }
   if (state === 'awaiting-user-input') {
     return t('view.input.placeholder.ask');
   }
@@ -138,7 +144,7 @@ export function InputLine(props: InputLineProps): ReactNode {
         </Text>
         {sanitize(text.slice(head.length))}
         {focused ? '▍' : ''}
-        {text === '' ? <Text dimColor> {placeholder(props.state)}</Text> : null}
+        {text === '' ? <Text dimColor> {placeholder(props.state, props.recording)}</Text> : null}
       </Text>
       {command === null ? null : (
         <Text color="magenta">{t('view.command.hint', { name: head })}</Text>
@@ -165,6 +171,7 @@ export function Screen(props: ScreenProps): ReactNode {
         commands={props.commands}
         state={props.view.state}
         focused={props.focused}
+        recording={props.recording}
       />
       <Rule />
       <StatusLine

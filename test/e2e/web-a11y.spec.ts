@@ -105,23 +105,28 @@ test('@a11y send, fill the form and complete with the keyboard only', async ({ p
 
 /**
  * Feature: Web renderer
- * Scenario: The controls of a later slice explain themselves to a keyboard user
- *   Given the chat open
- *   When the user tabs to the attach and the microphone buttons
- *   Then each is marked disabled and shows the tooltip "coming later"
- * Requirement: docs/specs/issue-3/requirements.md R20.6
+ * Scenario: The attach, microphone and spoken-answers controls are reachable by keyboard
+ *   Given the chat open on a harness with a voice
+ *   When the user tabs to each of the three controls
+ *   Then each takes the focus, is enabled, and is named for what it does
+ *   And the spoken-answers switch says whether it is on, and Space turns it on
+ * Requirement: docs/specs/issue-3/requirements.md R20.6, R24.4, R24.5
  */
-test('@a11y the attach and microphone buttons are inert and say why', async ({ page }) => {
+test('@a11y attach, microphone and spoken answers work from the keyboard', async ({ page }) => {
   await open(page);
-  for (const key of ['web.attach.label', 'web.voice.label']) {
+  for (const key of ['web.speak.off', 'web.attach.label', 'web.voice.start']) {
     const button = page.getByRole('button', { name: t(key) });
     // oxlint-disable-next-line no-await-in-loop -- one control at a time
     await tabTo(page, button);
     // oxlint-disable-next-line no-await-in-loop -- as above
-    await expect(button).toBeDisabled();
-    // oxlint-disable-next-line no-await-in-loop -- as above
-    await expect(page.getByText(t('web.later'), { exact: true })).toBeVisible();
+    await expect(button).toBeEnabled();
   }
+  const speak = page.locator('[data-slot="speak-toggle"]');
+  await expect(speak).toHaveAttribute('aria-pressed', 'false');
+  await tabTo(page, speak);
+  await page.keyboard.press('Space');
+  await expect(speak).toHaveAttribute('aria-pressed', 'true');
+  await expect(speak).toHaveAccessibleName(t('web.speak.on'));
 });
 
 /**

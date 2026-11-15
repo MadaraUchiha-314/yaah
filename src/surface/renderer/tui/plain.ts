@@ -14,7 +14,7 @@ import type { TuiController } from './controller.ts';
 import { sanitizeView } from './filter.ts';
 import type { ActiveForm, FormEntry } from './keys.ts';
 import { activeForm } from './keys.ts';
-import { formatDuration } from './transcript.tsx';
+import { describeFile, formatDuration } from './transcript.tsx';
 
 /** Where plain mode writes. */
 export interface PlainOutput {
@@ -140,6 +140,9 @@ class PlainPrinter {
       this.line(t('tui.plain.ask', { label: t('view.ask.label').toLowerCase(), text: item.text }));
     } else if (item.kind === 'note') {
       this.line(t('tui.plain.note', { text: item.text }));
+    } else if (item.kind === 'file') {
+      const who = t(item.from === 'user' ? 'tui.label.user' : 'tui.label.agent');
+      this.line(t('tui.plain.file', { who, file: describeFile(item) }));
     } else if (item.kind === 'tool') {
       const duration = item.durationMs === null ? '' : formatDuration(item.durationMs);
       this.line(

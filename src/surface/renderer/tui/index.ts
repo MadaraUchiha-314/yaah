@@ -74,6 +74,17 @@ export async function runTui(options: TuiOptions): Promise<void> {
     exitOnCtrlC: false,
     patchConsole: false,
     interactive: true,
+    // Where the terminal speaks the kitty keyboard protocol, keys report their release,
+    // which is what lets Space be held to talk. Elsewhere this changes nothing.
+    kittyKeyboard: {
+      mode: 'auto',
+      flags: [
+        'disambiguateEscapeCodes',
+        'reportEventTypes',
+        'reportAllKeysAsEscapeCodes',
+        'reportAssociatedText',
+      ],
+    },
   });
   try {
     await instance.waitUntilExit();
@@ -100,7 +111,7 @@ export function createTuiSurface(options: Omit<TuiOptions, 'url'> = {}): Surface
     ref: { kind: 'surface', id: 'tui', version: null },
     description: t('surface.tui.description'),
     locality: LOCAL,
-    modalities: ['text'],
+    modalities: ['text', 'audio'],
     renderer: tuiRenderer,
     open: async (url: string): Promise<void> => {
       await runTui({ ...options, url });
