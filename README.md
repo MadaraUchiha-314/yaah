@@ -20,6 +20,7 @@ bun install && bun run build
 node dist/cli/bin.js              # a harness on loopback + a chat in your terminal
 node dist/cli/bin.js serve        # a harness serving the A2A API and the web chat
 node dist/cli/bin.js tui --url http://127.0.0.1:7420   # chat with one already running
+                                  # add --attach to take up the task open there
 ```
 
 Installed as a package (`@yaah/yaah`), the command is `yaah`.

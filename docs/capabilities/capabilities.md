@@ -16,3 +16,6 @@ it. Affected docs are updated **in the same PR** as the work item that changes b
 | [Observability](observability.md)                                         | What the harness did, as logs and traces, without leaking a credential.              |
 | [Configuration, the `yaah` command and the SDK](configuration-and-cli.md) | One file configures a harness; the command and the library are the same code.        |
 | [The A2A API and its limits](api-security.md)                             | How clients reach the harness, and what stands between the network and a model call. |
+| [User interfaces: the terminal chat and the web chat](user-interfaces.md) | Two chats that talk to a harness the way any A2A client does, and can share a task.  |
+| [Images, audio and voice](modalities-and-voice.md)                        | Show the agent a picture, or talk to it.                                             |
+| [The browser build](browser-build.md)                                     | The whole harness in a browser tab, with no yaah server.                             |
