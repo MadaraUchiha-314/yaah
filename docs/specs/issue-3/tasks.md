@@ -350,7 +350,7 @@ suite. `T<n>` refers to a row of the testing plan's matrix.
   - _Requirements:_ Security considerations — fail closed; abuse case 11
   - _Test:_ T8 — `bun run test:security` (all twelve abuse cases and the fail-closed
     list)
-- [ ] 44. Live suite, demo and documentation
+- [x] 44. Live suite, demo and documentation
   - `test:live`, `demo:up`, `demo:record`, `demo:down`; the chaos test against
     Temporal Cloud; README, `docs/architecture/`, `docs/capabilities/`,
     `docs/decisions/` for the ten design decisions.

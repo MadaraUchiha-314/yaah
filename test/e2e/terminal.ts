@@ -52,8 +52,12 @@ export async function terminalPage(page: Page): Promise<void> {
 }
 
 /** Starts `yaah tui --url <url>` from source on a pseudo-terminal of a fixed size. */
-export function startTerminal(url: string, env: Readonly<Record<string, string>> = {}): Terminal {
-  const command = `stty cols ${String(COLUMNS)} rows ${String(ROWS)}; exec bun src/cli/bin.ts tui --url ${url}`;
+export function startTerminal(
+  url: string,
+  env: Readonly<Record<string, string>> = {},
+  flags = '',
+): Terminal {
+  const command = `stty cols ${String(COLUMNS)} rows ${String(ROWS)}; exec bun src/cli/bin.ts tui --url ${url} ${flags}`;
   const child: ChildProcessWithoutNullStreams = spawn('script', ['-qfec', command, '/dev/null'], {
     cwd: ROOT,
     env: { ...process.env, TERM: 'xterm-256color', FORCE_COLOR: '3', ...env },

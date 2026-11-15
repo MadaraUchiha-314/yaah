@@ -3,7 +3,7 @@
  * keyboard wired to it. It holds only what is purely of the screen — the text being
  * typed and where the focus is.
  */
-import { useApp, useInput } from 'ink';
+import { useApp, useInput, useStdout } from 'ink';
 import type { ReactNode } from 'react';
 import { useEffect, useRef, useState, useSyncExternalStore } from 'react';
 
@@ -32,6 +32,26 @@ function useLive<T>(initial: T): readonly [T, (value: T) => void, () => T] {
     setValue(next);
   };
   return [value, set, () => latest.current];
+}
+
+function rowsOf(stdout: NodeJS.WriteStream | NodeJS.WritableStream): number | undefined {
+  return 'rows' in stdout && typeof stdout.rows === 'number' ? stdout.rows : undefined;
+}
+
+/** The terminal's height, kept current as the window is resized; undefined when unknown. */
+function useRows(): number | undefined {
+  const { stdout } = useStdout();
+  const [rows, setRows] = useState<number | undefined>(rowsOf(stdout));
+  useEffect(() => {
+    const onResize = (): void => {
+      setRows(rowsOf(stdout));
+    };
+    stdout.on('resize', onResize);
+    return (): void => {
+      stdout.off('resize', onResize);
+    };
+  }, [stdout]);
+  return rows;
 }
 
 /** The terminal UI as an Ink component. */
@@ -70,8 +90,10 @@ export function App(props: AppProps): ReactNode {
           controlId: entry.control.id,
           cursor: focus.cursor,
         };
+  const rows = useRows();
   return (
     <Screen
+      rows={rows}
       view={state.view}
       busy={state.busy}
       models={(itemId, batches) => controller.model(itemId, batches)}

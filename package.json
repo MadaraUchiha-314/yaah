@@ -46,7 +46,8 @@
     "build:browser": "bun run scripts/build-browser.ts",
     "test:e2e": "playwright test",
     "test:live": "bun --config=bunfig.plain.toml test test/live",
-    "demo:up": "bun run scripts/demo/harness.ts"
+    "demo:up": "bun run scripts/demo/harness.ts",
+    "demo:record": "bun run build:web && playwright test -c playwright.demo.config.ts"
   },
   "dependencies": {
     "@a2a-js/sdk": "1.3.0",
@@ -91,6 +92,7 @@
     "@playwright/test": "^1.65.1",
     "@shadcn/react": "^0.3.1",
     "@tailwindcss/vite": "^4.3.5",
+    "@temporalio/proto": "1.25.0",
     "@testing-library/react": "^16.3.3",
     "@types/bun": "^1.4.4",
     "@types/express": "^5.0.6",

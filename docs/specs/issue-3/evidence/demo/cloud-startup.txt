@@ -1,0 +1,2 @@
+Temporal Web UI: https://cloud.temporal.io/namespaces/yaah.gtebu
+READY http://127.0.0.1:7421

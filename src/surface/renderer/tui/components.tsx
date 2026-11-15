@@ -46,6 +46,12 @@ export interface InputLineProps {
 
 /** Properties of {@link Screen}. */
 export interface ScreenProps extends StatusLineProps, InputLineProps {
+  /**
+   * The height of the terminal, in rows, when it is known. The screen then never grows
+   * taller than the terminal: the transcript shows its latest lines and older ones leave
+   * at the top. Without it the whole transcript is drawn.
+   */
+  readonly rows?: number | undefined;
   readonly models: ModelLookup;
   readonly focus: TranscriptFocus | null;
   /** True while a turn is under way. */
@@ -64,6 +70,8 @@ const STATE_MARK: Readonly<Record<ViewState, readonly [glyph: string, color: str
 };
 
 const RULE_WIDTH = 80;
+/** The least height the screen is drawn at: the input, the status and a little transcript. */
+const MIN_ROWS = 8;
 const SEPARATOR = ' · ';
 
 /**
@@ -162,9 +170,24 @@ function Rule(): ReactNode {
 
 /** The whole screen: transcript, input line, status line and key hints. */
 export function Screen(props: ScreenProps): ReactNode {
+  // One row is left free: a frame as tall as the terminal makes it scroll.
+  const height = props.rows === undefined ? undefined : Math.max(props.rows - 1, MIN_ROWS);
   return (
-    <Box flexDirection="column">
-      <Transcript view={props.view} models={props.models} focus={props.focus} />
+    <Box flexDirection="column" {...(height === undefined ? {} : { height })}>
+      <Box flexDirection="column" flexShrink={1} overflow="hidden" justifyContent="flex-end">
+        <Box flexDirection="column" flexShrink={0}>
+          <Transcript view={props.view} models={props.models} focus={props.focus} />
+        </Box>
+      </Box>
+      <Chrome {...props} />
+    </Box>
+  );
+}
+
+/** What stays on screen whatever the transcript's length: input, status and key hints. */
+function Chrome(props: ScreenProps): ReactNode {
+  return (
+    <Box flexDirection="column" flexShrink={0}>
       <Rule />
       <InputLine
         text={props.text}
