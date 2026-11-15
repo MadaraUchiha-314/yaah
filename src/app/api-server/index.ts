@@ -87,6 +87,7 @@ export const inject: readonly string[] = [
   'durable',
   'persistence',
   'strings',
+  'redactor',
 ];
 
 function callerOf(request: RequestContext): string {
@@ -98,18 +99,20 @@ function callerOf(request: RequestContext): string {
 }
 
 /**
- * Who is calling, and reports of what the inbox takes and what it drops as events other
- * plugins can hear.
+ * Who is calling, how what a caller is told is redacted, and reports of what the inbox
+ * takes and what it drops as events other plugins can hear.
  */
 function callerAndEvents(ctx: Context): {
   agentId: string;
   callerOf: (request: RequestContext) => string;
+  redact: (text: string) => string;
   onAccept: (item: InboxItem, contextId: string) => void;
   onDiscard: (taskId: string, reason: string) => void;
 } {
   return {
     agentId: 'self',
     callerOf,
+    redact: (text: string): string => ctx.redactor.redactString(text),
     onAccept: (item: InboxItem, contextId: string): void => {
       ctx.emit('inbox/accepted', item, contextId);
     },

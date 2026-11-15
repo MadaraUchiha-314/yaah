@@ -20,6 +20,7 @@ import type { Triage } from '../inbox/triage.ts';
 import type { StreamHub } from '../stream-hub.ts';
 import { callerClosed } from './caller.ts';
 import { messageText, metadataObject } from './convert.ts';
+import { recordFailure } from './request-failure.ts';
 import { activityEvent, artifactEvent } from './executor-events.ts';
 import type { DurableExecutionTask } from './extensions/index.ts';
 import { EXT, SCHEMAS, readExtension } from './extensions/index.ts';
@@ -49,6 +50,8 @@ export interface ExecutorDeps {
   readonly onDiscard?: ((taskId: string, reason: string) => void) | undefined;
   /** Told, inside the request that brought it, when an item is about to enter the inbox. */
   readonly onAccept?: ((item: InboxItem, contextId: string) => void) | undefined;
+  /** Removes registered credentials from text a caller is told. */
+  readonly redact?: ((text: string) => string) | undefined;
   /** Decides whether a message the client did not mark interrupts a working task. */
   readonly triage?: Triage | undefined;
   /** How long the stream may be silent before the task store is consulted. */
@@ -310,28 +313,28 @@ export class HarnessExecutor implements AgentExecutor {
     );
   }
 
-  /** Records a failure of the executor itself as the task's status. */
+  /**
+   * Reports a failure of the executor itself. For a task that existed before this
+   * request, the request fails and the task is left alone: its run is still going. A
+   * task this request created never got the message, so it is marked failed.
+   */
   #fail(request: RequestContext, bus: ExecutionEventBus, error: unknown): void {
-    const cause = error instanceof Error ? error.message : String(error);
-    const key = `${request.taskId}/-/executor/${request.userMessage.messageId}`;
-    if (this.#deps.store.get(request.taskId) === undefined) {
-      throw error;
+    const raw = error instanceof Error ? error.message : String(error);
+    const cause = this.#deps.redact?.(raw) ?? raw;
+    if (request.task !== undefined) {
+      recordFailure(request.context, cause);
+      return;
     }
+    const created = this.#deps.store.get(request.taskId);
+    if (created === undefined) {
+      throw new Error(cause);
+    }
+    const key = `${request.taskId}/-/executor/${request.userMessage.messageId}`;
     void this.#deps.tasks.setStatus(request.taskId, key, {
       state: 'failed',
       subState: null,
       message: [{ type: 'text', text: cause }],
     });
-    const failed = this.#deps.store.get(request.taskId);
-    if (failed?.status !== undefined) {
-      bus.publish(
-        AgentEvent.statusUpdate({
-          taskId: failed.id,
-          contextId: failed.contextId,
-          status: failed.status,
-          metadata: undefined,
-        }),
-      );
-    }
+    this.#publishStatus(created, bus);
   }
 }

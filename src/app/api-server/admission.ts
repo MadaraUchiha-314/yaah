@@ -17,6 +17,7 @@ import { DefaultRequestHandler } from '@a2a-js/sdk/server';
 
 import { YaahError } from '../../kernel/yaah-error.ts';
 import { RequestBusManager } from './request-buses.ts';
+import { failureOf } from './request-failure.ts';
 
 /**
  * Decides whether a message may enter. It resolves to admit the message.
@@ -126,7 +127,14 @@ export class AdmittingRequestHandler extends DefaultRequestHandler {
     context: ServerCallContext,
   ): Promise<Message | Task> {
     await this.#gate.check(params.message);
-    return super.sendMessage(params, context);
+    try {
+      const result = await super.sendMessage(params, context);
+      throwFailure(context);
+      return result;
+    } catch (error) {
+      throwFailure(context);
+      throw error;
+    }
   }
 
   override async *sendMessageStream(
@@ -134,6 +142,23 @@ export class AdmittingRequestHandler extends DefaultRequestHandler {
     context: ServerCallContext,
   ): AsyncGenerator<StreamResponse, void, undefined> {
     await this.#gate.check(params.message);
-    yield* super.sendMessageStream(params, context);
+    try {
+      for await (const response of super.sendMessageStream(params, context)) {
+        throwFailure(context);
+        yield response;
+      }
+    } catch (error) {
+      throwFailure(context);
+      throw error;
+    }
+    throwFailure(context);
+  }
+}
+
+/** Fails the request with what the executor noted for it, if it noted anything. */
+function throwFailure(context: ServerCallContext): void {
+  const failure = failureOf(context);
+  if (failure !== undefined) {
+    throw failure;
   }
 }

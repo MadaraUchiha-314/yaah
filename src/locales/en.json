@@ -31,6 +31,7 @@
   "server.listening": "yaah is listening on {url}",
   "server.unauthenticated-bind": "WARNING: the A2A API has no authentication and is listening on {address}. Anyone who can reach that address can use this harness and its model account.",
   "server.origin-rejected": "Requests from origin {origin} are not allowed.",
+  "server.message-not-taken": "The message could not be handed to the task: {cause}",
   "server.host-rejected": "Requests for host {host} are not allowed.",
   "server.limit.body": "The request body is larger than {limit} bytes.",
   "server.limit.parts": "A message may have at most {limit} parts.",

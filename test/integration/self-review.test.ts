@@ -188,4 +188,49 @@ describe('self-review findings', () => {
     const stored = running.harness.ctx.taskRuntime.taskStore.get(taskId);
     expect(JSON.stringify(stored?.metadata)).toContain('yaah.settings');
   });
+
+  /**
+   * Feature: Tasks
+   * Scenario: A failure to take a message for a live task leaves the task as it was
+   *   Given a long-running task waiting for its next message, and a harness that knows a key
+   *   And something on the way to the inbox fails, quoting the key
+   *   When the client sends the task a message, streaming and then blocking
+   *   Then each call fails with an error that does not contain the key
+   *   And the task still waits for input and answers the next message once the failure is gone
+   * Requirement: docs/specs/issue-3/requirements.md R18.4 (self-review 1, core #11)
+   */
+  test('A failure to take a message for a live task leaves the task as it was', async () => {
+    const key = 'sk-live-feedfacecafe0001';
+    running = await startHarness({
+      turns: [say('First.'), say('Second.')],
+      setup: (ctx) => {
+        ctx.redactor.add(key);
+      },
+    });
+    const first = await running.send('One', { metadata: longRunning });
+    const taskId = first.task?.id ?? '';
+    const { ctx } = running.harness;
+    const remove = ctx.a2a.addInterceptor(() => Promise.reject(new Error(`store down: ${key}`)));
+    const why = (error: unknown): string =>
+      error instanceof Error ? error.message : String(error);
+    const streamed = await running.send('Two', { taskId }).then(() => '', why);
+    const blocking = await running.client
+      .sendMessage({
+        tenant: '',
+        message: running.message('Two', { taskId }),
+        configuration: undefined,
+        metadata: undefined,
+      })
+      .then(() => '', why);
+    for (const message of [streamed, blocking]) {
+      expect(message).toContain('store down');
+      expect(message).not.toContain(key);
+    }
+    expect(ctx.taskRuntime.taskStore.get(taskId)?.status?.state).toBe(
+      TaskState.TASK_STATE_INPUT_REQUIRED,
+    );
+    remove();
+    const again = await running.send('Three', { taskId });
+    expect(again.streamed).toBe('Second.');
+  });
 });

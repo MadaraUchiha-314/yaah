@@ -15,6 +15,7 @@ Every conversation with the harness is an A2A task. A client may ask for a **lon
 - WHEN a message arrives for a task that is working THEN the system SHALL store it and show it to the model at its next iteration; with `interrupt: true` (`inbox-events` extension) it SHALL abort the iteration in progress first. Each such message gets a well-formed stream of its own.
 - The system SHALL store every accepted message before delivering it, and SHALL consume each exactly once, also across a client retry and a restart.
 - WHEN a client resends a message its task has consumed already and the task is waiting for input or finished THEN the system SHALL answer at once with the task's current status.
+- IF a message for an existing task cannot be handed to its inbox THEN the system SHALL fail the request with an A2A error, with registered credentials redacted, and SHALL leave the task's status and run as they were.
 - WHEN a client following a stream goes away THEN the system SHALL stop forwarding events to it; the task's run is not affected.
 - IF a task exceeds `limits.max_iterations` or `limits.max_task_tokens` THEN the system SHALL fail it.
 - The system SHALL publish the task's plan, participants and sub-tasks through the `task-model` extension, and what the agent is doing right now through the `activity` extension.
