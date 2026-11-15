@@ -35,7 +35,9 @@ interface Flags {
 function readFlags(argv: readonly string[]): Flags {
   const flags: Flags = { help: false, version: false, attach: false, positional: [] };
   for (let at = 0; at < argv.length; at += 1) {
-    const [name = '', inline] = (argv[at] ?? '').split(/=(.*)/su, 2);
+    const arg = argv[at] ?? '';
+    // Only a flag carries an inline `=value`; a positional is taken whole.
+    const [name = '', inline] = arg.startsWith('-') ? arg.split(/=(.*)/su, 2) : [arg];
     if (name === '--help' || name === '-h') {
       flags.help = true;
     } else if (name === '--version' || name === '-v') {
@@ -43,9 +45,11 @@ function readFlags(argv: readonly string[]): Flags {
     } else if (name === '--attach') {
       flags.attach = true;
     } else if (name === '--config' || name === '--url') {
-      const value = inline ?? argv[at + 1];
-      at += inline === undefined ? 1 : 0;
-      if (value === undefined || value === '') {
+      const next = argv[at + 1];
+      // A following flag is not this flag's value: `--config --help` asks for help.
+      const value = inline ?? (next?.startsWith('-') === true ? undefined : next);
+      at += inline === undefined && value !== undefined ? 1 : 0;
+      if (value === undefined || value === '' || value.startsWith('-')) {
         flags.invalid ??= { command: 'invalid', problem: 'cli.error.value', subject: name };
       } else if (name === '--config') {
         flags.config = value;
@@ -59,6 +63,12 @@ function readFlags(argv: readonly string[]): Flags {
     }
   }
   return flags;
+}
+
+/** Whether `text` is an absolute `http:` or `https:` URL: the only kind a harness has. */
+function isHttpUrl(text: string): boolean {
+  const url = URL.parse(text);
+  return url !== null && (url.protocol === 'http:' || url.protocol === 'https:');
 }
 
 /** Interprets the arguments after the program name. */
@@ -79,7 +89,7 @@ export function parseArgs(argv: readonly string[]): Invocation {
     return { command: 'invalid', problem: 'cli.error.unknown', subject: unknown };
   }
   if (command === 'tui') {
-    if (flags.url === undefined || !URL.canParse(flags.url)) {
+    if (flags.url === undefined || !isHttpUrl(flags.url)) {
       return { command: 'invalid', problem: 'cli.error.url', subject: flags.url ?? '' };
     }
     return { command: 'tui', url: flags.url.replace(/\/$/u, ''), attach: flags.attach };
