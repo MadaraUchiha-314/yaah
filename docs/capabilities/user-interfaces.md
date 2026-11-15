@@ -15,7 +15,7 @@ Both chats are built on one session (`HarnessSession`, the A2A SDK client) and o
 - IF an A2UI surface names a component outside the catalog, or is malformed, THEN the chat SHALL show a textual fallback and render nothing else of it. The web chat allows only `https:` (and `data:image/` for images) in links and media, and never injects agent text as HTML.
 - The terminal chat SHALL remove control and escape sequences from everything it prints, SHALL never draw taller than the terminal (the latest lines stay visible), and SHALL restore the terminal on exit. WHEN output is not a terminal or `NO_COLOR` is set THEN it SHALL print plain lines and read lines.
 - WHEN opened with `yaah tui --url <harness> --attach`, or the web chat with `/?attach`, THEN the chat SHALL take up the task that is already open on the harness. A chat SHALL show what another surface does on its task while it is not in a turn of its own.
-- The web chat SHALL follow the system's light or dark theme, work down to 400 px wide, be operable by keyboard alone, and have no serious or critical axe violation (WCAG 2.1 A and AA).
+- The web chat SHALL honour a request for reduced motion (no transitions or animations), follow the system's light or dark theme, work down to 400 px wide, be operable by keyboard alone, and have no serious or critical axe violation (WCAG 2.1 A and AA).
 - The web chat is served by the harness at `/` in the `server` composition; `yaah` opens the terminal chat against its own harness over HTTP.
 
 ## Design

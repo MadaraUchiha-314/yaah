@@ -14,7 +14,7 @@ One plugin listens to requests, the inbox, every step and every command, and rec
 - WHEN a request carries a W3C `traceparent` THEN its span SHALL continue that trace; calls to other agents and to MCP servers SHALL carry the `traceparent` on.
 - WHEN `o11y.otlp_endpoint` is set THEN spans SHALL be exported to `<endpoint>/v1/traces`; WHEN `o11y.langfuse` is set instead THEN to that Langfuse host with its Basic credentials.
 - The system SHALL NOT put message content on spans or in log records.
-- Every log record and span attribute SHALL pass through the redactor, as do errors returned to callers and content written to a conversation.
+- Every log record and span attribute SHALL pass through the redactor, as do errors returned to callers, content written to a conversation (text, data and file parts), artifacts, and a failing step's error — message, stack and causes — before it is recorded by Temporal.
 - WHEN `yaah` runs with the terminal chat THEN the log SHALL go to a file (`~/.yaah/logs/yaah.log` unless configured), since the terminal belongs to the chat.
 
 ## Design

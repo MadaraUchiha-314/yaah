@@ -9,6 +9,7 @@ A tool is a `tool` entity with a JSON Schema for its arguments. Tools come from 
 ## Current behaviour
 
 - The system SHALL validate a tool call's arguments against the tool's schema before the tool runs, and SHALL return a refusal to the model as the tool result WHEN the tool is not registered, the arguments are invalid, the tool declares no schema, or a tool guard denies the call.
+- IF a task is cancelled before a tool runs — including while a tool hook is deciding — THEN the system SHALL NOT run the tool.
 - The system SHALL run the tool calls of one model reply in parallel, bound each by a timeout, and report a thrown error to the model as a failed result, redacted.
 - WHEN an MCP server is configured (`[[mcp.servers]]`, stdio or streamable HTTP) THEN the system SHALL register its tools as `mcp__<server>__<tool>`; IF the server is unreachable THEN start-up SHALL continue and the system SHALL retry with growing delays.
 - The system SHALL present tool results, tool descriptions and agent replies to the model as data, and nothing in them SHALL add a tool, a permission or a configuration change.
