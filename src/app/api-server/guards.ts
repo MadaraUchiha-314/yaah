@@ -46,13 +46,57 @@ function reject(response: Response, status: number, code: number, message: strin
   response.status(status).json({ jsonrpc: '2.0', id: null, error: { code, message } });
 }
 
-/** The key the per-caller limits count against: the remote address, since nobody is identified. */
-export function callerKey(request: Request, trustProxy: boolean): string {
+/** What {@link callerKey} reads of a request. */
+export interface CallerSource {
+  readonly headers: Readonly<Record<string, string | string[] | undefined>>;
+  readonly socket: { readonly remoteAddress?: string | undefined };
+}
+
+/**
+ * The key the per-caller limits count against: the remote address, since nobody is
+ * identified. Behind a trusted proxy it is the last `X-Forwarded-For` entry — the one
+ * the proxy appended for the address it saw. The entries before it are whatever the
+ * client chose to send.
+ */
+export function callerKey(request: CallerSource, trustProxy: boolean): string {
   const forwarded = request.headers['x-forwarded-for'];
-  if (trustProxy && typeof forwarded === 'string' && forwarded !== '') {
-    return forwarded.split(',')[0]?.trim() ?? '';
+  const hops = (Array.isArray(forwarded) ? forwarded.join(',') : (forwarded ?? ''))
+    .split(',')
+    .map((hop: string) => hop.trim())
+    .filter((hop: string) => hop !== '');
+  const nearest = hops.at(-1);
+  if (trustProxy && nearest !== undefined) {
+    return nearest;
   }
   return request.socket.remoteAddress ?? 'unknown';
+}
+
+/** Recent request times per caller, over a sliding minute. Callers gone quiet are forgotten. */
+export class RequestRate {
+  readonly #recent = new Map<string, number[]>();
+  #swept = 0;
+
+  /** How many callers are remembered. */
+  get size(): number {
+    return this.#recent.size;
+  }
+
+  /** Records a request of `caller` at `now` and returns how many it made in the last minute. */
+  hit(caller: string, now: number): number {
+    const since = now - MINUTE_MS;
+    if (now - this.#swept >= MINUTE_MS) {
+      this.#swept = now;
+      for (const [key, stamps] of this.#recent) {
+        if (stamps.every((stamp: number) => stamp <= since)) {
+          this.#recent.delete(key);
+        }
+      }
+    }
+    const stamps = (this.#recent.get(caller) ?? []).filter((stamp: number) => stamp > since);
+    stamps.push(now);
+    this.#recent.set(caller, stamps);
+    return stamps.length;
+  }
 }
 
 const LOOPBACK_HOSTS: readonly string[] = ['localhost', '127.0.0.1', '[::1]'];
@@ -148,16 +192,12 @@ function tooLarge(part: unknown, limit: number): boolean {
 export function limitGuard(deps: GuardDeps): RequestHandler {
   const { limits } = deps;
   const now = deps.now ?? Date.now;
-  const recent = new Map<string, number[]>();
+  const rate = new RequestRate();
   return (request: Request, response: Response, next: NextFunction): void => {
     const caller = callerKey(request, deps.trustProxy);
     // Overwrites whatever the client sent: only this layer names the caller.
     request.headers[CALLER_HEADER] = caller;
-    const since = now() - MINUTE_MS;
-    const stamps = (recent.get(caller) ?? []).filter((stamp: number) => stamp > since);
-    stamps.push(now());
-    recent.set(caller, stamps);
-    if (stamps.length > limits.maxRequestsPerMinute) {
+    if (rate.hit(caller, now()) > limits.maxRequestsPerMinute) {
       reject(
         response,
         429,

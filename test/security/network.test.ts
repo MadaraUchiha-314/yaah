@@ -199,6 +199,34 @@ describe('network boundary', () => {
   });
 });
 
+describe('behind a proxy', () => {
+  /**
+   * Feature: Security
+   * Scenario: A caller behind the proxy cannot pick its own key with X-Forwarded-For
+   *   Given a harness that trusts the proxy in front of it, with a small rate limit
+   *   When one caller sends many requests, each naming a different client first in
+   *        X-Forwarded-For, after the proxy's own entry for it
+   *   Then the requests are counted against the address the proxy saw, and refused with 429
+   * Requirement: docs/specs/issue-3/requirements.md abuse case 8 (self-review 1, core #7)
+   */
+  test('A caller behind the proxy cannot pick its own key with X-Forwarded-For', async () => {
+    const harness = await start({
+      config: '[server]\nport = 0\ntrust_proxy = true\n[limits]\nmax_requests_per_minute = 3',
+    });
+    const statuses: number[] = [];
+    for (let index = 0; index < 5; index += 1) {
+      // The client wrote the first entry; the proxy appended the address it saw.
+      const forwarded = `198.51.100.${String(index)}, 203.0.113.7`;
+      // oxlint-disable-next-line no-await-in-loop -- requests are counted in order
+      const response = await rpc(harness, message([text('x')], { taskId: 'none' }), {
+        'x-forwarded-for': forwarded,
+      });
+      statuses.push(response.status);
+    }
+    expect(statuses.at(-1)).toBe(429);
+  });
+});
+
 describe('fail closed: a wider bind', () => {
   /**
    * Feature: Security
