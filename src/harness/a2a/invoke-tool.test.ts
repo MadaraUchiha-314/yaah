@@ -129,6 +129,36 @@ describe('delegate', () => {
     expect(text(result)).toContain('rt1');
   });
 
+  test('a continued task answers with what this turn produced, not its earlier answers', async () => {
+    const opening = wholeTask(TaskState.TASK_STATE_INPUT_REQUIRED, 'Which account?', 'Old.');
+    const parts = [textPart('New.')];
+    const reply = { artifactId: 'a2', name: '', description: '', parts, extensions: [] };
+    const done = {
+      state: TaskState.TASK_STATE_COMPLETED,
+      message: undefined,
+      timestamp: undefined,
+    };
+    const update = { taskId: 'rt1', contextId: 'rc1', metadata: undefined };
+    const { run } = setup([
+      { payload: { $case: 'task', value: opening } },
+      {
+        payload: {
+          $case: 'artifactUpdate',
+          value: {
+            ...update,
+            artifact: { ...reply, metadata: undefined },
+            append: false,
+            lastChunk: true,
+          },
+        },
+      },
+      { payload: { $case: 'statusUpdate', value: { ...update, status: done } } },
+    ]);
+    const result = await run();
+    expect(text(result)).toContain('New.');
+    expect(text(result)).not.toContain('Old.');
+  });
+
   test('refuses a taskId this task did not hand to that agent, and sends nothing', async () => {
     const done = wholeTask(TaskState.TASK_STATE_COMPLETED, 'Done.', '');
     const { run, received } = setup([{ payload: { $case: 'task', value: done } }]);

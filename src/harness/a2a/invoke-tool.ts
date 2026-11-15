@@ -64,6 +64,11 @@ interface Outcome {
   statusText: string;
   /** The text of each artifact, by id, as last streamed. */
   artifacts: Map<string, string>;
+  /**
+   * The artifacts of the last whole task, used only until a status or artifact event
+   * follows it: a continued task opens with its earlier answers, which are not this reply.
+   */
+  snapshot: Map<string, string>;
   reply: string;
 }
 
@@ -86,9 +91,9 @@ function foldTask(outcome: Outcome, task: Task): void {
   if (task.status?.message !== undefined) {
     outcome.statusText = messageText(task.status.message);
   }
-  for (const artifact of task.artifacts) {
-    outcome.artifacts.set(artifact.artifactId, partsText(artifact.parts));
-  }
+  outcome.snapshot = new Map(
+    task.artifacts.map((artifact) => [artifact.artifactId, partsText(artifact.parts)]),
+  );
 }
 
 /** Folds one stream event into the outcome. */
@@ -97,9 +102,11 @@ function fold(outcome: Outcome, event: StreamResponse): void {
   if (payload?.$case === 'task') {
     foldTask(outcome, payload.value);
   } else if (payload?.$case === 'statusUpdate') {
+    outcome.snapshot.clear();
     outcome.state = payload.value.status?.state ?? outcome.state;
     outcome.statusText = messageText(payload.value.status?.message);
   } else if (payload?.$case === 'artifactUpdate') {
+    outcome.snapshot.clear();
     const id = payload.value.artifact?.artifactId ?? '';
     const text = partsText(payload.value.artifact?.parts ?? []);
     outcome.artifacts.set(
@@ -112,7 +119,8 @@ function fold(outcome: Outcome, event: StreamResponse): void {
 }
 
 function toResult(outcome: Outcome, request: Delegation): ToolResult {
-  const produced = [...outcome.artifacts.values()].filter((text) => text !== '').join('\n\n');
+  const artifacts = new Map([...outcome.snapshot, ...outcome.artifacts]);
+  const produced = [...artifacts.values()].filter((text) => text !== '').join('\n\n');
   const text = produced === '' ? outcome.statusText || outcome.reply : produced;
   if (outcome.state === TaskState.TASK_STATE_INPUT_REQUIRED && outcome.subTask !== null) {
     const { taskId } = outcome.subTask;
@@ -191,6 +199,7 @@ async function call(
     state: TaskState.TASK_STATE_COMPLETED,
     statusText: '',
     artifacts: new Map(),
+    snapshot: new Map(),
     reply: '',
   };
   let noted = false;
