@@ -89,7 +89,8 @@ describe('two surfaces on one task', () => {
     expect(web.view.state).toBe('awaiting-user-input');
 
     const terminal = new Surface(await HarnessSession.connect(running.url), true);
-    await until(() => terminal.view.taskId !== null);
+    // The task is adopted from the listing first, then its history arrives with the follow.
+    await until(() => texts(terminal.view).includes('Refund or store credit?'));
     expect(terminal.view.taskId).toBe(web.view.taskId);
     expect(terminal.view.state).toBe('awaiting-user-input');
     expect(texts(terminal.view)).toContain('Refund or store credit?');
