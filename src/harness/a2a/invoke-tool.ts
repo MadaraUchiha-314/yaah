@@ -14,10 +14,12 @@ import { isJsonObject } from '../../kernel/json.ts';
 import type { EntityRegistry } from '../../kernel/registry.ts';
 import { t } from '../../kernel/strings.ts';
 import { MAX_DESCRIPTION_LENGTH, sanitizeDescription } from '../core/context/builder.ts';
+import type { StateStore } from '../core/persistence.ts';
 import type { TaskPort } from '../core/task-port.ts';
 import type { TaskRef, ToolResult } from '../core/types.ts';
 import type { Tool, ToolCallContext } from '../tools/types.ts';
 import { errorResult, textResult } from '../tools/types.ts';
+import { delegatedTo, rememberAsked } from './delegated.ts';
 import type { Agent } from './types.ts';
 
 /** The name of the delegation tool. */
@@ -27,6 +29,8 @@ export const INVOKE_AGENT = 'invoke_agent';
 export interface InvokeAgentDeps {
   readonly registry: EntityRegistry;
   readonly tasks: TaskPort;
+  /** Where a task remembers the agent tasks its questions opened. */
+  readonly state: StateStore;
   /** How deep delegation may go: a root task is depth 0. */
   readonly maxDepth: number;
 }
@@ -189,16 +193,19 @@ async function call(
     artifacts: new Map(),
     reply: '',
   };
-  let linked = !request.track;
+  let noted = false;
   for await (const event of agent.sendMessage(message, {
     extensions: message.extensions,
     signal: ctx.signal,
   })) {
     fold(outcome, event);
-    if (!linked && outcome.subTask !== null) {
-      linked = true;
+    if (!noted && outcome.subTask !== null) {
+      noted = true;
+      const opened = { ...outcome.subTask, agent: agent.ref.id };
       // oxlint-disable-next-line no-await-in-loop -- once, on the first event that names the task
-      await link(deps, ctx, { ...outcome.subTask, agent: agent.ref.id });
+      await (request.track
+        ? link(deps, ctx, opened)
+        : rememberAsked(deps, ctx.taskId, ctx.key, opened));
     }
   }
   return toResult(outcome, request);
@@ -228,6 +235,10 @@ export async function delegate(
   if (model.depth + 1 > deps.maxDepth) {
     const message = t('agent.invoke.depth', { depth: model.depth, limit: deps.maxDepth });
     return errorResult('depth-limit', message);
+  }
+  if (request.taskId !== '' && !(await delegatedTo(deps, ctx.taskId, agentId, request.taskId))) {
+    const message = t('agent.invoke.unknown-task', { taskId: request.taskId, agent: agentId });
+    return errorResult('not-found', message);
   }
   try {
     const result = await call(deps, deps.registry.resolve(ref), request, ctx);

@@ -36,6 +36,7 @@ export const inject: readonly string[] = [
   'entities',
   'config',
   'strings',
+  'persistence',
   'taskRuntime',
   'harnessTarget',
 ];
@@ -94,6 +95,7 @@ export function apply(ctx: Context, config: SubAgentsConfig | undefined): void {
     createInvokeAgentTool({
       registry: entities,
       tasks: ctx.taskRuntime.tasks,
+      state: ctx.persistence.state,
       maxDepth: settings.limits.maxAgentDepth,
     }),
   );

@@ -40,13 +40,14 @@ declare module 'cordis' {
 }
 
 export const name = 'channels';
-export const inject: readonly string[] = ['entities', 'config', 'taskRuntime'];
+export const inject: readonly string[] = ['entities', 'config', 'persistence', 'taskRuntime'];
 
 /** Starts the channels plugin. */
 export function apply(ctx: Context): void {
   const manager = new ChannelManager({
     registry: ctx.entities,
     tasks: ctx.taskRuntime.tasks,
+    state: ctx.persistence.state,
     maxDepth: ctx.config.limits.maxAgentDepth,
   });
   ctx.provide('channels', manager);

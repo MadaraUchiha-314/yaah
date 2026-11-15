@@ -54,6 +54,7 @@
   "agent.invoke.none": "No agent is available.",
   "agent.invoke.unknown": "No agent \"{agent}\" is registered. Available: {available}.",
   "agent.invoke.depth": "This task is already {depth} delegations deep; the limit is {limit}. Do the work here, or ask the user.",
+  "agent.invoke.unknown-task": "Task \"{taskId}\" is not one this task handed to {agent}, so nothing was sent. Leave taskId out to start a new task, or use an id {agent} gave you.",
   "agent.invoke.needs-input": "The agent needs input before it can continue: {question} Call invoke_agent again with taskId \"{taskId}\" to answer.",
   "agent.invoke.ended": "The agent's task ended as {state}. {text}",
   "agent.self.name": "self",

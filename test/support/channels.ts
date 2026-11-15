@@ -9,6 +9,7 @@ import type { Agent } from '../../src/harness/a2a/types.ts';
 import { ChannelManager } from '../../src/harness/channels/manager.ts';
 import type { Participant, ToolResult } from '../../src/harness/core/types.ts';
 import type { ToolCallContext } from '../../src/harness/tools/types.ts';
+import { createMemoryPersistence } from '../../src/harness/core/memory-persistence.ts';
 import { EntityRegistry } from '../../src/kernel/registry.ts';
 import { MemoryTaskPort } from '../../src/testing/memory-task-port.ts';
 
@@ -114,7 +115,12 @@ export function channelFixture(
     taskId: 't1',
     registry,
     tasks,
-    channels: new ChannelManager({ registry, tasks, maxDepth: options.maxDepth ?? 3 }),
+    channels: new ChannelManager({
+      registry,
+      tasks,
+      state: createMemoryPersistence().state,
+      maxDepth: options.maxDepth ?? 3,
+    }),
     call: (n: number): ToolCallContext => ({
       taskId: 't1',
       callId: `c${String(n)}`,

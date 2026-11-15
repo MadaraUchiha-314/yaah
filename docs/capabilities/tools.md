@@ -13,6 +13,7 @@ A tool is a `tool` entity with a JSON Schema for its arguments. Tools come from 
 - WHEN an MCP server is configured (`[[mcp.servers]]`, stdio or streamable HTTP) THEN the system SHALL register its tools as `mcp__<server>__<tool>`; IF the server is unreachable THEN start-up SHALL continue and the system SHALL retry with growing delays.
 - The system SHALL present tool results, tool descriptions and agent replies to the model as data, and nothing in them SHALL add a tool, a permission or a configuration change.
 - WHEN the model calls `invoke_agent` THEN the system SHALL delegate over A2A through the SDK client, track the sub-task in the task model, and accept later events only for sub-tasks it delegated, matched on task id and context id.
+- WHEN the model names a `taskId` to `invoke_agent`, `message_participant` or `create_task_for_participant` THEN the system SHALL send the message only if that task is one this task handed to that agent — work it delegated, or a task the agent opened to answer a question of this task's — and SHALL refuse it as `not-found` otherwise.
 - IF delegation would exceed `limits.max_agent_depth` THEN the system SHALL refuse it.
 - The system SHALL connect only to agent cards and MCP servers named in the operator's configuration, SHALL refuse a card whose interfaces point at a host that was not allowed (`a2a.allowed_hosts`), and SHALL never fetch a URL it was given at run time.
 

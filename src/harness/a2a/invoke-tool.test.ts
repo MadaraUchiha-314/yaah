@@ -7,6 +7,8 @@ import { MemoryTaskPort } from '../../testing/memory-task-port.ts';
 import type { ToolResult } from '../core/types.ts';
 import { buildContext } from '../core/context/builder.ts';
 import { definePrompt } from '../system-prompt/prompt.ts';
+import { createMemoryPersistence } from '../core/memory-persistence.ts';
+import type { Delegation } from './invoke-tool.ts';
 import { createInvokeAgentTool, delegate } from './invoke-tool.ts';
 import type { Agent } from './types.ts';
 
@@ -55,15 +57,20 @@ function wholeTask(state: TaskState, status: string, artifact: string): Task {
   };
 }
 
-/** An agent that answers every message with the given events. */
-function scriptedAgent(id: string, events: readonly StreamResponse[]): Agent {
+/** An agent that answers every message with the given events, and counts the messages. */
+function scriptedAgent(
+  id: string,
+  events: readonly StreamResponse[],
+  received: Message[] = [],
+): Agent {
   return {
     ref: { kind: 'agent', id, version: null },
     description: 'An agent.',
     locality: { type: 'local' },
     name: id,
     skills: [],
-    async *sendMessage(): AsyncIterable<StreamResponse> {
+    async *sendMessage(request: Message): AsyncIterable<StreamResponse> {
+      received.push(request);
       yield* events;
       await Promise.resolve();
     },
@@ -73,22 +80,25 @@ function scriptedAgent(id: string, events: readonly StreamResponse[]): Agent {
 }
 
 function setup(events: readonly StreamResponse[]): {
-  run: () => Promise<ToolResult>;
+  run: (request?: Partial<Delegation>, agent?: string) => Promise<ToolResult>;
   tasks: MemoryTaskPort;
+  received: Message[];
 } {
   const registry = new EntityRegistry();
-  registry.register(scriptedAgent('helper', events));
+  const received: Message[] = [];
+  registry.register(scriptedAgent('helper', events, received));
+  registry.register(scriptedAgent('other', events, received));
   const tasks = new MemoryTaskPort();
   tasks.create({ taskId: 't1' });
-  const ctx = { taskId: 't1', key: 'k1', signal: new AbortController().signal };
-  const run = (): Promise<ToolResult> =>
-    delegate(
-      { registry, tasks, maxDepth: 3 },
-      'helper',
-      { message: 'Do it.', taskId: '', track: true },
-      ctx,
-    );
-  return { run, tasks };
+  const { state } = createMemoryPersistence();
+  let step = 0;
+  const run = (request: Partial<Delegation> = {}, agent = 'helper'): Promise<ToolResult> => {
+    step += 1;
+    const ctx = { taskId: 't1', key: `k${String(step)}`, signal: new AbortController().signal };
+    const delegation = { message: 'Do it.', taskId: '', track: true, ...request };
+    return delegate({ registry, tasks, state, maxDepth: 3 }, agent, delegation, ctx);
+  };
+  return { run, tasks, received };
 }
 
 const text = (result: ToolResult): string => (result.ok ? JSON.stringify(result.content) : '');
@@ -118,6 +128,30 @@ describe('delegate', () => {
     expect(text(result)).toContain('Which account?');
     expect(text(result)).toContain('rt1');
   });
+
+  test('refuses a taskId this task did not hand to that agent, and sends nothing', async () => {
+    const done = wholeTask(TaskState.TASK_STATE_COMPLETED, 'Done.', '');
+    const { run, received } = setup([{ payload: { $case: 'task', value: done } }]);
+    const refused = await run({ taskId: 'someone-elses-task' });
+    expect(refused.ok ? '' : refused.error.code).toBe('not-found');
+    expect(refused.ok ? '' : refused.error.message).toContain('someone-elses-task');
+    expect(received).toHaveLength(0);
+  });
+
+  test('accepts the taskId of work it handed, or of a question it asked, to that agent', async () => {
+    const asking = wholeTask(TaskState.TASK_STATE_INPUT_REQUIRED, 'Which account?', '');
+    const work = setup([{ payload: { $case: 'task', value: asking } }]);
+    await work.run();
+    expect((await work.run({ taskId: 'rt1' })).ok).toBe(true);
+    const other = await work.run({ taskId: 'rt1' }, 'other');
+    expect(other.ok ? '' : other.error.code).toBe('not-found');
+
+    const question = setup([{ payload: { $case: 'task', value: asking } }]);
+    await question.run({ track: false });
+    expect((await question.tasks.load('t1')).model.subTasks).toEqual([]);
+    expect((await question.run({ taskId: 'rt1', track: false })).ok).toBe(true);
+    expect(question.received.map((message) => message.taskId)).toEqual(['', 'rt1']);
+  });
 });
 
 describe('invoke_agent', () => {
@@ -134,7 +168,12 @@ describe('invoke_agent', () => {
     registry.register(scriptedAgent('mmm', []));
     registry.register(scriptedAgent('zzz', []));
     registry.register(
-      createInvokeAgentTool({ registry, tasks: new MemoryTaskPort(), maxDepth: 3 }),
+      createInvokeAgentTool({
+        registry,
+        tasks: new MemoryTaskPort(),
+        state: createMemoryPersistence().state,
+        maxDepth: 3,
+      }),
     );
     const tasks = new MemoryTaskPort();
     const task = tasks.create({ taskId: 't1' });
