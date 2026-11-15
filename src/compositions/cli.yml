@@ -1,6 +1,14 @@
 # Root composition of the cli build. Entries are addressed by id: an operator replaces
 # any of them with an [[overrides]] table in config.toml.
-- id: core
+- id: core-layer
   name: '@cordisjs/include'
   config:
     path: ./shared/core.yml
+- id: app-layer
+  name: '@cordisjs/include'
+  config:
+    path: ./shared/app.yml
+- id: http-layer
+  name: '@cordisjs/include'
+  config:
+    path: ./shared/http.yml

@@ -27,8 +27,6 @@ export interface TaskStatusUpdate {
   readonly subState: TaskSubState | null;
   /** The answer, the question, or the reason — whatever the status is about. */
   readonly message: readonly ContentPart[];
-  /** True when `message` is the task's result and should also be kept as an artifact. */
-  readonly isResult: boolean;
 }
 
 /** The core's view of task storage. */
@@ -37,6 +35,11 @@ export interface TaskPort {
   load(taskId: TaskId): Promise<TaskSnapshot>;
   /** Records a status. Repeating the call with the same `key` has no further effect. */
   setStatus(taskId: TaskId, key: StepKey, update: TaskStatusUpdate): Promise<void>;
+  /**
+   * Stores what the model said in step `key` as an output of the task. Repeating the call
+   * with the same `key` replaces the earlier content.
+   */
+  setReply(taskId: TaskId, key: StepKey, parts: readonly ContentPart[]): Promise<void>;
   /** Replaces the task model. Repeating the call with the same `key` has no further effect. */
   setModel(taskId: TaskId, key: StepKey, model: TaskModel): Promise<void>;
 }

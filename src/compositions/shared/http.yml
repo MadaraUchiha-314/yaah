@@ -1,0 +1,3 @@
+# The network listener: agent card, JSON-RPC and HTTP+JSON bindings.
+- id: http
+  name: ../../app/http.ts

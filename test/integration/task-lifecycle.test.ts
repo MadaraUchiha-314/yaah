@@ -48,7 +48,6 @@ describe('task lifecycle', () => {
     expect(last(afterFirst)).toMatchObject({
       state: 'input-required',
       subState: 'awaiting-next-interaction',
-      isResult: true,
     });
     await core.send('Two');
     const afterSecond = await core.statuses(4);
@@ -126,7 +125,6 @@ describe('task lifecycle', () => {
       state: 'input-required',
       subState: 'awaiting-user-input',
       message: [{ type: 'text', text: 'Refund or store credit?' }],
-      isResult: false,
     });
     expect(log).toEqual(['lookup started']);
     await core.send('Refund');

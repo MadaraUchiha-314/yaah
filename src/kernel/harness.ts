@@ -1,5 +1,7 @@
 import { isAbsolute, resolve as resolvePath } from 'node:path';
 
+import type { Context } from 'cordis';
+
 import { assetPath, hasAsset } from './assets.ts';
 import type { Harness } from './bootstrap.ts';
 import { bootstrap } from './bootstrap.ts';
@@ -18,6 +20,13 @@ declare module 'cordis' {
     /** Removes credentials from anything leaving the process. */
     redactor: Redactor;
   }
+  interface Events {
+    /**
+     * The composition is fully loaded and `setup` has run: every entity is registered.
+     * Work that needs the whole harness — picking open tasks up again — starts here.
+     */
+    'harness/ready'(): Promise<void>;
+  }
 }
 
 /** What {@link createHarness} accepts. */
@@ -26,6 +35,12 @@ export interface CreateHarnessOptions {
   readonly config?: YaahConfig;
   /** Directory a relative `config.composition` path is resolved against. */
   readonly cwd?: string;
+  /**
+   * Runs once the composition is up, with the root context — the programmatic way to
+   * register entities (tools, models, prompts) without writing a module for the YAML to
+   * name. What it registers lives as long as the harness.
+   */
+  readonly setup?: (ctx: Context) => void | Promise<void>;
 }
 
 /**
@@ -65,5 +80,8 @@ export async function createHarness(options: CreateHarnessOptions = {}): Promise
       redactor: new Redactor(),
     },
   });
+  // Run on the root context, which may read every service the composition provided.
+  await options.setup?.(harness.ctx);
+  await harness.ctx.parallel('harness/ready');
   return harness;
 }

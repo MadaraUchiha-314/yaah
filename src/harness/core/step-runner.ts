@@ -18,8 +18,6 @@ export interface InboxItemRef {
   readonly id: string;
   readonly kind: 'message' | 'action' | 'event';
   readonly interrupt: boolean;
-  /** For a message whose text starts with `/name`: the name. */
-  readonly command: string | null;
 }
 
 /** A change of task status the loop asks for. */
@@ -70,11 +68,6 @@ export interface StepContract {
     readonly input: TransitionRequest;
     readonly output: TransitionResult;
   };
-  /** Runs a `/command` and consumes its inbox item. */
-  'command.run': {
-    readonly input: { readonly itemId: string; readonly command: string };
-    readonly output: { readonly handled: boolean };
-  };
 }
 
 /** The name of a step. */
@@ -111,8 +104,8 @@ export interface StepRunner {
    * @throws TaskCancelledError when the task is cancelled while waiting.
    */
   nextInboxItem(): Promise<InboxItemRef>;
-  /** Takes the items that arrived since the last call, without waiting. */
-  drainInbox(): readonly InboxItemRef[];
+  /** Takes the items that arrived since the last call, without waiting for one. */
+  drainInbox(): Promise<readonly InboxItemRef[]>;
   /** Runs `body` so that an interrupting inbox item aborts it. */
   interruptible<T>(body: () => Promise<T>): Promise<T>;
   /** Runs `body` shielded from cancellation — for recording the final status. */
@@ -140,5 +133,15 @@ export class LimitError extends YaahError {
   constructor(limit: 'iterations' | 'tokens', value: number) {
     super(`limit.${limit}`, `${limit} limit reached (${String(value)})`);
     this.limit = limit;
+  }
+}
+
+/**
+ * The process is shutting down: the run stops where it is and records nothing. It is
+ * picked up again, from its journal, when the harness next starts.
+ */
+export class RunAbandonedError extends YaahError {
+  constructor() {
+    super('task.abandoned', 'run abandoned');
   }
 }
