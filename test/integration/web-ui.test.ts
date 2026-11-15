@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, test } from 'bun:test';
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { join, relative } from 'node:path';
 
 import { AGENT_CARD_PATH } from '@a2a-js/sdk';
 
@@ -22,9 +22,10 @@ afterEach(async () => {
   }
 });
 
-/** A stand-in for `dist/web`: a page and one asset. */
-function builtApp(): string {
-  const dir = mkdtempSync(join(tmpdir(), 'yaah-web-'));
+/** A stand-in for `dist/web`: a page and one asset, in `under` when given. */
+function builtApp(under?: string): string {
+  const dir = under ?? mkdtempSync(join(tmpdir(), 'yaah-web-'));
+  mkdirSync(dir, { recursive: true });
   writeFileSync(join(dir, 'index.html'), '<!doctype html><title>yaah</title><div id="root"></div>');
   writeFileSync(join(dir, 'app.js'), 'export {};');
   return dir;
@@ -70,6 +71,44 @@ describe('web UI plugin', () => {
     expect(missing.status).toBe(404);
     const posted = await fetch(`${url}/tasks/42`, { method: 'POST', ...html });
     expect(posted.status).toBe(404);
+  });
+
+  /**
+   * Feature: Web renderer
+   * Scenario: The page is served from a hidden or relative directory
+   *   Given a built application in a directory under a dot-directory, named relatively
+   *   When a browser asks for a path the application routes itself, and for an asset
+   *   Then it gets the page and the asset
+   *   And a file outside the directory is not served
+   * Requirement: docs/specs/issue-3/requirements.md R20.1
+   */
+  test('The page is served from a hidden or relative directory', async () => {
+    directory = mkdtempSync(join(tmpdir(), 'yaah-web-'));
+    writeFileSync(join(directory, 'secret.txt'), 'secret');
+    builtApp(join(directory, '.bun', 'web'));
+    const app = join(directory, '.bun', 'web');
+    for (const named of [app, relative(process.cwd(), app)]) {
+      // oxlint-disable-next-line no-await-in-loop -- one harness at a time
+      running = await startHarness({
+        setup: async (ctx) => {
+          await ctx.use(webUi, { directory: named });
+        },
+      });
+      // oxlint-disable-next-line no-await-in-loop -- as above
+      const deep = await fetch(`${running.url}/deep/link`, html);
+      expect(deep.status).toBe(200);
+      // oxlint-disable-next-line no-await-in-loop -- as above
+      expect(await deep.text()).toContain('<div id="root">');
+      // oxlint-disable-next-line no-await-in-loop -- as above
+      expect((await fetch(`${running.url}/app.js`)).status).toBe(200);
+      // oxlint-disable-next-line no-await-in-loop -- as above
+      const outside = await fetch(`${running.url}/..%2F..%2Fsecret.txt`, html);
+      // oxlint-disable-next-line no-await-in-loop -- as above
+      expect(await outside.text()).not.toContain('secret');
+      // oxlint-disable-next-line no-await-in-loop -- as above
+      await running.stop();
+      running = undefined;
+    }
   });
 
   /**

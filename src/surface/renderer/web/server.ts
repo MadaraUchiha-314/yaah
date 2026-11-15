@@ -3,7 +3,7 @@
  * harness's own HTTP listener, so the page and the A2A API share one origin.
  */
 import { existsSync } from 'node:fs';
-import { join } from 'node:path';
+import { join, resolve } from 'node:path';
 
 import type { Context } from 'cordis';
 import type { NextFunction, Request, RequestHandler, Response } from 'express';
@@ -56,7 +56,9 @@ function pageFallback(directory: string, active: () => boolean): RequestHandler 
       next();
       return;
     }
-    response.sendFile(join(directory, 'index.html'));
+    // Sent relative to its directory as root: a dot segment above it (`~/.bun/…`) is not a
+    // hidden file, and a relative directory is resolved first.
+    response.sendFile('index.html', { root: resolve(directory) });
   };
 }
 
