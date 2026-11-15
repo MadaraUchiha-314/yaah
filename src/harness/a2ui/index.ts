@@ -63,13 +63,14 @@ const OPEN_TAG = '<a2ui>';
 const CLOSE_TAG = '</a2ui>';
 
 /**
- * The text of a reply from its last `<a2ui>` tag on — with the white space before it —
- * when no `</a2ui>` follows: a tag the model only mentioned, or a block cut off. Empty
- * otherwise.
+ * The text of a reply from the first `<a2ui>` tag after its last `</a2ui>` on — with the
+ * white space before it: a tag the model only mentioned (perhaps more than once), or a
+ * block cut off. Empty when there is no such tag.
  */
 function unclosedTail(raw: string): string {
-  const at = raw.lastIndexOf(OPEN_TAG);
-  if (at === -1 || raw.includes(CLOSE_TAG, at)) {
+  const closed = raw.lastIndexOf(CLOSE_TAG);
+  const at = raw.indexOf(OPEN_TAG, closed === -1 ? 0 : closed + CLOSE_TAG.length);
+  if (at === -1) {
     return '';
   }
   return raw.slice(raw.slice(0, at).trimEnd().length);
