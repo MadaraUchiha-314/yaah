@@ -16,6 +16,7 @@ workItem: "github:MadaraUchiha-314/yaah#3"
 | Round | Reviewer | Outcome | Findings → disposition | Link |
 | ----- | -------- | ------- | ---------------------- | ---- |
 | 1 | `[claude/fable-5.2]` — three fresh-eyes reviewers, one per area: core and app layer; harness extensions; surfaces, CLI and build | 36 new findings (5 high, 16 medium, 15 low); 25 confirmed by reading or by running them, 11 plausible | all will-fix; see below | [core](https://github.com/MadaraUchiha-314/yaah/pull/13#issuecomment-6889638160), [extensions](https://github.com/MadaraUchiha-314/yaah/pull/13#issuecomment-6889635531), [surfaces](https://github.com/MadaraUchiha-314/yaah/pull/13#issuecomment-6897301093) |
+| 2 | `[claude/opus-5.5]` — one reviewer: (A) each round-1 fix against its own scenario and for regressions; (B) the files round 1 did not read | 12 new findings (1 high, 9 medium, 2 low), all confirmed, plus 6 lower ones listed outside the twelve; **escalated**: round-1 core #8 and extensions #7 not fully closed, core #4 partial | all 18 will-fix | [round 2](https://github.com/MadaraUchiha-314/yaah/pull/13#issuecomment-6898458275) |
 
 ## Round 1 — what was fixed
 
@@ -61,6 +62,35 @@ workItem: "github:MadaraUchiha-314/yaah#3"
 \* commit ids as authored on the fixer's branch; on this branch they were cherry-picked, see `git log --grep "self-review 1"`.
 
 Every fix has a test that failed before it and passes after. Merged result: `bun run check` 1148 pass; `bun run test:node` 1079 pass; `bun run test:e2e` 47 pass three runs in a row; `bun run test:chaos` 6 pass; `bun run test:live` 5 pass.
+
+## Round 2 — what was fixed
+
+| # | Finding (short) | Commit |
+| --- | --- | --- |
+| 1 | A non-blocking send then a resubscribe got no updates (regression from round 1's disconnect fix) | `2c2cc45` |
+| 2 | File parts not redacted (**repeat**: round-1 core #4 partial) | `10632d0` |
+| 3 | Continuing a sub-task returned all its earlier answers | `665dd57` |
+| 4 | Parallel `invoke_agent` calls lost each other's records | `1ee79f0` |
+| 5 | A task resting in `input-required` kept its stream log forever (**repeat**: round-1 core #8) | `1605e07` |
+| 6 | The rate limiter's cost grew with the square of a flood | `f78eb05` |
+| 7 | On a wildcard bind `localhost:<port>` was refused; Host case and default port | `fa7c461` |
+| 8 | Speech and image plugins ignored the browser build's credentials | `2dc61e7` |
+| 9 | Text-to-speech hung when its instructions could not be rendered | `376fc89` |
+| 10 | `createHarness` left plugins running when `setup` or a ready handler threw | `7d0d60b` |
+| 11 | A reply mentioning `<a2ui>` twice lost text (**repeat**: round-1 extensions #7) | `7569029` |
+| 12 | A plugin's own clashing server ids left it half-registered | `9309afc` |
+| 13 | Each binding had its own rate map | `ede11b8` |
+| 14 | Behind two proxies every caller shared one key | `0066c52` — `server.trust_proxy` now takes `true`, a hop count or addresses |
+| 15 | `image/jpg`, `image/PNG` replaced by the omitted-media note on Claude | `285975e` |
+| 16 | An unknown `[[overrides]]` id was ignored | `6137583`; browser build `ffcba52` |
+| 17 | Signal listeners outlived the terminal chat | `abcf037` |
+| 18 | A refused Realtime handshake reported as retryable | **won't-fix in this work item**: Bun, Node and the browser `WebSocket` all hide the HTTP status of a refused upgrade, so 401 and 503 look the same to the provider. Follow-up: a socket factory that reports the upgrade response, or one HTTP probe when the socket never opened. The key is already kept out of the message |
+
+Found by a round-2 fixer, same race as #4: participant changes on a channel could lose one another — `21da374`.
+
+Merged result on round-2 fixes: `bun run check` 1177 pass · `bun run test:node` 1108 pass · `bun run test:e2e` 47 pass, twice · `bun run test:chaos` 6 pass (incl. Temporal Cloud) · `bun run test:live` 5 pass · `bun run build:browser` ok.
+
+Self rounds stop here: the policy allows two. The critic round follows.
 
 ## Found outside the rounds
 
