@@ -10,7 +10,7 @@ import type { EntryOverride, Harness } from '../kernel/bootstrap.ts';
 import type { YaahConfig } from '../kernel/config-types.ts';
 import { defaultConfig } from '../kernel/config.ts';
 import type { Credentials } from '../kernel/credentials.ts';
-import { PluginLoadError, YaahError } from '../kernel/errors.ts';
+import { ConfigError, PluginLoadError, YaahError } from '../kernel/errors.ts';
 import type { CreateHarnessOptions } from '../kernel/harness.ts';
 import type { Json } from '../kernel/json.ts';
 import { Redactor } from '../kernel/redactor.ts';
@@ -83,6 +83,8 @@ const MEMORY = ':memory:';
  * an override may reconfigure or disable an entry but not replace its plugin.
  *
  * @throws YaahError `browser.override-name` for an override that names a module.
+ * @throws ConfigError `config.override-unknown` for an override whose id is no entry: as
+ *   in the Node builds, an override that changes nothing is refused, not ignored.
  */
 function withOverrides(
   entries: readonly BrowserEntry[],
@@ -101,6 +103,12 @@ function withOverrides(
     if (override?.disabled !== true) {
       kept.push(override?.config === undefined ? entry : { ...entry, config: override.config });
     }
+  }
+  const ids = new Set(entries.map((entry: BrowserEntry) => entry.id));
+  const unknown = overrides.find((override: EntryOverride) => !ids.has(override.id));
+  if (unknown !== undefined) {
+    const message = t('error.config.override-unknown', { file: 'config.toml', id: unknown.id });
+    throw new ConfigError('config.override-unknown', message, 'config.toml', 'overrides');
   }
   return kept;
 }

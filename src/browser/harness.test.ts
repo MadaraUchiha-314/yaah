@@ -150,5 +150,13 @@ describe('createBrowserHarness', () => {
     );
     expect(error instanceof YaahError ? error.code : '').toBe('browser.override-name');
     expect(error instanceof Error ? error.message : '').toContain('./mine.ts');
+
+    // An override for an entry the composition does not have changes nothing: refused.
+    const stray = toml('[[overrides]]\nid = "typo"\ndisabled = true');
+    const unknown = await failure(
+      createBrowserHarness({ composition: compose(plugin('a')), config: stray }),
+    );
+    expect(unknown instanceof YaahError ? unknown.code : '').toBe('config.override-unknown');
+    expect(unknown instanceof Error ? unknown.message : '').toContain('typo');
   });
 });
