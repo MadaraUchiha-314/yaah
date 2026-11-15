@@ -91,6 +91,7 @@ export async function apply(ctx: Context): Promise<void> {
     allowedOrigins: settings.allowedOrigins,
     listener: (): ListenerAddress | undefined => bound,
     openTasks: (caller: string): number => ctx.a2a.openTasks(caller),
+    slots: ctx.a2a.slots,
   };
   app.use((request: Request, response: Response, next: () => void): void => {
     if (ctx.bail('http/request', request, response, next) !== true) {

@@ -237,6 +237,53 @@ describe('network boundary', () => {
   });
 });
 
+describe('concurrent new tasks', () => {
+  /**
+   * Feature: Security
+   * Scenario: New-task requests sent together cannot pass the open-task limit
+   *   Given a harness that allows one open task per caller
+   *   And an admission check that takes a while to answer
+   *   When one caller sends four new-task requests at once
+   *   Then one creates a task and the other three are refused with 429
+   *   And a message to the task that exists is still accepted
+   * Requirement: docs/specs/issue-3/requirements.md abuse case 8 (critic 1, #3)
+   */
+  test('New-task requests sent together cannot pass the open-task limit', async () => {
+    const harness = await start({
+      turns: [say('one'), say('two'), say('three'), say('four'), say('again')],
+      config: '[limits]\nmax_open_tasks_per_caller = 1',
+      setup: (ctx) => {
+        ctx.a2a.addAdmission(
+          () =>
+            new Promise((resolve) => {
+              setTimeout(resolve, 200);
+            }),
+        );
+      },
+    });
+    const keepOpen = { metadata: { [EXT.taskLifecycle]: { longRunning: true } } };
+    const responses = await Promise.all(
+      ['a', 'b', 'c', 'd'].map((context) =>
+        rpc(harness, message([text(context)], { ...keepOpen, contextId: `ctx-${context}` })),
+      ),
+    );
+    const statuses = responses.map((response) => response.status).toSorted((a, b) => a - b);
+    expect(statuses).toEqual([200, 429, 429, 429]);
+    expect(await taskCount(harness)).toBe(1);
+
+    const listed = await harness.client.listTasks({
+      tenant: '',
+      contextId: '',
+      status: TaskState.TASK_STATE_UNSPECIFIED,
+      pageToken: '',
+      statusTimestampAfter: undefined,
+    });
+    const taskId = listed.tasks[0]?.id ?? '';
+    const follow = await rpc(harness, message([text('more')], { taskId }));
+    expect(follow.status).toBe(200);
+  });
+});
+
 describe('one budget per caller', () => {
   /**
    * Feature: Security

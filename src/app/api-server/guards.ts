@@ -6,6 +6,8 @@
 import type { NextFunction, Request, RequestHandler, Response } from 'express';
 
 import { t } from '../../kernel/strings.ts';
+import type { TaskSlots } from './task-slots.ts';
+import { SLOT_HEADER } from './task-slots.ts';
 
 /** The header the HTTP layer sets to tell the executor who is calling. Never trusted from a client. */
 export const CALLER_HEADER = 'x-yaah-caller';
@@ -34,6 +36,8 @@ export interface GuardDeps {
   readonly listener?: (() => ListenerAddress | undefined) | undefined;
   /** How many open tasks `caller` has. */
   readonly openTasks: (caller: string) => number;
+  /** Slots held by requests that will create a task and whose task does not exist yet. */
+  readonly slots?: TaskSlots | undefined;
   /** The clock, in milliseconds. Tests pass their own. */
   readonly now?: (() => number) | undefined;
 }
@@ -226,8 +230,29 @@ function tooLarge(part: unknown, limit: number): boolean {
 }
 
 /**
+ * Holds an open-task slot for a request that will create a task, until its task exists
+ * (the executor releases it then) or the request ends, refused, failed or answered.
+ */
+function holdSlot(
+  slots: TaskSlots | undefined,
+  caller: string,
+  request: Request,
+  response: Response,
+): void {
+  if (slots === undefined) {
+    return;
+  }
+  const token = slots.reserve(caller);
+  request.headers[SLOT_HEADER] = token;
+  response.on('close', () => {
+    slots.release(token);
+  });
+}
+
+/**
  * Stamps the caller key on the request and enforces the per-request and per-caller
- * limits, before any task is created and before any model is called.
+ * limits, before any task is created and before any model is called. A request that will
+ * create a task holds a slot meanwhile, so concurrent ones cannot pass the same count.
  */
 export function limitGuard(deps: GuardDeps): RequestHandler {
   const { limits } = deps;
@@ -237,6 +262,7 @@ export function limitGuard(deps: GuardDeps): RequestHandler {
     const caller = callerKey(request);
     // Overwrites whatever the client sent: only this layer names the caller.
     request.headers[CALLER_HEADER] = caller;
+    Reflect.deleteProperty(request.headers, SLOT_HEADER);
     if (!rate.hit(caller, now(), limits.maxRequestsPerMinute)) {
       reject(
         response,
@@ -261,11 +287,17 @@ export function limitGuard(deps: GuardDeps): RequestHandler {
       return;
     }
     const createsTask = typeof message['taskId'] !== 'string' || message['taskId'] === '';
-    if (createsTask && deps.openTasks(caller) >= limits.maxOpenTasksPerCaller) {
+    if (!createsTask) {
+      next();
+      return;
+    }
+    const held = deps.slots?.held(caller) ?? 0;
+    if (deps.openTasks(caller) + held >= limits.maxOpenTasksPerCaller) {
       const limit = limits.maxOpenTasksPerCaller;
       reject(response, 429, -32_000, t('server.limit.open-tasks', { limit }));
       return;
     }
+    holdSlot(deps.slots, caller, request, response);
     next();
   };
 }

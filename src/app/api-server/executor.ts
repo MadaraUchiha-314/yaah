@@ -47,6 +47,8 @@ export interface ExecutorDeps {
   readonly commands?: CommandDispatcher | undefined;
   /** Reads the caller key the HTTP layer attached to the request. */
   readonly callerOf?: ((request: RequestContext) => string) | undefined;
+  /** Told when the task a request creates exists, so the slot it held can go. */
+  readonly onCreated?: ((request: RequestContext) => void) | undefined;
   /** Told when something a caller sent is dropped rather than accepted. */
   readonly onDiscard?: ((taskId: string, reason: string) => void) | undefined;
   /** Told, inside the request that brought it, when an item is about to enter the inbox. */
@@ -228,6 +230,7 @@ export class HarnessExecutor implements AgentExecutor {
       },
     };
     this.#deps.store.update(task.id, (existing: Task | undefined) => existing ?? task);
+    this.#deps.onCreated?.(request);
     return task;
   }
 
