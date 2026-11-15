@@ -132,7 +132,7 @@ content written to a conversation all pass through the `Redactor`.
 
 The A2A API has no authentication in this version
 ([decision-012](../decisions/decision-012.md)). The listener binds loopback by default,
-rejects foreign browser origins, and limits body size, parts, open tasks and request rate
+rejects foreign browser origins and any `Host` that is not its own (DNS rebinding), and limits body size, parts, open tasks and request rate
 per caller. The harness never fetches a URL it was given at run time: agent cards and MCP
 servers come from the operator's configuration only. The threat model and the test for
 each abuse case are in the

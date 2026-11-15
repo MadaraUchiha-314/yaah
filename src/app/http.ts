@@ -16,6 +16,7 @@ import type { Express, Request, Response } from 'express';
 import express from 'express';
 
 import { JSONRPC_PATH, REST_PATH } from './api-server/agent-card.ts';
+import type { ListenerAddress } from './api-server/guards.ts';
 import { limitGuard, originGuard } from './api-server/guards.ts';
 
 export type { HarnessTarget } from './harness-target.ts';
@@ -76,10 +77,12 @@ export async function apply(ctx: Context): Promise<void> {
   const app = express();
   app.disable('x-powered-by');
   app.set('trust proxy', settings.trustProxy);
+  let bound: ListenerAddress | undefined = undefined;
   const guards = {
     limits,
     allowedOrigins: settings.allowedOrigins,
     trustProxy: settings.trustProxy,
+    listener: (): ListenerAddress | undefined => bound,
     openTasks: (caller: string): number => ctx.a2a.openTasks(caller),
   };
   app.use((request: Request, response: Response, next: () => void): void => {
@@ -91,6 +94,7 @@ export async function apply(ctx: Context): Promise<void> {
   const server = await listen(app, settings.host, settings.port);
   const address = server.address();
   const port = typeof address === 'object' && address !== null ? address.port : settings.port;
+  bound = { host: settings.host, port };
   const host = settings.host.includes(':') ? `[${settings.host}]` : settings.host;
   const url = `http://${host}:${String(port)}`;
   const requestHandler = ctx.a2a.handlerFor(url);

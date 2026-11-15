@@ -18,11 +18,20 @@ export interface GuardLimits {
   readonly maxRequestsPerMinute: number;
 }
 
+/** Where the listener is bound. */
+export interface ListenerAddress {
+  /** The bound host as configured: a name, an IPv4 address or a bare IPv6 address. */
+  readonly host: string;
+  readonly port: number;
+}
+
 /** What the guards need to know about the harness. */
 export interface GuardDeps {
   readonly limits: GuardLimits;
   /** Origins allowed besides the server's own. */
   readonly allowedOrigins: readonly string[];
+  /** Where the listener is bound; undefined until it is. */
+  readonly listener?: (() => ListenerAddress | undefined) | undefined;
   /** Whether to believe `X-Forwarded-For`. */
   readonly trustProxy: boolean;
   /** How many open tasks `caller` has. */
@@ -46,19 +55,60 @@ export function callerKey(request: Request, trustProxy: boolean): string {
   return request.socket.remoteAddress ?? 'unknown';
 }
 
+const LOOPBACK_HOSTS: readonly string[] = ['localhost', '127.0.0.1', '[::1]'];
+const WILDCARD_HOSTS: ReadonlySet<string> = new Set(['0.0.0.0', '::', '[::]']);
+
+/** A host that is an IP literal, which no DNS answer can rebind. */
+function isIpLiteral(host: string): boolean {
+  return /^\d{1,3}(?:\.\d{1,3}){3}(?::\d+)?$/u.test(host) || host.startsWith('[');
+}
+
+/** The `Host` values naming the listener itself: its bound host and, on loopback, every loopback name. */
+function ownHosts(address: ListenerAddress): string[] {
+  const bound = address.host.includes(':') ? `[${address.host}]` : address.host;
+  const names = LOOPBACK_HOSTS.includes(bound) ? LOOPBACK_HOSTS : [bound];
+  return names.map((name: string) => `${name}:${String(address.port)}`);
+}
+
 /**
- * Rejects a browser request from an origin that is neither the server's own nor allowed.
- * A request without an `Origin` header — any non-browser client — passes: this guard
- * exists to stop a web page the user happens to visit from driving a local harness.
+ * Whether `host` (a request's `Host`) names this listener or an allowed origin. A host
+ * taken from the request alone proves nothing: a page whose name was rebound to this
+ * address sends its own name. A wildcard bind cannot list the machine's addresses, so
+ * there an IP literal is accepted too.
+ */
+function knownHost(host: string, deps: GuardDeps): boolean {
+  const address = deps.listener?.();
+  if (address === undefined) {
+    return true;
+  }
+  return (
+    ownHosts(address).includes(host) ||
+    deps.allowedOrigins.some((origin: string) => URL.parse(origin)?.host === host) ||
+    (WILDCARD_HOSTS.has(address.host) && isIpLiteral(host))
+  );
+}
+
+/**
+ * Rejects a request whose `Host` is not this listener's, and a browser request from an
+ * origin that is neither the server's own nor allowed. A request without an `Origin`
+ * header — any non-browser client — passes the origin check: this guard exists to stop a
+ * web page the user happens to visit, or one whose name was rebound to this address, from
+ * driving a local harness.
  */
 export function originGuard(deps: GuardDeps): RequestHandler {
   return (request: Request, response: Response, next: NextFunction): void => {
+    const host = request.headers.host ?? '';
+    if (!knownHost(host, deps)) {
+      reject(response, 403, -32_600, t('server.host-rejected', { host }));
+      return;
+    }
     const { origin } = request.headers;
     if (origin === undefined) {
       next();
       return;
     }
-    const own = `${request.protocol}://${request.headers.host ?? ''}`;
+    // The Host is now known to be this listener's, so the origin it implies is too.
+    const own = `${request.protocol}://${host}`;
     if (origin !== own && !deps.allowedOrigins.includes(origin)) {
       reject(response, 403, -32_600, t('server.origin-rejected', { origin }));
       return;

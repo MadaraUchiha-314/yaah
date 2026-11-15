@@ -11,6 +11,7 @@ The harness is an A2A 1.0 server built on the official SDK: an agent card, JSON-
 - The system SHALL serve the agent card at `/.well-known/agent-card.json`, listing its extensions, commands and the durable-execution mode.
 - WHEN no host is configured THEN the system SHALL listen on loopback only; WHEN another address is configured THEN it SHALL say at start that the API is unauthenticated and where it listens.
 - IF a request carries an `Origin` that is neither the harness's own nor in `server.allowed_origins` THEN the system SHALL reject it.
+- IF a request's `Host` names neither the listener (its bound host and port; on loopback, `localhost`, `127.0.0.1` or `[::1]` with that port; on a wildcard bind, any IP address) nor a host in `server.allowed_origins` THEN the system SHALL reject it, so a page whose name was rebound to the harness's address cannot drive it.
 - IF a request exceeds the limits on body size, part count or part size, or its caller has `limits.max_open_tasks_per_caller` open tasks or exceeded `limits.max_requests_per_minute`, THEN the system SHALL reject it before any model is called.
 - WHEN a heartbeat fires (every `heartbeat.interval_ms`) THEN the system SHALL hand inbox items no run has taken back to their tasks, and SHALL emit `task/stalled` once for each working task with no progress for `heartbeat.stalled_after_ms`.
 - IF a message has no text, file, data or lifecycle action THEN the system SHALL refuse it before a task is created.

@@ -110,6 +110,44 @@ describe('network boundary', () => {
 
   /**
    * Feature: Security
+   * Scenario: A page that rebinds its name to loopback cannot drive the harness
+   *   Given a harness listening on loopback
+   *   When a page at http://evil.example:<port>, its name now pointing at 127.0.0.1,
+   *        posts to /a2a with that Host and that Origin
+   *   Then it is rejected with 403, no task is created and the model is not called
+   *   And a request naming the harness as localhost, or by its bound address, is served
+   * Requirement: docs/specs/issue-3/requirements.md abuse case 2 (self-review 1, core #3)
+   */
+  test('A page that rebinds its name to loopback cannot drive the harness', async () => {
+    const harness = await start({ turns: [say('one'), say('two'), say('never')] });
+    const { port } = new URL(harness.url);
+    const evil = `evil.example:${port}`;
+    const rebound = await rpc(harness, message([text('hi')]), {
+      host: evil,
+      origin: `http://${evil}`,
+    });
+    expect(rebound.status).toBe(403);
+    expect(rebound.headers.get('access-control-allow-origin')).toBeNull();
+    // A same-origin page sends no Origin on a GET: the Host alone must be refused.
+    const card = await fetch(`${harness.url}/.well-known/agent-card.json`, {
+      headers: { host: evil },
+    });
+    expect(card.status).toBe(403);
+    expect(await taskCount(harness)).toBe(0);
+    expect(harness.llm.requests.length).toBe(0);
+
+    const local = `localhost:${port}`;
+    const byName = await rpc(harness, message([text('hi')]), {
+      host: local,
+      origin: `http://${local}`,
+    });
+    expect(byName.status).toBe(200);
+    const byAddress = await rpc(harness, message([text('hi')]), { origin: harness.url });
+    expect(byAddress.status).toBe(200);
+  });
+
+  /**
+   * Feature: Security
    * Scenario: An oversized or flooding request is rejected before any model call
    *   Given a harness with small limits
    *   When a message has too many parts, a part is too large, the body is too large,
@@ -182,6 +220,12 @@ describe('fail closed: a wider bind', () => {
       const wide = await start({ config: '[server]\nhost = "0.0.0.0"\nport = 0' });
       expect(written.join('')).toContain('has no authentication');
       expect(written.join('')).toContain(wide.url);
+      // A wildcard bind is reached by any of the machine's addresses, never by a name.
+      const { port } = new URL(wide.url);
+      const card = (host: string): Promise<Response> =>
+        fetch(`${wide.url}/.well-known/agent-card.json`, { headers: { host } });
+      expect((await card(`127.0.0.1:${port}`)).status).toBe(200);
+      expect((await card(`evil.example:${port}`)).status).toBe(403);
       await wide.stop();
       written.length = 0;
       await start({});
